@@ -1,0 +1,329 @@
+erDiagram
+  CAT_PAIS {
+    integer id PK
+    string codigo
+    string nombre
+  }
+  MAE_USUARIO {
+    integer id PK
+    string email
+    string password_hash
+    string nombre
+    string rol
+    string activo
+    string creado_en
+  }
+  MAE_PERFIL {
+    integer id PK
+    integer usuario_id FK
+    integer nacionalidad_id FK
+    integer residencia_id FK
+    string fecha_nacimiento
+    integer version
+    string actualizado_en
+    string provincia_residencia
+    string ciudad_residencia
+    string dedicacion_disponible
+    string disponible_traslado
+    string disponible_extranjero
+  }
+  MAE_FORMACION {
+    integer id PK
+    integer perfil_id FK
+    string nivel
+    string carrera
+    string institucion
+    string titulo_obtenido
+    string promedio
+    string escala_min
+    string escala_max
+    string estado_estudios
+    string nombre_titulo
+    string fecha_finalizacion
+    integer area_id FK
+  }
+  CAT_IDIOMA {
+    integer id PK
+    string codigo
+    string nombre
+  }
+  REL_PERFIL_IDIOMA {
+    integer id PK
+    integer perfil_id FK
+    integer idioma_id FK
+    string nivel
+  }
+  CAT_AREA {
+    integer id PK
+    string nombre
+  }
+  REL_PERFIL_AREA {
+    integer id PK
+    integer perfil_id FK
+    integer area_id FK
+  }
+  CFG_PREFERENCIA {
+    integer id PK
+    integer perfil_id FK
+    string nivel
+    string modalidad
+  }
+  REL_PERFIL_PAIS {
+    integer id PK
+    integer perfil_id FK
+    integer pais_id FK
+  }
+  MAE_INSTITUCION {
+    integer id PK
+    string nombre
+    string sector
+    integer pais_id FK
+    string url_oficial
+  }
+  CFG_FUENTE {
+    integer id PK
+    string nombre
+    string url_base
+    string tipo
+    string adaptador
+    integer frecuencia_min
+    integer espera_seg
+    integer timeout_seg
+    string activa
+  }
+  TRA_EJECUCION_RASTREO {
+    integer id PK
+    integer fuente_id FK
+    string inicio
+    string fin
+    string estado
+    integer nuevas
+    integer duplicadas
+    integer actualizadas
+    string error_resumen
+  }
+  MAE_CONVOCATORIA {
+    integer id PK
+    integer institucion_id FK
+    string titulo
+    string descripcion
+    string apertura
+    string cierre
+    string cierre_original
+    string url_oficial
+    string clave_deduplicacion
+    string revision
+    string activa
+    integer version
+    string actualizado_en
+    integer tipo_beca_id FK
+    string cobertura_tipo
+    string gastos_no_cubiertos
+    string obligaciones_beneficiario
+    string fecha_publicacion
+    string url_bases
+  }
+  MAE_OPCION_ESTUDIO {
+    integer id PK
+    integer convocatoria_id FK
+    string nivel
+    string modalidad
+    string activa
+    string programa
+    string institucion_destino
+    string inicio_estudios
+    integer duracion_meses
+    integer cupos
+  }
+  REL_OPCION_ESTUDIO_PAIS {
+    integer id PK
+    integer opcion_estudio_id FK
+    integer pais_id FK
+  }
+  TRA_PUBLICACION_FUENTE {
+    integer id PK
+    integer convocatoria_id FK
+    integer fuente_id FK
+    integer ejecucion_id FK
+    string url_normalizada
+    string hash_contenido
+    string texto_extraido
+    string primera_deteccion
+    string ultima_deteccion
+  }
+  REL_CONVOCATORIA_AREA {
+    integer id PK
+    integer convocatoria_id FK
+    integer area_id FK
+  }
+  MAE_REQUISITO {
+    integer id PK
+    integer convocatoria_id FK
+    string texto_original
+    string obligatorio
+    string operador
+    string valor_estructurado
+    string validado
+    integer opcion_estudio_id FK
+    string activo
+    integer tipo_requisito_id FK
+    string modo_comprobacion
+    string documento_exigido
+    string detalle_acreditacion
+    string referencia_bases
+    string fecha_referencia
+  }
+  CFG_MOTOR_RECOMENDACION {
+    integer id PK
+    string version
+    string modelo
+    string revision_modelo
+    string peso_semantico
+    string peso_reglas
+    string umbral_alerta
+    string politica_version
+    integer creado_por FK
+    string creado_en
+  }
+  TEC_EMBEDDING_CONVOCATORIA {
+    integer id PK
+    integer convocatoria_id FK
+    integer version_convocatoria
+    string modelo
+    string revision_modelo
+    string hash_texto
+    string vector
+  }
+  TRA_RECOMENDACION {
+    integer id PK
+    integer perfil_id FK
+    integer convocatoria_id FK
+    integer config_id FK
+    integer version_perfil
+    integer version_convocatoria
+    string similitud
+    string afinidad
+    string elegibilidad
+    string resumen_evidencia
+    string calculado_en
+    integer opcion_estudio_id FK
+  }
+  TRA_EVALUACION_REQUISITO {
+    integer id PK
+    integer recomendacion_id FK
+    integer requisito_id FK
+    integer convocatoria_id FK
+    string resultado
+    string explicacion
+    string dato_comparado
+    string tipo_comprobacion
+  }
+  REL_FAVORITO {
+    integer id PK
+    integer usuario_id FK
+    integer convocatoria_id FK
+    string creado_en
+  }
+  TRA_NOTIFICACION {
+    integer id PK
+    integer usuario_id FK
+    integer recomendacion_id FK
+    integer convocatoria_id FK
+    string tipo
+    string titulo
+    string mensaje
+    string clave_evento
+    string creado_en
+    string leida_en
+  }
+  AUD_EVENTO {
+    integer id PK
+    integer actor_id FK
+    integer convocatoria_id FK
+    integer fuente_id FK
+    integer config_id FK
+    string accion
+    string cambios
+    string creado_en
+  }
+  MAE_EXPERIENCIA {
+    integer id PK
+    integer perfil_id FK
+    integer area_id FK
+    string cargo
+    string descripcion
+    string fecha_inicio
+    string fecha_fin
+    string actual
+  }
+  CAT_TIPO_BECA {
+    integer id PK
+    string nombre
+    string descripcion
+  }
+  MAE_BENEFICIO {
+    integer id PK
+    integer convocatoria_id FK
+    integer opcion_estudio_id FK
+    string concepto
+    string porcentaje
+    string monto
+    string moneda
+    string periodicidad
+    string detalle
+  }
+  CAT_TIPO_REQUISITO {
+    integer id PK
+    string codigo
+    string nombre
+    string esquema_valor
+  }
+  MAE_USUARIO ||--o| MAE_PERFIL : usuario_id
+  CAT_PAIS ||--o{ MAE_PERFIL : nacionalidad_id
+  CAT_PAIS |o--o{ MAE_PERFIL : residencia_id
+  MAE_PERFIL ||--o{ MAE_FORMACION : perfil_id
+  CAT_AREA |o--o{ MAE_FORMACION : area_id
+  MAE_PERFIL ||--o{ REL_PERFIL_IDIOMA : perfil_id
+  CAT_IDIOMA ||--o{ REL_PERFIL_IDIOMA : idioma_id
+  MAE_PERFIL ||--o{ REL_PERFIL_AREA : perfil_id
+  CAT_AREA ||--o{ REL_PERFIL_AREA : area_id
+  MAE_PERFIL ||--o{ CFG_PREFERENCIA : perfil_id
+  MAE_PERFIL ||--o{ REL_PERFIL_PAIS : perfil_id
+  CAT_PAIS ||--o{ REL_PERFIL_PAIS : pais_id
+  CAT_PAIS ||--o{ MAE_INSTITUCION : pais_id
+  CFG_FUENTE ||--o{ TRA_EJECUCION_RASTREO : fuente_id
+  MAE_INSTITUCION ||--o{ MAE_CONVOCATORIA : institucion_id
+  CAT_TIPO_BECA |o--o{ MAE_CONVOCATORIA : tipo_beca_id
+  MAE_CONVOCATORIA ||--o{ MAE_OPCION_ESTUDIO : convocatoria_id
+  MAE_OPCION_ESTUDIO ||--o{ REL_OPCION_ESTUDIO_PAIS : opcion_estudio_id
+  CAT_PAIS ||--o{ REL_OPCION_ESTUDIO_PAIS : pais_id
+  MAE_CONVOCATORIA ||--o{ TRA_PUBLICACION_FUENTE : convocatoria_id
+  CFG_FUENTE ||--o{ TRA_PUBLICACION_FUENTE : fuente_id
+  TRA_EJECUCION_RASTREO ||--o{ TRA_PUBLICACION_FUENTE : ejecucion_id
+  MAE_CONVOCATORIA ||--o{ REL_CONVOCATORIA_AREA : convocatoria_id
+  CAT_AREA ||--o{ REL_CONVOCATORIA_AREA : area_id
+  MAE_CONVOCATORIA ||--o{ MAE_REQUISITO : convocatoria_id
+  MAE_OPCION_ESTUDIO |o--o{ MAE_REQUISITO : opcion_estudio_id
+  CAT_TIPO_REQUISITO ||--o{ MAE_REQUISITO : tipo_requisito_id
+  MAE_USUARIO ||--o{ CFG_MOTOR_RECOMENDACION : creado_por
+  MAE_CONVOCATORIA ||--o{ TEC_EMBEDDING_CONVOCATORIA : convocatoria_id
+  MAE_PERFIL ||--o{ TRA_RECOMENDACION : perfil_id
+  MAE_CONVOCATORIA ||--o{ TRA_RECOMENDACION : convocatoria_id
+  CFG_MOTOR_RECOMENDACION ||--o{ TRA_RECOMENDACION : config_id
+  MAE_OPCION_ESTUDIO ||--o{ TRA_RECOMENDACION : opcion_estudio_id
+  TRA_RECOMENDACION ||--o{ TRA_EVALUACION_REQUISITO : recomendacion_id
+  MAE_REQUISITO ||--o{ TRA_EVALUACION_REQUISITO : requisito_id
+  MAE_CONVOCATORIA ||--o{ TRA_EVALUACION_REQUISITO : convocatoria_id
+  MAE_USUARIO ||--o{ REL_FAVORITO : usuario_id
+  MAE_CONVOCATORIA ||--o{ REL_FAVORITO : convocatoria_id
+  MAE_USUARIO ||--o{ TRA_NOTIFICACION : usuario_id
+  TRA_RECOMENDACION |o--o{ TRA_NOTIFICACION : recomendacion_id
+  MAE_CONVOCATORIA |o--o{ TRA_NOTIFICACION : convocatoria_id
+  MAE_USUARIO ||--o{ AUD_EVENTO : actor_id
+  MAE_CONVOCATORIA |o--o{ AUD_EVENTO : convocatoria_id
+  CFG_FUENTE |o--o{ AUD_EVENTO : fuente_id
+  CFG_MOTOR_RECOMENDACION |o--o{ AUD_EVENTO : config_id
+  MAE_PERFIL ||--o{ MAE_EXPERIENCIA : perfil_id
+  CAT_AREA |o--o{ MAE_EXPERIENCIA : area_id
+  MAE_CONVOCATORIA ||--o{ MAE_BENEFICIO : convocatoria_id
+  MAE_OPCION_ESTUDIO |o--o{ MAE_BENEFICIO : opcion_estudio_id

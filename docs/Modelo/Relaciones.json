@@ -1,0 +1,345 @@
+[
+  {
+    "id": "R01",
+    "hija": "MAE_PERFIL",
+    "campo": "usuario_id",
+    "padre": "MAE_USUARIO",
+    "cardinalidad": "1 a 0..1"
+  },
+  {
+    "id": "R02",
+    "hija": "MAE_PERFIL",
+    "campo": "nacionalidad_id",
+    "padre": "CAT_PAIS",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R03",
+    "hija": "MAE_PERFIL",
+    "campo": "residencia_id",
+    "padre": "CAT_PAIS",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R04",
+    "hija": "MAE_FORMACION",
+    "campo": "perfil_id",
+    "padre": "MAE_PERFIL",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R05",
+    "hija": "MAE_FORMACION",
+    "campo": "area_id",
+    "padre": "CAT_AREA",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R06",
+    "hija": "REL_PERFIL_IDIOMA",
+    "campo": "perfil_id",
+    "padre": "MAE_PERFIL",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R07",
+    "hija": "REL_PERFIL_IDIOMA",
+    "campo": "idioma_id",
+    "padre": "CAT_IDIOMA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R08",
+    "hija": "REL_PERFIL_AREA",
+    "campo": "perfil_id",
+    "padre": "MAE_PERFIL",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R09",
+    "hija": "REL_PERFIL_AREA",
+    "campo": "area_id",
+    "padre": "CAT_AREA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R10",
+    "hija": "CFG_PREFERENCIA",
+    "campo": "perfil_id",
+    "padre": "MAE_PERFIL",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R11",
+    "hija": "REL_PERFIL_PAIS",
+    "campo": "perfil_id",
+    "padre": "MAE_PERFIL",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R12",
+    "hija": "REL_PERFIL_PAIS",
+    "campo": "pais_id",
+    "padre": "CAT_PAIS",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R13",
+    "hija": "MAE_INSTITUCION",
+    "campo": "pais_id",
+    "padre": "CAT_PAIS",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R14",
+    "hija": "TRA_EJECUCION_RASTREO",
+    "campo": "fuente_id",
+    "padre": "CFG_FUENTE",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R15",
+    "hija": "MAE_CONVOCATORIA",
+    "campo": "institucion_id",
+    "padre": "MAE_INSTITUCION",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R16",
+    "hija": "MAE_CONVOCATORIA",
+    "campo": "tipo_beca_id",
+    "padre": "CAT_TIPO_BECA",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R17",
+    "hija": "MAE_OPCION_ESTUDIO",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R18",
+    "hija": "REL_OPCION_ESTUDIO_PAIS",
+    "campo": "opcion_estudio_id",
+    "padre": "MAE_OPCION_ESTUDIO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R19",
+    "hija": "REL_OPCION_ESTUDIO_PAIS",
+    "campo": "pais_id",
+    "padre": "CAT_PAIS",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R20",
+    "hija": "TRA_PUBLICACION_FUENTE",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R21",
+    "hija": "TRA_PUBLICACION_FUENTE",
+    "campo": "fuente_id",
+    "padre": "CFG_FUENTE",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R22",
+    "hija": "TRA_PUBLICACION_FUENTE",
+    "campo": "ejecucion_id",
+    "padre": "TRA_EJECUCION_RASTREO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R23",
+    "hija": "REL_CONVOCATORIA_AREA",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R24",
+    "hija": "REL_CONVOCATORIA_AREA",
+    "campo": "area_id",
+    "padre": "CAT_AREA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R25",
+    "hija": "MAE_REQUISITO",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R26",
+    "hija": "MAE_REQUISITO",
+    "campo": "opcion_estudio_id",
+    "padre": "MAE_OPCION_ESTUDIO",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R27",
+    "hija": "MAE_REQUISITO",
+    "campo": "tipo_requisito_id",
+    "padre": "CAT_TIPO_REQUISITO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R28",
+    "hija": "CFG_MOTOR_RECOMENDACION",
+    "campo": "creado_por",
+    "padre": "MAE_USUARIO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R29",
+    "hija": "TEC_EMBEDDING_CONVOCATORIA",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R30",
+    "hija": "TRA_RECOMENDACION",
+    "campo": "perfil_id",
+    "padre": "MAE_PERFIL",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R31",
+    "hija": "TRA_RECOMENDACION",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R32",
+    "hija": "TRA_RECOMENDACION",
+    "campo": "config_id",
+    "padre": "CFG_MOTOR_RECOMENDACION",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R33",
+    "hija": "TRA_RECOMENDACION",
+    "campo": "opcion_estudio_id",
+    "padre": "MAE_OPCION_ESTUDIO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R34",
+    "hija": "TRA_EVALUACION_REQUISITO",
+    "campo": "recomendacion_id",
+    "padre": "TRA_RECOMENDACION",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R35",
+    "hija": "TRA_EVALUACION_REQUISITO",
+    "campo": "requisito_id",
+    "padre": "MAE_REQUISITO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R36",
+    "hija": "TRA_EVALUACION_REQUISITO",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R37",
+    "hija": "REL_FAVORITO",
+    "campo": "usuario_id",
+    "padre": "MAE_USUARIO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R38",
+    "hija": "REL_FAVORITO",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R39",
+    "hija": "TRA_NOTIFICACION",
+    "campo": "usuario_id",
+    "padre": "MAE_USUARIO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R40",
+    "hija": "TRA_NOTIFICACION",
+    "campo": "recomendacion_id",
+    "padre": "TRA_RECOMENDACION",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R41",
+    "hija": "TRA_NOTIFICACION",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R42",
+    "hija": "AUD_EVENTO",
+    "campo": "actor_id",
+    "padre": "MAE_USUARIO",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R43",
+    "hija": "AUD_EVENTO",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R44",
+    "hija": "AUD_EVENTO",
+    "campo": "fuente_id",
+    "padre": "CFG_FUENTE",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R45",
+    "hija": "AUD_EVENTO",
+    "campo": "config_id",
+    "padre": "CFG_MOTOR_RECOMENDACION",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R46",
+    "hija": "MAE_EXPERIENCIA",
+    "campo": "perfil_id",
+    "padre": "MAE_PERFIL",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R47",
+    "hija": "MAE_EXPERIENCIA",
+    "campo": "area_id",
+    "padre": "CAT_AREA",
+    "cardinalidad": "0..1 a 0..N"
+  },
+  {
+    "id": "R48",
+    "hija": "MAE_BENEFICIO",
+    "campo": "convocatoria_id",
+    "padre": "MAE_CONVOCATORIA",
+    "cardinalidad": "1 a 0..N"
+  },
+  {
+    "id": "R49",
+    "hija": "MAE_BENEFICIO",
+    "campo": "opcion_estudio_id",
+    "padre": "MAE_OPCION_ESTUDIO",
+    "cardinalidad": "0..1 a 0..N"
+  }
+]

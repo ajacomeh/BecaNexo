@@ -1,0 +1,65 @@
+# Variables privadas y configuración local
+.env
+.env.*
+!.env.example
+
+# Credenciales y claves privadas locales
+.aws/
+.ssh/
+credentials.json
+credentials.ini
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.pgpass
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Frontend
+node_modules/
+dist/
+coverage/
+
+# Archivos generados
+*.log
+db.sqlite3
+media/
+staticfiles/
+
+# Respaldos locales
+backups/
+*.dump
+*.sql
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# Archivos temporales y herramientas
+*.tmp
+*.temp
+*.swp
+*.swo
+.mypy_cache/
+.tox/
+.nox/
+build/
+*.egg-info/
+.vite/
+
+# Mantener versionados .env.example y las migraciones de Django.
+# No agregar reglas que excluyan migrations/ o sus archivos Python.
+
+# Sistema operativo
+Thumbs.db
+.DS_Store

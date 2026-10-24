@@ -1,0 +1,2123 @@
+[
+  {
+    "tabla": "CAT_PAIS",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "codigo",
+        "tipo": "char(2)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": "Código ISO de dos letras."
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(100)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nombre visible."
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_USUARIO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "email",
+        "tipo": "varchar(254)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": "Correo; único sin distinguir mayúsculas."
+      },
+      {
+        "atributo": "password_hash",
+        "tipo": "varchar(128)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Hash gestionado por Django; nunca contraseña en claro."
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(180)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nombre visible."
+      },
+      {
+        "atributo": "rol",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "postulante o administrador."
+      },
+      {
+        "atributo": "activo",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Permite desactivar la cuenta."
+      },
+      {
+        "atributo": "creado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Fecha de alta."
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_PERFIL",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "usuario_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": "MAE_USUARIO.id",
+        "descripcion": "Un perfil por cuenta."
+      },
+      {
+        "atributo": "nacionalidad_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_PAIS.id",
+        "descripcion": "Debe referenciar Ecuador (EC); regla del alcance."
+      },
+      {
+        "atributo": "residencia_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "CAT_PAIS.id",
+        "descripcion": "País de residencia."
+      },
+      {
+        "atributo": "fecha_nacimiento",
+        "tipo": "date",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Opcional; solo si es necesaria para requisitos de edad."
+      },
+      {
+        "atributo": "version",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Aumenta al modificar datos del perfil o sus relaciones."
+      },
+      {
+        "atributo": "actualizado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Última modificación."
+      },
+      {
+        "atributo": "provincia_residencia",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "ciudad_residencia",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "dedicacion_disponible",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "completa/parcial/ambas; NULL=sin declarar"
+      },
+      {
+        "atributo": "disponible_traslado",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "NULL=sin declarar; false=no"
+      },
+      {
+        "atributo": "disponible_extranjero",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "NULL=sin declarar; false=no"
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_FORMACION",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "perfil_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_PERFIL.id",
+        "descripcion": "Propietario de la formación."
+      },
+      {
+        "atributo": "nivel",
+        "tipo": "varchar(30)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "bachillerato, grado, especializacion, maestria o doctorado."
+      },
+      {
+        "atributo": "carrera",
+        "tipo": "varchar(200)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nombre de la carrera."
+      },
+      {
+        "atributo": "institucion",
+        "tipo": "varchar(200)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Institución donde estudió."
+      },
+      {
+        "atributo": "titulo_obtenido",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Distingue título obtenido de estudios en curso."
+      },
+      {
+        "atributo": "promedio",
+        "tipo": "numeric(7,3)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Promedio en escala original."
+      },
+      {
+        "atributo": "escala_min",
+        "tipo": "numeric(7,3)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Mínimo de la escala."
+      },
+      {
+        "atributo": "escala_max",
+        "tipo": "numeric(7,3)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Máximo de la escala."
+      },
+      {
+        "atributo": "estado_estudios",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "en_curso/concluidos"
+      },
+      {
+        "atributo": "nombre_titulo",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "fecha_finalizacion",
+        "tipo": "date",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "area_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "CAT_AREA.id",
+        "descripcion": "Área del título declarado"
+      }
+    ]
+  },
+  {
+    "tabla": "CAT_IDIOMA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "codigo",
+        "tipo": "varchar(12)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": "Código del idioma."
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(80)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nombre visible."
+      }
+    ]
+  },
+  {
+    "tabla": "REL_PERFIL_IDIOMA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "perfil_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_PERFIL.id",
+        "descripcion": "Perfil del postulante."
+      },
+      {
+        "atributo": "idioma_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_IDIOMA.id",
+        "descripcion": "Idioma declarado."
+      },
+      {
+        "atributo": "nivel",
+        "tipo": "varchar(2)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nivel MCER o desconocido."
+      }
+    ]
+  },
+  {
+    "tabla": "CAT_AREA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(140)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": "Área normalizada."
+      }
+    ]
+  },
+  {
+    "tabla": "REL_PERFIL_AREA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "perfil_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_PERFIL.id",
+        "descripcion": "Perfil interesado."
+      },
+      {
+        "atributo": "area_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_AREA.id",
+        "descripcion": "Área de interés."
+      }
+    ]
+  },
+  {
+    "tabla": "CFG_PREFERENCIA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "perfil_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_PERFIL.id",
+        "descripcion": "Perfil del postulante."
+      },
+      {
+        "atributo": "nivel",
+        "tipo": "varchar(30)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nivel deseado."
+      },
+      {
+        "atributo": "modalidad",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Modalidad aceptada."
+      }
+    ]
+  },
+  {
+    "tabla": "REL_PERFIL_PAIS",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "perfil_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_PERFIL.id",
+        "descripcion": "Perfil interesado."
+      },
+      {
+        "atributo": "pais_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_PAIS.id",
+        "descripcion": "Destino preferido."
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_INSTITUCION",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(200)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nombre oficial."
+      },
+      {
+        "atributo": "sector",
+        "tipo": "varchar(12)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Público o privado."
+      },
+      {
+        "atributo": "pais_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_PAIS.id",
+        "descripcion": "Debe referenciar Ecuador (EC); regla del alcance."
+      },
+      {
+        "atributo": "url_oficial",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Dirección institucional."
+      }
+    ]
+  },
+  {
+    "tabla": "CFG_FUENTE",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(160)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nombre administrativo."
+      },
+      {
+        "atributo": "url_base",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": "URL validada contra destinos permitidos."
+      },
+      {
+        "atributo": "tipo",
+        "tipo": "varchar(12)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Público o privado."
+      },
+      {
+        "atributo": "adaptador",
+        "tipo": "varchar(100)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador de código de extracción; no código ejecutable del usuario."
+      },
+      {
+        "atributo": "frecuencia_min",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Intervalo entre revisiones."
+      },
+      {
+        "atributo": "espera_seg",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Pausa entre peticiones."
+      },
+      {
+        "atributo": "timeout_seg",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Tiempo máximo por petición."
+      },
+      {
+        "atributo": "activa",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Permite pausar el rastreo."
+      }
+    ]
+  },
+  {
+    "tabla": "TRA_EJECUCION_RASTREO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "fuente_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CFG_FUENTE.id",
+        "descripcion": "Fuente consultada."
+      },
+      {
+        "atributo": "inicio",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Inicio de la tarea."
+      },
+      {
+        "atributo": "fin",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Final de la tarea."
+      },
+      {
+        "atributo": "estado",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "en_curso, finalizada, fallida o parcial."
+      },
+      {
+        "atributo": "nuevas",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Convocatorias nuevas."
+      },
+      {
+        "atributo": "duplicadas",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Publicaciones ya conocidas."
+      },
+      {
+        "atributo": "actualizadas",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Convocatorias modificadas."
+      },
+      {
+        "atributo": "error_resumen",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Mensaje saneado; sin credenciales."
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_CONVOCATORIA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "institucion_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_INSTITUCION.id",
+        "descripcion": "Oferente."
+      },
+      {
+        "atributo": "titulo",
+        "tipo": "varchar(250)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Título de la convocatoria."
+      },
+      {
+        "atributo": "descripcion",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Texto normalizado."
+      },
+      {
+        "atributo": "apertura",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Inicio si está publicado."
+      },
+      {
+        "atributo": "cierre",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Fecha interpretada con zona; nulo si no se conoce."
+      },
+      {
+        "atributo": "cierre_original",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Texto literal para revisar ambigüedades."
+      },
+      {
+        "atributo": "url_oficial",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "URL final validada para postular."
+      },
+      {
+        "atributo": "clave_deduplicacion",
+        "tipo": "char(64)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": "SHA-256 de identidad canónica conservadora."
+      },
+      {
+        "atributo": "revision",
+        "tipo": "varchar(16)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Estado de validación humana."
+      },
+      {
+        "atributo": "activa",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Desactivación administrativa."
+      },
+      {
+        "atributo": "version",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Versión de datos y requisitos."
+      },
+      {
+        "atributo": "actualizado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Última actualización."
+      },
+      {
+        "atributo": "tipo_beca_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "CAT_TIPO_BECA.id",
+        "descripcion": ""
+      },
+      {
+        "atributo": "cobertura_tipo",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "total/parcial/mixta/no_especificada; resumen según bases"
+      },
+      {
+        "atributo": "gastos_no_cubiertos",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "obligaciones_beneficiario",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "fecha_publicacion",
+        "tipo": "date",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "url_bases",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_OPCION_ESTUDIO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Convocatoria propietaria."
+      },
+      {
+        "atributo": "nivel",
+        "tipo": "varchar(30)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nivel de esta opción."
+      },
+      {
+        "atributo": "modalidad",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Modalidad de esta opción."
+      },
+      {
+        "atributo": "activa",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Desactivar sin borrar resultados históricos."
+      },
+      {
+        "atributo": "programa",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "institucion_destino",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "inicio_estudios",
+        "tipo": "date",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "duracion_meses",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "cupos",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      }
+    ]
+  },
+  {
+    "tabla": "REL_OPCION_ESTUDIO_PAIS",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "opcion_estudio_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_OPCION_ESTUDIO.id",
+        "descripcion": "Opción de nivel y modalidad."
+      },
+      {
+        "atributo": "pais_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_PAIS.id",
+        "descripcion": "País de destino confirmado."
+      }
+    ]
+  },
+  {
+    "tabla": "TRA_PUBLICACION_FUENTE",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Convocatoria canónica."
+      },
+      {
+        "atributo": "fuente_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CFG_FUENTE.id",
+        "descripcion": "Fuente donde se observó."
+      },
+      {
+        "atributo": "ejecucion_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "TRA_EJECUCION_RASTREO.id",
+        "descripcion": "Última ejecución que observó la publicación."
+      },
+      {
+        "atributo": "url_normalizada",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador dentro de la fuente."
+      },
+      {
+        "atributo": "hash_contenido",
+        "tipo": "char(64)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Detecta cambios de contenido."
+      },
+      {
+        "atributo": "texto_extraido",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Evidencia mínima de la última extracción."
+      },
+      {
+        "atributo": "primera_deteccion",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Primera observación."
+      },
+      {
+        "atributo": "ultima_deteccion",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Última observación."
+      }
+    ]
+  },
+  {
+    "tabla": "REL_CONVOCATORIA_AREA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Oferta."
+      },
+      {
+        "atributo": "area_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_AREA.id",
+        "descripcion": "Área académica."
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_REQUISITO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Oferta propietaria."
+      },
+      {
+        "atributo": "texto_original",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Condición tal como se publicó."
+      },
+      {
+        "atributo": "obligatorio",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Distingue requisito de preferencia."
+      },
+      {
+        "atributo": "operador",
+        "tipo": "varchar(24)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Operador de una lista permitida en el backend."
+      },
+      {
+        "atributo": "valor_estructurado",
+        "tipo": "jsonb",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Valor tipado según esquema validado para cada tipo."
+      },
+      {
+        "atributo": "validado",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Regla revisada antes de automatizar decisiones."
+      },
+      {
+        "atributo": "opcion_estudio_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "MAE_OPCION_ESTUDIO.id",
+        "descripcion": "Nulo: requisito común. Con valor: solo se aplica a esa opción."
+      },
+      {
+        "atributo": "activo",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Las nuevas evaluaciones usan solo requisitos activos."
+      },
+      {
+        "atributo": "tipo_requisito_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CAT_TIPO_REQUISITO.id",
+        "descripcion": ""
+      },
+      {
+        "atributo": "modo_comprobacion",
+        "tipo": "varchar(30)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "dato_declarado / entidad_oferente"
+      },
+      {
+        "atributo": "documento_exigido",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "detalle_acreditacion",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "referencia_bases",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "fecha_referencia",
+        "tipo": "date",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Para edad o vigencia cuando aplique"
+      }
+    ]
+  },
+  {
+    "tabla": "CFG_MOTOR_RECOMENDACION",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "version",
+        "tipo": "varchar(60)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": "Identificador de configuración."
+      },
+      {
+        "atributo": "modelo",
+        "tipo": "varchar(180)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador del modelo NLP."
+      },
+      {
+        "atributo": "revision_modelo",
+        "tipo": "varchar(120)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Revisión concreta para reproducibilidad."
+      },
+      {
+        "atributo": "peso_semantico",
+        "tipo": "numeric(5,4)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Peso del componente semántico."
+      },
+      {
+        "atributo": "peso_reglas",
+        "tipo": "numeric(5,4)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Peso del componente de reglas."
+      },
+      {
+        "atributo": "umbral_alerta",
+        "tipo": "numeric(5,2)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Afinidad mínima para notificar."
+      },
+      {
+        "atributo": "politica_version",
+        "tipo": "varchar(60)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Versión de reglas y normalización."
+      },
+      {
+        "atributo": "creado_por",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_USUARIO.id",
+        "descripcion": "Administrador que registra la configuración."
+      },
+      {
+        "atributo": "creado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Fecha de alta."
+      }
+    ]
+  },
+  {
+    "tabla": "TEC_EMBEDDING_CONVOCATORIA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Texto vectorizado."
+      },
+      {
+        "atributo": "version_convocatoria",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Versión del texto."
+      },
+      {
+        "atributo": "modelo",
+        "tipo": "varchar(180)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Modelo utilizado."
+      },
+      {
+        "atributo": "revision_modelo",
+        "tipo": "varchar(120)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Revisión del modelo."
+      },
+      {
+        "atributo": "hash_texto",
+        "tipo": "char(64)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Hash del texto normalizado."
+      },
+      {
+        "atributo": "vector",
+        "tipo": "real[]",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Dimensión validada en el backend."
+      }
+    ]
+  },
+  {
+    "tabla": "TRA_RECOMENDACION",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "perfil_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_PERFIL.id",
+        "descripcion": "Perfil evaluado."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Oferta evaluada."
+      },
+      {
+        "atributo": "config_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "CFG_MOTOR_RECOMENDACION.id",
+        "descripcion": "Configuración exacta."
+      },
+      {
+        "atributo": "version_perfil",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Versión del perfil y relaciones."
+      },
+      {
+        "atributo": "version_convocatoria",
+        "tipo": "integer",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Versión de la oferta y requisitos."
+      },
+      {
+        "atributo": "similitud",
+        "tipo": "numeric(7,6)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Coseno entre -1 y 1."
+      },
+      {
+        "atributo": "afinidad",
+        "tipo": "numeric(5,2)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Puntuación orientativa 0–100."
+      },
+      {
+        "atributo": "elegibilidad",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Estado orientativo: compatible_declarado / incumplido_declarado / pendiente. Nunca elegibilidad oficial."
+      },
+      {
+        "atributo": "resumen_evidencia",
+        "tipo": "jsonb",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Instantánea de criterios, opción y destinos utilizados. El contrato completo de historial sigue pendiente; no garantiza reproducción íntegra por sí sola."
+      },
+      {
+        "atributo": "calculado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Momento de evaluación."
+      },
+      {
+        "atributo": "opcion_estudio_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_OPCION_ESTUDIO.id",
+        "descripcion": "Combinación concreta evaluada."
+      }
+    ]
+  },
+  {
+    "tabla": "TRA_EVALUACION_REQUISITO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "recomendacion_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "TRA_RECOMENDACION.id",
+        "descripcion": "Evaluación general."
+      },
+      {
+        "atributo": "requisito_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_REQUISITO.id",
+        "descripcion": "Regla comparada."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Garantiza que ambas pertenecen a la misma oferta."
+      },
+      {
+        "atributo": "resultado",
+        "tipo": "varchar(20)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "cumple, no_cumple o desconocido."
+      },
+      {
+        "atributo": "explicacion",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Motivo y evidencia resumida al momento de calcular."
+      },
+      {
+        "atributo": "dato_comparado",
+        "tipo": "jsonb",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "tipo_comprobacion",
+        "tipo": "varchar(30)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "declaracion / externa; no documentos del usuario"
+      }
+    ]
+  },
+  {
+    "tabla": "REL_FAVORITO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "usuario_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_USUARIO.id",
+        "descripcion": "Propietario."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Convocatoria guardada."
+      },
+      {
+        "atributo": "creado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Fecha de guardado."
+      }
+    ]
+  },
+  {
+    "tabla": "TRA_NOTIFICACION",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "usuario_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_USUARIO.id",
+        "descripcion": "Destinatario autorizado."
+      },
+      {
+        "atributo": "recomendacion_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "TRA_RECOMENDACION.id",
+        "descripcion": "Resultado relacionado si existe."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Oferta relacionada."
+      },
+      {
+        "atributo": "tipo",
+        "tipo": "varchar(30)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "nueva_coincidencia, cierre o sistema."
+      },
+      {
+        "atributo": "titulo",
+        "tipo": "varchar(200)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Texto visible."
+      },
+      {
+        "atributo": "mensaje",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Descripción."
+      },
+      {
+        "atributo": "clave_evento",
+        "tipo": "varchar(180)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Idempotencia dentro del destinatario."
+      },
+      {
+        "atributo": "creado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Fecha de emisión."
+      },
+      {
+        "atributo": "leida_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Nulo hasta marcar como leída."
+      }
+    ]
+  },
+  {
+    "tabla": "AUD_EVENTO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Identificador interno."
+      },
+      {
+        "atributo": "actor_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_USUARIO.id",
+        "descripcion": "Administrador responsable."
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": "Convocatoria afectada."
+      },
+      {
+        "atributo": "fuente_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "CFG_FUENTE.id",
+        "descripcion": "Fuente afectada."
+      },
+      {
+        "atributo": "config_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "CFG_MOTOR_RECOMENDACION.id",
+        "descripcion": "Configuración afectada."
+      },
+      {
+        "atributo": "accion",
+        "tipo": "varchar(60)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Tipo de cambio."
+      },
+      {
+        "atributo": "cambios",
+        "tipo": "jsonb",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Campos permitidos antes/después; sin credenciales."
+      },
+      {
+        "atributo": "creado_en",
+        "tipo": "timestamptz",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Momento de la acción."
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_EXPERIENCIA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "perfil_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_PERFIL.id",
+        "descripcion": ""
+      },
+      {
+        "atributo": "area_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "CAT_AREA.id",
+        "descripcion": ""
+      },
+      {
+        "atributo": "cargo",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "descripcion",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "fecha_inicio",
+        "tipo": "date",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "fecha_fin",
+        "tipo": "date",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "NULL si continúa"
+      },
+      {
+        "atributo": "actual",
+        "tipo": "boolean",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      }
+    ]
+  },
+  {
+    "tabla": "CAT_TIPO_BECA",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(100)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "descripcion",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      }
+    ]
+  },
+  {
+    "tabla": "MAE_BENEFICIO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "convocatoria_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": "MAE_CONVOCATORIA.id",
+        "descripcion": ""
+      },
+      {
+        "atributo": "opcion_estudio_id",
+        "tipo": "bigint",
+        "clave": "FK",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": "MAE_OPCION_ESTUDIO.id",
+        "descripcion": ""
+      },
+      {
+        "atributo": "concepto",
+        "tipo": "varchar(100)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "matrícula, aranceles, manutención, etc."
+      },
+      {
+        "atributo": "porcentaje",
+        "tipo": "numeric(5,2)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "0 a 100; referido al concepto"
+      },
+      {
+        "atributo": "monto",
+        "tipo": "numeric(12,2)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "moneda",
+        "tipo": "char(3)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "periodicidad",
+        "tipo": "varchar(30)",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "único/mensual/anual/otra"
+      },
+      {
+        "atributo": "detalle",
+        "tipo": "text",
+        "clave": "",
+        "obligatorio": false,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      }
+    ]
+  },
+  {
+    "tabla": "CAT_TIPO_REQUISITO",
+    "atributos": [
+      {
+        "atributo": "id",
+        "tipo": "bigint",
+        "clave": "PK",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "codigo",
+        "tipo": "varchar(40)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": true,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "nombre",
+        "tipo": "varchar(100)",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": ""
+      },
+      {
+        "atributo": "esquema_valor",
+        "tipo": "jsonb",
+        "clave": "",
+        "obligatorio": true,
+        "unico": false,
+        "referencia": null,
+        "descripcion": "Contrato por tipo para valor_estructurado; no texto libre sin validar"
+      }
+    ]
+  }
+]
