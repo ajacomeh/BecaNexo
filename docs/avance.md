@@ -1,6 +1,34 @@
 # Avance de BecaNexo
 
-## Estado actual — API de autenticación (24 de octubre de 2026)
+## Estado actual — frontend inicial (24 de octubre de 2026)
+
+- Se inspeccionó frontend/ y estaba vacío. Se creó React con Vite, JavaScript/JSX y Tailwind CSS, con package-lock.json. Se priorizó Node portable 24.22.1 en el PATH de cada proceso; no se modificó el PATH global ni se instalaron herramientas globales.
+- Implementadas /login, /registro e /inicio. Formularios con etiquetas, autocomplete, foco visible, errores de campos, carga y bloqueo de doble envío. Registro dirige al login con confirmación; inicio muestra solo nombre y rol reales y permite cerrar sesión.
+- Cliente de API centralizado con rutas relativas, cookies, CSRF en memoria, renovación tras login y tratamiento de 204, 400, 403, 429, errores de red y servidor. No hay almacenamiento de credenciales/tokens en localStorage/sessionStorage ni mocks fuera de pruebas.
+- Contexto de autenticación consulta me al cargar y espera antes de redirigir; un fallo de conexión o 5xx muestra reintento, no se confunde con una sesión ausente. La protección del backend se conserva.
+- Se leyeron y visualizaron login/registro del PDF (páginas 3–4). Se respetaron colores, tipografía Inter local y disposición del panel y formulario, adaptando textos y quitando funciones simuladas. Se revisaron capturas reales en escritorio y móvil; no hay estadísticas ni recomendaciones ficticias.
+- Vite está configurado en 127.0.0.1:5173, strictPort, proxy /api hacia 127.0.0.1:8000 y Origin conservado. Django lee DJANGO_CSRF_TRUSTED_ORIGINS del entorno (lista vacía por defecto); solo se configura http://127.0.0.1:5173 para la ejecución local. No hay CORS abierto, excepciones CSRF ni cambios en credenciales.
+- Archivos: proyecto frontend completo, incluidos src/api, src/auth, src/components, src/pages, pruebas Vitest y Playwright; ajustes en backend/config/settings.py, backend/.env.example, backend/usuarios/test_api.py y .gitignore. Nueva guía docs/ejecucion-local.md y actualización del contrato de autenticación.
+
+### Verificación del frontend inicial
+
+- npm run lint: aprobado, sin errores.
+- npm run build: aprobado, genera dist/.
+- npm test: **13 pruebas aprobadas**, con fetch simulado exclusivamente en pruebas.
+- manage.py check: sin incidencias; makemigrations --check --dry-run: No changes detected.
+- manage.py test usuarios --keepdb --verbosity 2: **30 aprobadas**, 0 fallidas/errores/omitidas, sobre test_becanexo_db, en 23,412 segundos. Incluye la prueba nueva que comprueba CSRF con el origen local Vite.
+- npm run test:e2e: **1 prueba de recorrido completo aprobada** en Edge sin ventana, con Django y PostgreSQL reales; registro 201, login 200, restauración de sesión por me tras recarga, logout 204 y retorno al login al intentar acceder sin sesión. Se confirmó Origin http://127.0.0.1:5173 y almacenamiento web vacío. Vistas revisadas a 1440×1000 y 390×844, sin desbordamiento horizontal en móvil.
+- La primera ejecución de navegador se detuvo después de login por consultar Origin con el listado reducido headers() de Playwright. Se corrigió la comprobación usando allHeaders(); la ejecución posterior aprobó. No se cambió ni falsificó el Origin de la aplicación.
+- Las dos ejecuciones crearon **dos cuentas desechables nuevas** en becanexo_db (nombre «Verificación desechable», correo e2e-UUID@example.com). Se conservaron; no se eliminó ni modificó ningún usuario previo ni el superusuario. Las pruebas unitarias del backend siguen usando únicamente su base de pruebas.
+- Se preservó el commit de referencia fb73f9a: no se hicieron commits ni publicaciones. Los servidores utilizados por Playwright se detuvieron al terminar.
+
+### Pendientes actuales
+
+- Ampliar la verificación a otros navegadores y una auditoría de accesibilidad completa. No se implementaron los demás módulos del alcance.
+- Antes de producción: HTTPS/cookies Secure, política de origen y alojamiento SPA, límites compartidos y demás configuración de despliegue.
+- Los comandos exactos para abrir el aplicativo, repetir las pruebas y el efecto de las cuentas desechables están en docs/ejecucion-local.md.
+
+## Registro histórico — API de autenticación (24 de octubre de 2026)
 
 - El responsable confirmó que aplicó las migraciones en becanexo_db y que existe un superusuario con acceso a /admin/. Esta tarea no modificó esa cuenta ni sus credenciales y no ejecutó migraciones sobre desarrollo.
 - Implementados GET /api/auth/csrf/, POST /api/auth/registro/, POST /api/auth/login/, GET /api/auth/me/ y POST /api/auth/logout/ con Django REST Framework y sesiones nativas.
@@ -24,7 +52,7 @@ Los tres finalizaron con código 0. Check no identificó incidencias y makemigra
 
 Se verificaron registro/hash, validaciones, duplicados mediante el conflicto real de PostgreSQL, rechazo de privilegios, login y me, mensajes genéricos, usuarios inactivos, acceso anónimo, CSRF ausente/inválido y origen ajeno, rotación del token, logout e invalidez de la sesión anterior, métodos rechazados, 429 y aislamiento de contadores, cookies y no caché, y respuestas sin contraseñas ni hashes. No fue necesario debilitar ni corregir las pruebas anteriores.
 
-### Pendientes actuales
+### Pendientes registrados al finalizar la API
 
 - Preparar HTTPS y configurar ambas cookies Secure antes de desplegar; decidir el origen/proxy del futuro frontend y una estrategia de límites compartidos si hay varios procesos. La limitación local no reemplaza controles operativos frente a abuso.
 - No se realizaron pruebas de carga concurrente ni se ejecutó el ejemplo manual contra desarrollo. El comportamiento de la API se verificó con PostgreSQL de pruebas.

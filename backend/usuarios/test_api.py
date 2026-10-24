@@ -157,3 +157,13 @@ class AuthAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(settings.CSRF_COOKIE_NAME, response.cookies)
         self.assertIn("no-store", response["Cache-Control"])
+
+    @override_settings(CSRF_TRUSTED_ORIGINS=["http://127.0.0.1:5173"])
+    def test_origen_vite_conserva_exigencia_csrf(self):
+        self.user()
+        data = {"email": "ana@example.com", "password": PASSWORD}
+        response = self.client.post("/api/auth/login/", data, format="json",
+                                    HTTP_ORIGIN="http://127.0.0.1:5173")
+        self.assertEqual(response.status_code, 403)
+        response = self.post("login", data, HTTP_ORIGIN="http://127.0.0.1:5173")
+        self.assertEqual(response.status_code, 200)

@@ -34,7 +34,7 @@ Todas las respuestas de estas vistas, incluidos errores, llevan Cache-Control co
 
 ## Cookies y límites locales
 
-La cookie de sesión es HttpOnly y SameSite=Lax. SESSION_COOKIE_SECURE y CSRF_COOKIE_SECURE se leen del entorno y valen False por defecto para HTTP local en 127.0.0.1; ambas deben configurarse True bajo HTTPS. No se habilitó CORS ni se añadieron orígenes confiables. El futuro frontend necesita una decisión explícita sobre mismo origen/proxy de desarrollo. HttpOnly no sustituye la prevención de XSS; HTTPS es necesario fuera del entorno local.
+La cookie de sesión es HttpOnly y SameSite=Lax. SESSION_COOKIE_SECURE y CSRF_COOKIE_SECURE se leen del entorno y valen False por defecto para HTTP local en 127.0.0.1; ambas deben configurarse True bajo HTTPS. No se habilitó CORS. Para el frontend local, Vite utiliza proxy /api y conserva Origin: configurar DJANGO_CSRF_TRUSTED_ORIGINS=http://127.0.0.1:5173 en el proceso del backend o su .env. La lista queda vacía si se omite la variable; confiar en un origen no elimina la obligación del token CSRF. Véase ejecucion-local.md. HttpOnly no sustituye la prevención de XSS; HTTPS es necesario fuera del entorno local.
 
 Los límites configurables son AUTH_REGISTRO_RATE=`5/hour` y AUTH_LOGIN_RATE=`10/minute`. Se cuentan solicitudes que alcanzan el throttle, incluidas entradas inválidas y éxitos; un rechazo previo por CSRF no consume este contador. Se usan scopes separados por operación y REMOTE_ADDR. X-Forwarded-For se ignora. Las claves son `throttle_<scope>_<HMAC de REMOTE_ADDR>`, con salted_hmac de Django, y almacenan una lista temporal de marcas de tiempo, sin correos ni contraseñas. El 429 incluye Retry-After.
 

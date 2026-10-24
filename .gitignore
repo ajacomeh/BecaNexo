@@ -56,6 +56,9 @@ backups/
 build/
 *.egg-info/
 .vite/
+frontend/test-results/
+frontend/playwright-report/
+frontend/reference-*.png
 
 # Mantener versionados .env.example y las migraciones de Django.
 # No agregar reglas que excluyan migrations/ o sus archivos Python.
