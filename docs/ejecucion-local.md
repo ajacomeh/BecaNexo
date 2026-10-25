@@ -1,5 +1,11 @@
 # Ejecución local de BecaNexo
 
+Estado actual: autenticación, perfiles, gestión administrativa de convocatorias y catálogo. Pruebas backend: 62 aprobadas; frontend: 30 aprobadas; navegador: tres recorridos aprobados. Detalles y limitaciones en [avance.md](avance.md).
+
+El catálogo público está en `/becas` y su detalle en `/becas/:id`. Los administradores acceden desde Inicio a `/gestion/convocatorias` y `/gestion/instituciones`; el backend comprueba el rol. La guía [api-convocatorias.md](api-convocatorias.md) contiene el flujo crear → publicar → consultar → editar → republicar.
+
+`convocatorias.0001_initial` ya está aplicada en este entorno. El comando `cargar_catalogos_convocatorias` prepara idempotentemente dos tipos de beca y trece contratos; no crea ejemplos. El tercer recorrido E2E usa una única entidad y convocatoria DEMOSTRACIÓN con enlaces example.org y dos cuentas específicas sin contraseña utilizable. Las reutiliza sin duplicarlas y no modifica el superusuario. Consulta los detalles de esa fixture en la guía de convocatorias. Las capturas y servidores siguen el mismo manejo local descrito abajo.
+
 Entorno comprobado: Windows, PowerShell, Python de `.venv`, PostgreSQL local y Node portable **24.22.1**. No es necesario modificar el PATH global. Usar siempre **127.0.0.1**, tanto para backend como para frontend.
 
 ## Terminal 1: backend
@@ -55,14 +61,14 @@ npm.cmd run build
 npm.cmd test
 ```
 
-Las pruebas Vitest/Testing Library simulan fetch exclusivamente dentro de `src/App.test.jsx` y `src/Profile.test.jsx`. Cubren registro, errores de campos y confirmación, prevención de envíos duplicados, restauración y espera de sesión, acceso anónimo, fallo de red y de servidor en me, reintento, logout/204, renovación CSRF y errores 403/429/500. No escriben en PostgreSQL. La compilación produce `frontend/dist/`, excluido de Git; no es un despliegue de producción.
+Las pruebas Vitest/Testing Library simulan fetch exclusivamente dentro de `src/App.test.jsx`, `src/Profile.test.jsx` y `src/Offers.test.jsx`. Cubren registro, errores de campos y confirmación, prevención de envíos duplicados, restauración y espera de sesión, acceso anónimo, fallo de red y de servidor en me, reintento, logout/204, renovación CSRF y errores 403/429/500. No escriben en PostgreSQL. La compilación produce `frontend/dist/`, excluido de Git; no es un despliegue de producción.
 
 Backend, desde la raíz:
 
 ```powershell
 .\.venv\Scripts\python.exe backend\manage.py check
 .\.venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run
-.\.venv\Scripts\python.exe backend\manage.py test usuarios perfiles --keepdb --verbosity 2
+.\.venv\Scripts\python.exe backend\manage.py test usuarios perfiles convocatorias --keepdb --verbosity 2
 ```
 
 Estas pruebas usan exclusivamente test_becanexo_db, sin paralelismo. La nueva prueba de origen Vite confirma tanto la aceptación de su origen con token como el rechazo sin token.
@@ -83,7 +89,7 @@ El recorrido comprueba registro 201 sin sesión automática, login 200 con corre
 
 Se visualizaron las páginas 3 y 4 del PDF `docs/diseno/BecaNexo_Interfaces_y_ER_v05.pdf`: panel azul #17345C, acciones #2563EB, fondo #F5F7FB, texto #17243B, tipografía Inter, formularios y distribución. Inter se sirve desde el paquete local @fontsource/inter, sin peticiones a Google Fonts.
 
-Se adaptó el botón de entrada para ambos roles y se omitieron enlaces de navegación simulada, acceso administrativo separado, aviso de privacidad no implementado y promesas de funciones pendientes. El texto secundario y pie identifican el avance real. En móvil el panel se apila sobre el formulario. Perfil y preferencias ya están implementados. No se implementaron catálogo de becas, IA, rastreo ni recuperación de contraseña.
+Se adaptó el botón de entrada para ambos roles y se omitieron enlaces de navegación simulada, acceso administrativo separado, aviso de privacidad no implementado y promesas de funciones pendientes. El texto secundario y pie identifican el avance real. En móvil el panel se apila sobre el formulario. Perfil y preferencias ya están implementados. El catálogo y la gestión administrativa también están implementados. No se implementaron IA, rastreo ni recuperación de contraseña.
 
 La verificación visual se hizo en Edge a esos dos tamaños; no sustituye una auditoría de accesibilidad completa ni pruebas en todos los navegadores/dispositivos. Antes de desplegar siguen pendientes HTTPS, cookies Secure, el enrutamiento SPA del servidor y la estrategia de límites compartidos. No se publicó el sitio.
 
@@ -102,4 +108,4 @@ En este entorno `perfiles.0001_initial` ya está aplicada y los catálogos está
 
 La carga es idempotente y no elimina registros. Los catálogos iniciales contienen 249 países/territorios, 12 idiomas y 11 áreas. Las fuentes están en `backend/perfiles/data/FUENTES.md`. Antes de ejecutar pruebas backend, comprobar que TEST.NAME sea `test_becanexo_db`, distinto de `becanexo_db`; mantener `--keepdb` y no añadir `--parallel`.
 
-El recorrido manual reproducible y las reglas están en [api-perfil.md](api-perfil.md). Los recorridos E2E requieren estas migraciones y catálogos en desarrollo. La ejecución verificada obtuvo 46 pruebas backend, 22 frontend y 2 recorridos de navegador aprobados. Las capturas de perfil y preferencias también están en `frontend/test-results/` y no se versionan.
+El recorrido manual reproducible y las reglas están en [api-perfil.md](api-perfil.md). Los recorridos E2E requieren estas migraciones y catálogos en desarrollo. Al finalizar perfiles se obtuvieron 46 pruebas backend, 22 frontend y 2 recorridos aprobados; los resultados actuales constan en avance.md. Las capturas de perfil y preferencias también están en `frontend/test-results/` y no se versionan.

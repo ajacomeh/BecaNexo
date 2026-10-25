@@ -19,17 +19,18 @@ export default function ProfileLayout({ children }) {
       <span className="brand">BecaNexo</span><p className="sidebar-tag">TU PRÓXIMA OPORTUNIDAD</p>
       <nav aria-label="Navegación principal">
         <NavLink to="/inicio">Inicio</NavLink>
-        <NavLink to="/perfil">Mi perfil académico</NavLink>
-        <NavLink to="/preferencias">Idiomas y preferencias</NavLink>
+        {user.rol === 'postulante' && <><NavLink to="/perfil">Mi perfil académico</NavLink><NavLink to="/preferencias">Idiomas y preferencias</NavLink></>}
+        <NavLink to="/becas">Explorar becas</NavLink>
+        {user.rol === 'administrador' && <><NavLink to="/gestion/convocatorias">Convocatorias</NavLink><NavLink to="/gestion/instituciones">Entidades oferentes</NavLink></>}
       </nav>
       <div className="sidebar-account"><span>{user.nombre}</span><span className="capitalize">{user.rol}</span>
         <Button className="button-outline" busy={busy} onClick={leave}>{busy ? 'Cerrando sesión…' : 'Cerrar sesión'}</Button>
         <Message>{error}</Message>
       </div>
     </aside>
-    <div className="profile-body"><header className="profile-topbar">Tu espacio de oportunidades <span>Datos declarados</span></header>
+    <div className="profile-body"><header className="profile-topbar">{user.rol === 'administrador' ? 'Espacio de administración' : 'Tu espacio de oportunidades'} <span>BecaNexo</span></header>
       <main id="contenido" className="profile-main">{children}</main>
-      <footer className="home-footer">BecaNexo · Proyecto de tesis · Perfil del postulante</footer>
+      <footer className="home-footer">BecaNexo · Proyecto de tesis</footer>
     </div>
   </div>
 }

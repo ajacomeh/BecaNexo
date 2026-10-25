@@ -1,0 +1,77 @@
+import json
+from django.core.serializers.json import DjangoJSONEncoder
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+from . import models as m, serializers as s
+
+
+def detalle(obj, publico=False):
+    data = dict(s.ConvocatoriaSerializer(obj).data)
+    data["institucion"] = s.InstitucionSerializer(obj.institucion).data
+    data["tipo_beca_nombre"] = obj.tipo_beca.nombre if obj.tipo_beca else None
+    opciones = obj.opciones.filter(activa=True) if publico else obj.opciones.all()
+    data["opciones"] = s.OpcionSerializer(opciones, many=True).data
+    beneficios = obj.beneficios.all()
+    requisitos = obj.requisitos.all()
+    if publico:
+        from django.db.models import Q
+        beneficios = beneficios.filter(Q(opcion_estudio__isnull=True) | Q(opcion_estudio__activa=True))
+        requisitos = requisitos.filter(activo=True).filter(Q(opcion_estudio__isnull=True) | Q(opcion_estudio__activa=True))
+    data["beneficios"] = s.BeneficioSerializer(beneficios, many=True).data
+    data["requisitos"] = s.RequisitoSerializer(requisitos, many=True).data
+    if publico:
+        for key in ("revision", "activa", "version"): data.pop(key, None)
+    return data
+
+
+def audit(actor, accion, antes, despues, convocatoria=None, institucion=None):
+    # Instantáneas de negocio, sin datos de cuentas ni cabeceras de sesión.
+    cambios = json.loads(json.dumps({"origen": "manual", "antes": antes, "despues": despues}, cls=DjangoJSONEncoder))
+    m.Evento.objects.create(actor=actor, accion=accion, convocatoria=convocatoria, institucion=institucion, cambios=cambios)
+
+
+def touch(obj):
+    obj.version += 1
+    obj.actualizado_en = timezone.now()
+    obj.revision = "pendiente"
+    obj.save(update_fields=["version", "actualizado_en", "revision"])
+
+
+def publicar(obj):
+    errors = []
+    if obj.institucion.pais.codigo != "EC": errors.append("El oferente debe ser ecuatoriano.")
+    if not obj.titulo.strip() or not obj.descripcion.strip() or not obj.url_oficial:
+        errors.append("Completa título, descripción y enlace oficial.")
+    opciones = list(obj.opciones.filter(activa=True))
+    if not opciones: errors.append("Añade al menos una opción activa.")
+    # Los destinos desconocidos no se inventan: se permiten listas vacías y se muestran como no especificados.
+    requisitos = list(obj.requisitos.filter(activo=True).select_related("tipo_requisito"))
+    if any(not r.validado for r in requisitos): errors.append("Revisa todos los requisitos activos.")
+    # Validar nuevamente reglas aunque se hayan insertado fuera de esta API.
+    for r in requisitos:
+        serializer = s.RequisitoSerializer(r, data=s.RequisitoSerializer(r).data, context={"convocatoria": obj})
+        payload = dict(serializer.initial_data); payload.pop("id")
+        serializer = s.RequisitoSerializer(r, data=payload, context={"convocatoria": obj})
+        serializer.is_valid(raise_exception=True)
+    for opcion in opciones:
+        reglas = [r for r in requisitos if r.opcion_estudio_id in (None, opcion.pk)]
+        # Evitar combinar reglas escalares incompatibles; idiomas/experiencias pueden repetirse por idioma/área.
+        seen = set()
+        for r in reglas:
+            codigo = r.tipo_requisito.codigo
+            if codigo in ("ACREDITACION", "DOCUMENTO", "OTRO"): continue
+            key = (codigo, (r.valor_estructurado or {}).get("codigo_idioma") if codigo == "IDIOMA" else (r.valor_estructurado or {}).get("area") if codigo == "EXPERIENCIA" else None)
+            if key in seen: errors.append(f"Unifica las condiciones {codigo} comunes y de la opción {opcion.pk} antes de publicar.")
+            seen.add(key)
+        beneficios = [b for b in obj.beneficios.all() if b.opcion_estudio_id in (None, opcion.pk)]
+        conceptos = set()
+        for b in beneficios:
+            key = " ".join(b.concepto.casefold().split())
+            if key in conceptos: errors.append(f"Resuelve el beneficio superpuesto '{b.concepto}' en la opción {opcion.pk}; registra el resultado por opción.")
+            conceptos.add(key)
+    if errors: raise ValidationError({"detail": " ".join(dict.fromkeys(errors))})
+    obj.revision = "validada"
+    obj.activa = True
+    obj.version += 1
+    obj.actualizado_en = timezone.now()
+    obj.save()

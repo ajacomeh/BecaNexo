@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "usuarios.apps.UsuariosConfig",
     "perfiles.apps.PerfilesConfig",
+    "convocatorias.apps.ConvocatoriasConfig",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

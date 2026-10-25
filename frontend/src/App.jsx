@@ -7,6 +7,10 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
 import Profile from './pages/Profile'
+import Offers from './pages/Offers'
+import OfferDetail from './pages/OfferDetail'
+import OfferEditor from './pages/OfferEditor'
+import Institutions from './pages/Institutions'
 
 export default function App() {
   const { status, error, retry, user } = useAuth()
@@ -17,9 +21,16 @@ export default function App() {
     <Button onClick={retry}>Reintentar conexión</Button>
   </AuthLayout>
   const authenticated = status === 'authenticated'
+  const admin = (element) => !authenticated ? <Navigate to="/login" replace /> : user.rol === 'administrador' ? element : <Navigate to="/inicio" replace />
   return <>
     <a className="skip-link" href="#contenido">Saltar al contenido</a>
     <Routes>
+      <Route path="/becas" element={<Offers />} />
+      <Route path="/becas/:id" element={<OfferDetail />} />
+      <Route path="/gestion/convocatorias" element={admin(<Offers admin />)} />
+      <Route path="/gestion/convocatorias/nueva" element={admin(<OfferEditor key="new" />)} />
+      <Route path="/gestion/convocatorias/:id" element={admin(<OfferEditor key="edit" />)} />
+      <Route path="/gestion/instituciones" element={admin(<Institutions />)} />
       <Route path="/login" element={authenticated ? <Navigate to="/inicio" replace /> : <Login />} />
       <Route path="/registro" element={authenticated ? <Navigate to="/inicio" replace /> : <Register />} />
       <Route path="/inicio" element={authenticated ? <Home /> : <Navigate to="/login" replace />} />

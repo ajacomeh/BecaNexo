@@ -1,6 +1,21 @@
 # Avance de BecaNexo
 
-## Estado actual — perfil y preferencias (25 de octubre de 2026)
+## Estado actual — convocatorias y catálogo (25 de octubre de 2026)
+
+- Perfiles guardado en el commit local `5523eb8`; convocatorias sin commit.
+- Se verificaron archivos parciales y ausencia de migraciones. Se conservaron modelos y contratos, y se añadieron API, servicios, auditoría y carga idempotente.
+- Backend: 62 pruebas aprobadas, 0 errores/fallidas/omitidas, 35,170 s en test_becanexo_db con --keepdb sin paralelismo. Django check sin incidencias; makemigrations --check --dry-run sin cambios.
+- Frontend: 30 pruebas aprobadas, lint sin incidencias y build aprobado. Gestión de oferentes, editor/listado administrativo, catálogo y detalle implementados. Errores por campo y conservación de entradas comprobados.
+- Revisados el historial y la ausencia de las diez tablas nuevas antes de aplicar `convocatorias/0001_initial.py`: 10 CreateModel, 3 AddField y 16 AddConstraint, sin operaciones destructivas. Aplicada con éxito en becanexo_db; showmigrations confirma [X]. La revisión AST inicial incluyó por error swappable_dependency como operación; se corrigió para inspeccionar exclusivamente operations.
+- Cargados catálogos dos veces: 2 tipos de beca y 13 contratos de requisitos, sin duplicados ni ofertas en el comando. Países/idiomas/áreas reutilizados.
+- Navegador: 3 recorridos aprobados en Edge con backend real, 29,8 s. El nuevo recorrido creó entidad y convocatoria DEMOSTRACIÓN, opción con Ecuador/España, beneficio del 80 % de matrícula y condición documental externa. Publicó, consultó como postulante, editó, comprobó 404 mientras estaba pendiente y republicó, verificando el cambio.
+- Se crearon dos cuentas DEMO específicas sin contraseñas utilizables y sin privilegios de Django Admin; las pruebas anteriores también crearon sus dos cuentas desechables habituales. No se modificaron credenciales ni cuentas previas. La demostración se reutiliza. Las sesiones nuevas del recorrido se cerraron.
+- Ajustes visuales verificados: casillas de selección con tamaño correcto, espera de carga antes de capturar y paginación sin desbordamiento móvil. Se repitió únicamente offers.spec.js, reutilizando entidad, convocatoria y cuentas DEMO: aprobado en 18,3 s. Capturas finales de catálogo, detalle y administración revisadas a 1440 y 390 px; sin desbordamiento en las tres pantallas. Lint y build finales aprobados tras el ajuste CSS. Servidores de prueba detenidos al terminar.
+- Datos conservados: una entidad DEMOSTRACIÓN, una convocatoria DEMOSTRACIÓN, una opción con dos destinos, un beneficio y un requisito externo. Las ejecuciones posteriores reutilizaron esos registros y agregaron únicamente eventos de sus ediciones/publicaciones y sesiones temporales cerradas al terminar. No se duplicaron las cuentas DEMO ni se cambiaron sus credenciales; el helper de repetición crea sesiones sin actualizar last_login.
+- Adaptación de AUD_EVENTO, transiciones, endpoints, reglas y pasos manuales en [api-convocatorias.md](api-convocatorias.md). [ejecucion-local.md](ejecucion-local.md) actualizada. Revisión de patrones de secretos sin hallazgos; .env, entorno virtual, dependencias, respaldos y reportes excluidos; git diff --check sin errores.
+- No quedan comprobaciones solicitadas pendientes. Límites: Edge de escritorio/móvil comprobado, no otros navegadores ni auditoría completa de accesibilidad/carga; HTTPS y operación distribuida pendientes de producción. Las referencias de fuente/configuración de AUD_EVENTO se añadirán con esos módulos, ampliando su restricción de objeto único. No se implementaron favoritos, IA, rastreo ni notificaciones. Convocatorias permanece sin commit; último commit 5523eb8, sin publicación.
+
+## Registro histórico — perfil y preferencias (25 de octubre de 2026)
 
 - Se conservó el trabajo parcial y el commit de autenticación `4cd2c1f`. El módulo perfiles permanece sin commit; no se publicó el repositorio.
 - Implementadas las diez tablas del perfil v0.5, sus restricciones, API propia con sesiones/CSRF y catálogos de solo lectura. La propiedad se obtiene de la sesión; las modificaciones se serializan por usuario y actualizan la versión del perfil en la misma transacción.
