@@ -12,7 +12,7 @@ $env:DJANGO_CSRF_TRUSTED_ORIGINS = 'http://127.0.0.1:5173'
 .\.venv\Scripts\python.exe backend\manage.py runserver 127.0.0.1:8000
 ```
 
-El backend lee las credenciales y demás configuración local desde `backend/.env`, que no se versiona. Se mantienen los valores existentes; no es necesario cambiar la contraseña de PostgreSQL ni el superusuario. Las migraciones de desarrollo ya fueron aplicadas por el responsable. Estos comandos no ejecutan migraciones ni crean usuarios administradores.
+El backend lee las credenciales y demás configuración local desde `backend/.env`, que no se versiona. Se mantienen los valores existentes; no es necesario cambiar la contraseña de PostgreSQL ni el superusuario. Las migraciones de autenticación fueron aplicadas por el responsable y perfiles.0001_initial se aplicó en la etapa de perfil, tras verificar las pruebas. Estos comandos no ejecutan migraciones ni crean usuarios administradores.
 
 La variable de origen puede añadirse al `.env` local en lugar de declararla en el proceso; su valor no es secreto y está documentado en `backend/.env.example`. Sin ella, una petición POST desde Vite será rechazada por CSRF aunque contenga token. Por defecto la lista de orígenes confiables está vacía. No usar comodines.
 
@@ -32,7 +32,7 @@ npm.cmd run dev
 
 `node --version` debe mostrar v24.22.1 (el proyecto exige Node 24). `npm.cmd ci` instala exactamente el lockfile; solo es necesario tras clonar o cambiar dependencias, no en cada arranque. Usar npm.cmd evita la política de ejecución de npm.ps1. No instalar herramientas globales.
 
-Abrir **http://127.0.0.1:5173/login**. También están disponibles `/registro` e `/inicio`; esta última requiere sesión. `strictPort` impide que Vite cambie de puerto silenciosamente si 5173 está ocupado. Detener los servidores con Ctrl+C en sus respectivas terminales.
+Abrir **http://127.0.0.1:5173/login**. También están disponibles `/registro` e `/inicio`; esta última requiere sesión. Los postulantes disponen de /perfil y /preferencias. `strictPort` impide que Vite cambie de puerto silenciosamente si 5173 está ocupado. Detener los servidores con Ctrl+C en sus respectivas terminales.
 
 ## Integración y datos
 
@@ -55,14 +55,14 @@ npm.cmd run build
 npm.cmd test
 ```
 
-Las pruebas Vitest/Testing Library simulan fetch exclusivamente dentro de `src/App.test.jsx`. Cubren registro, errores de campos y confirmación, prevención de envíos duplicados, restauración y espera de sesión, acceso anónimo, fallo de red y de servidor en me, reintento, logout/204, renovación CSRF y errores 403/429/500. No escriben en PostgreSQL. La compilación produce `frontend/dist/`, excluido de Git; no es un despliegue de producción.
+Las pruebas Vitest/Testing Library simulan fetch exclusivamente dentro de `src/App.test.jsx` y `src/Profile.test.jsx`. Cubren registro, errores de campos y confirmación, prevención de envíos duplicados, restauración y espera de sesión, acceso anónimo, fallo de red y de servidor en me, reintento, logout/204, renovación CSRF y errores 403/429/500. No escriben en PostgreSQL. La compilación produce `frontend/dist/`, excluido de Git; no es un despliegue de producción.
 
 Backend, desde la raíz:
 
 ```powershell
 .\.venv\Scripts\python.exe backend\manage.py check
 .\.venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run
-.\.venv\Scripts\python.exe backend\manage.py test usuarios --keepdb --verbosity 2
+.\.venv\Scripts\python.exe backend\manage.py test usuarios perfiles --keepdb --verbosity 2
 ```
 
 Estas pruebas usan exclusivamente test_becanexo_db, sin paralelismo. La nueva prueba de origen Vite confirma tanto la aceptación de su origen con token como el rechazo sin token.
@@ -75,7 +75,7 @@ Con los puertos 8000 y 5173 libres (detener primero las terminales anteriores), 
 npm.cmd run test:e2e
 ```
 
-Requiere Microsoft Edge instalado. Playwright utiliza el Edge local sin ventana, arranca y detiene sus propios servidores, y proporciona el origen CSRF solo al proceso Django. No reutiliza servidores existentes. El flujo completo usa la base de desarrollo configurada en `.env`, **no una API simulada**: crea una cuenta desechable `e2e-<UUID>@example.com` con contraseña aleatoria y nombre «Verificación desechable». Cada ejecución deja esa cuenta en desarrollo y no elimina registros. No usar este comando apuntando a producción. No consulta ni modifica el superusuario existente.
+Requiere Microsoft Edge instalado. Playwright utiliza el Edge local sin ventana, arranca y detiene sus propios servidores, y proporciona el origen CSRF solo al proceso Django. No reutiliza servidores existentes. El flujo completo usa la base de desarrollo configurada en `.env`, **no una API simulada**: crea una cuenta desechable `e2e-<UUID>@example.com` con contraseña aleatoria y nombre «Verificación desechable». El segundo recorrido crea otra cuenta y su perfil; elimina solo la experiencia creada durante ese recorrido. Ambas cuentas y los otros datos de prueba permanecen en desarrollo. No usar este comando apuntando a producción. No consulta ni modifica el superusuario existente.
 
 El recorrido comprueba registro 201 sin sesión automática, login 200 con correo en mayúsculas y Origin real, restauración tras recargar, datos de usuario, logout 204, acceso anónimo posterior y ausencia de almacenamiento web. Captura las pantallas vacías de login/registro y el inicio con nombre desechable a 1440×1000 y 390×844. Las capturas y resultados quedan en `frontend/test-results/`, excluido de Git; no se graban trazas ni videos con credenciales.
 
@@ -83,6 +83,23 @@ El recorrido comprueba registro 201 sin sesión automática, login 200 con corre
 
 Se visualizaron las páginas 3 y 4 del PDF `docs/diseno/BecaNexo_Interfaces_y_ER_v05.pdf`: panel azul #17345C, acciones #2563EB, fondo #F5F7FB, texto #17243B, tipografía Inter, formularios y distribución. Inter se sirve desde el paquete local @fontsource/inter, sin peticiones a Google Fonts.
 
-Se adaptó el botón de entrada para ambos roles y se omitieron enlaces de navegación simulada, acceso administrativo separado, aviso de privacidad no implementado y promesas de funciones pendientes. El texto secundario y pie identifican el avance real. En móvil el panel se apila sobre el formulario. No se implementaron perfil académico, catálogo, IA, rastreo ni recuperación de contraseña.
+Se adaptó el botón de entrada para ambos roles y se omitieron enlaces de navegación simulada, acceso administrativo separado, aviso de privacidad no implementado y promesas de funciones pendientes. El texto secundario y pie identifican el avance real. En móvil el panel se apila sobre el formulario. Perfil y preferencias ya están implementados. No se implementaron catálogo de becas, IA, rastreo ni recuperación de contraseña.
 
 La verificación visual se hizo en Edge a esos dos tamaños; no sustituye una auditoría de accesibilidad completa ni pruebas en todos los navegadores/dispositivos. Antes de desplegar siguen pendientes HTTPS, cookies Secure, el enrutamiento SPA del servidor y la estrategia de límites compartidos. No se publicó el sitio.
+
+
+## Preparación y comprobación del perfil
+
+En este entorno `perfiles.0001_initial` ya está aplicada y los catálogos están cargados. Para comprobarlo o preparar otra instalación, desde la raíz y verificando primero el destino configurado:
+
+```powershell
+.\.venv\Scripts\python.exe backend\manage.py showmigrations perfiles
+.\.venv\Scripts\python.exe backend\manage.py migrate --plan
+# Solo si corresponde aplicar las migraciones pendientes en ese entorno:
+.\.venv\Scripts\python.exe backend\manage.py migrate --noinput
+.\.venv\Scripts\python.exe backend\manage.py cargar_catalogos
+```
+
+La carga es idempotente y no elimina registros. Los catálogos iniciales contienen 249 países/territorios, 12 idiomas y 11 áreas. Las fuentes están en `backend/perfiles/data/FUENTES.md`. Antes de ejecutar pruebas backend, comprobar que TEST.NAME sea `test_becanexo_db`, distinto de `becanexo_db`; mantener `--keepdb` y no añadir `--parallel`.
+
+El recorrido manual reproducible y las reglas están en [api-perfil.md](api-perfil.md). Los recorridos E2E requieren estas migraciones y catálogos en desarrollo. La ejecución verificada obtuvo 46 pruebas backend, 22 frontend y 2 recorridos de navegador aprobados. Las capturas de perfil y preferencias también están en `frontend/test-results/` y no se versionan.

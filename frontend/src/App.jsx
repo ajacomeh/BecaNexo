@@ -6,9 +6,10 @@ import Message from './components/Message'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
+import Profile from './pages/Profile'
 
 export default function App() {
-  const { status, error, retry } = useAuth()
+  const { status, error, retry, user } = useAuth()
   if (status === 'loading') return <AuthLayout><p role="status">Comprobando tu sesión…</p></AuthLayout>
   if (status === 'error') return <AuthLayout>
     <h1>No pudimos comprobar tu sesión</h1>
@@ -22,6 +23,8 @@ export default function App() {
       <Route path="/login" element={authenticated ? <Navigate to="/inicio" replace /> : <Login />} />
       <Route path="/registro" element={authenticated ? <Navigate to="/inicio" replace /> : <Register />} />
       <Route path="/inicio" element={authenticated ? <Home /> : <Navigate to="/login" replace />} />
+      <Route path="/perfil" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Profile key="perfil" /> : <Navigate to="/inicio" replace />} />
+      <Route path="/preferencias" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Profile key="preferencias" preferences /> : <Navigate to="/inicio" replace />} />
       <Route path="*" element={<Navigate to={authenticated ? '/inicio' : '/login'} replace />} />
     </Routes>
   </>

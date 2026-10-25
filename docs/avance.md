@@ -1,6 +1,29 @@
 # Avance de BecaNexo
 
-## Estado actual — frontend inicial (24 de octubre de 2026)
+## Estado actual — perfil y preferencias (25 de octubre de 2026)
+
+- Se conservó el trabajo parcial y el commit de autenticación `4cd2c1f`. El módulo perfiles permanece sin commit; no se publicó el repositorio.
+- Implementadas las diez tablas del perfil v0.5, sus restricciones, API propia con sesiones/CSRF y catálogos de solo lectura. La propiedad se obtiene de la sesión; las modificaciones se serializan por usuario y actualizan la versión del perfil en la misma transacción.
+- Implementadas `/perfil` y `/preferencias`: datos personales progresivos, formación, experiencia, idiomas, áreas, preferencias y destinos. Hay confirmación de eliminación, errores por campo y conservación de entradas ante errores. Los valores desconocidos se mantienen como NULL, distintos de False y cero.
+- Se revisó el historial real antes de migrar: las tablas de perfiles no existían. Se generó `backend/perfiles/migrations/0001_initial.py` (10 CreateModel y 16 AddConstraint), se probó y se aplicó en `becanexo_db` con autorización. `showmigrations perfiles` confirmó `[X] 0001_initial`.
+- Se ejecutó dos veces la carga idempotente: quedaron 249 países/territorios, 12 idiomas y 11 áreas amplias CINE-F. No se cambiaron credenciales ni el superusuario. Fuentes, cobertura y hash en `backend/perfiles/data/FUENTES.md`.
+
+### Resultados ejecutados
+
+- `manage.py check`: sin incidencias. `manage.py makemigrations --check --dry-run`: sin cambios pendientes.
+- `manage.py test usuarios perfiles --keepdb --verbosity 2`: **46 aprobadas**, 0 fallidas, 0 errores y 0 omitidas, en 29,725 s en la última ejecución. Se usó `test_becanexo_db`, distinto de desarrollo, sin paralelismo del ejecutor. Una prueba específica usa dos conexiones para comprobar la actualización concurrente de versión.
+- Frontend: `npm.cmd run lint` y `npm.cmd run build` aprobados; `npm.cmd test`: **22 aprobadas** (13 de autenticación y 9 de perfil).
+- `npm.cmd run test:e2e`: **2 recorridos aprobados** en Edge y backend real, en 21,6 s. Se comprobó persistencia tras recarga, edición, cancelación y confirmación de eliminación, sesión/CSRF y ausencia de desbordamiento móvil. Se revisaron capturas de escritorio y móvil.
+- Los recorridos crearon dos cuentas desechables nuevas en desarrollo; una conserva su perfil de prueba. Solo se eliminó la experiencia creada por ese mismo recorrido. No se modificaron cuentas anteriores. Los servidores de Playwright se detuvieron al terminar.
+- Se corrigió un selector ambiguo de la prueba de idioma. Se reforzaron además la normalización de textos opcionales con espacios a NULL y el rechazo de campos en DELETE; después se repitieron las 46 pruebas backend con éxito.
+
+### Límites y siguientes etapas
+
+- No quedan pruebas solicitadas pendientes. La verificación de navegador cubre Edge en escritorio/móvil; faltan otros navegadores y una auditoría completa de accesibilidad.
+- El contrato, diferencias con el ER (incluido varchar(2) para país y el dominio de modalidades), reglas y comprobación manual están en [api-perfil.md](api-perfil.md). Los catálogos de idiomas y áreas tienen cobertura inicial limitada y documentada.
+- No se implementaron convocatorias, recomendaciones, rastreo ni notificaciones. HTTPS, cookies Secure, despliegue SPA y limitación distribuida siguen pendientes de producción.
+
+## Registro histórico — frontend inicial (24 de octubre de 2026)
 
 - Se inspeccionó frontend/ y estaba vacío. Se creó React con Vite, JavaScript/JSX y Tailwind CSS, con package-lock.json. Se priorizó Node portable 24.22.1 en el PATH de cada proceso; no se modificó el PATH global ni se instalaron herramientas globales.
 - Implementadas /login, /registro e /inicio. Formularios con etiquetas, autocomplete, foco visible, errores de campos, carga y bloqueo de doble envío. Registro dirige al login con confirmación; inicio muestra solo nombre y rol reales y permite cerrar sesión.
@@ -22,7 +45,7 @@
 - Las dos ejecuciones crearon **dos cuentas desechables nuevas** en becanexo_db (nombre «Verificación desechable», correo e2e-UUID@example.com). Se conservaron; no se eliminó ni modificó ningún usuario previo ni el superusuario. Las pruebas unitarias del backend siguen usando únicamente su base de pruebas.
 - Se preservó el commit de referencia fb73f9a: no se hicieron commits ni publicaciones. Los servidores utilizados por Playwright se detuvieron al terminar.
 
-### Pendientes actuales
+### Pendientes registrados al finalizar el frontend inicial
 
 - Ampliar la verificación a otros navegadores y una auditoría de accesibilidad completa. No se implementaron los demás módulos del alcance.
 - Antes de producción: HTTPS/cookies Secure, política de origen y alojamiento SPA, límites compartidos y demás configuración de despliegue.

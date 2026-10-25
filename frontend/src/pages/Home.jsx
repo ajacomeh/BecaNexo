@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useAuth } from '../auth/context'
 import Button from '../components/Button'
 import Message from '../components/Message'
+import { Link } from 'react-router-dom'
 
 export default function Home() {
   const { user, logout } = useAuth()
@@ -33,7 +34,8 @@ export default function Home() {
           <div><dt>Rol</dt><dd className="capitalize">{user.rol}</dd></div>
         </dl>
       </section>
-      <p className="scope-note">En esta etapa puedes acceder a tu cuenta y cerrar sesión. El perfil académico, el catálogo y las recomendaciones se incorporarán en próximas etapas.</p>
+      {user.rol === 'postulante' && <nav className="form-actions" aria-label="Tu perfil"><Link className="secondary-link" to="/perfil">Completar mi perfil</Link><Link className="secondary-link" to="/preferencias">Idiomas y preferencias</Link></nav>}
+      <p className="scope-note">{user.rol === 'postulante' ? 'Puedes guardar tu perfil de forma progresiva. ' : ''}El catálogo y las recomendaciones se incorporarán en próximas etapas.</p>
     </main>
     <footer className="home-footer">BecaNexo · Proyecto de tesis · Avance inicial</footer>
   </div>

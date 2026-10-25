@@ -9,10 +9,10 @@ export class ApiError extends Error {
 
 let csrfToken = null
 
-async function request(path, options = {}) {
+async function request(path, options = {}, prefix = 'auth') {
   let response
   try {
-    response = await fetch(`/api/auth/${path}/`, {
+    response = await fetch(`/api/${prefix}/${path ? `${path}/` : ''}`, {
       credentials: 'same-origin',
       cache: 'no-store',
       ...options,
@@ -68,5 +68,17 @@ export const authApi = {
   async logout() {
     await post('logout', {})
     csrfToken = null
+  },
+}
+
+export const profileApi = {
+  get: (path = '') => request(path, {}, 'perfil'),
+  async write(path, method, data) {
+    if (!csrfToken) await prepareCsrf()
+    return request(path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+    }, 'perfil')
   },
 }

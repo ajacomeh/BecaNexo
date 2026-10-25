@@ -37,6 +37,7 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
 INSTALLED_APPS = [
     "rest_framework",
     "usuarios.apps.UsuariosConfig",
+    "perfiles.apps.PerfilesConfig",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
