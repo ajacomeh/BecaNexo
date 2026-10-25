@@ -66,6 +66,7 @@ export default function OfferDetail() {
           <div><dt>Institución de destino</dt><dd>{display(o.institucion_destino)}</dd></div><div><dt>Inicio</dt><dd>{display(o.inicio_estudios)}</dd></div><div><dt>Duración (meses)</dt><dd>{display(o.duracion_meses)}</dd></div><div><dt>Cupos</dt><dd>{display(o.cupos)}</dd></div></dl>
         <h3>Beneficios de esta opción</h3><BenefitList records={offer.beneficios.filter((b) => b.opcion_estudio === o.id)} /><h3>Requisitos de esta opción</h3><RequirementList records={offer.requisitos.filter((r) => r.opcion_estudio === o.id)} catalogs={data.catalogs} /></section>)}
       <section className="profile-card"><h2>Fuente oficial y postulación externa</h2><p>BecaNexo no recibe documentos ni tramita postulaciones. La entidad oferente verifica certificados y decide la adjudicación.</p>
-        <div className="form-actions"><a className="secondary-link" href={offer.url_oficial} target="_blank" rel="noopener noreferrer">Consultar fuente oficial</a>{offer.url_bases && <a href={offer.url_bases} target="_blank" rel="noopener noreferrer">Consultar bases</a>}</div><p className="small-note">Última actualización: {date(offer.actualizado_en)}</p></section></>}
+        <p>La postulación se realiza en la plataforma de la entidad oferente.</p>
+        <div className="form-actions"><a className="secondary-link" href={offer.url_oficial} target="_blank" rel="noopener noreferrer">Ir al sitio oficial</a>{offer.url_bases && <a href={offer.url_bases} target="_blank" rel="noopener noreferrer">Consultar bases</a>}</div><p className="small-note">Última actualización: {date(offer.actualizado_en)}</p></section></>}
   </OffersLayout>
 }

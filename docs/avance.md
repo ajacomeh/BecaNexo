@@ -1,5 +1,14 @@
 # Avance de BecaNexo
 
+## Estado actual — ajuste de consulta pública (25 de octubre de 2026)
+
+- Repositorio limpio comprobado en 3f11de4. Ya funcionaban consulta anónima de catálogo/detalle, filtros, paginación, reglas de publicación y enlaces públicos de cuenta. Conservados permisos y CSRF.
+- Ajustados enlace oficial y aclaración de postulación externa; favorito anónimo dirige al login con retorno interno validado, sin guardar automáticamente. Se retiraron indicadores internos de revisión de opciones/requisitos en respuestas públicas.
+- Comprobaciones reales: Django check sin incidencias; makemigrations --check --dry-run sin cambios. 73 pruebas backend aprobadas en test_becanexo_db con --keepdb y sin paralelismo (54,942 s), 59 frontend aprobadas (17,06 s); lint y build aprobados. Cero fallidas u omitidas.
+- Navegador anónimo: 1 recorrido aprobado en Edge (6,2 s), catálogo y búsqueda, detalle y enlace oficial, acceso a login desde favorito, conservación de next tras recarga y favoritos protegidos. Cero solicitudes de escritura a la API. Login y retorno completos probados en integración frontend con API simulada; autenticación real comprobada en backend de pruebas. No se inició sesión contra desarrollo para evitar modificar last_login o sesiones persistidas.
+- Primer intento de Playwright detenido por puerto 8000 ocupado. Se añadió playwright.public.config.js, limitado al recorrido público de lectura, para reutilizar servidores locales activos sin detenerlos. Captura del detalle público revisada. Los servidores del usuario permanecen intactos.
+- Documentación en consulta-publica.md y contrato de favoritos actualizado. Sin migraciones, cambios de datos de desarrollo, cambios del respaldo, commit ni publicación. No hay comprobaciones solicitadas pendientes; el recorrido de navegador cubre Edge y no pretende sustituir pruebas de todos los navegadores.
+
 ## Estado actual — favoritos (25 de octubre de 2026)
 
 - Estado inicial verificado: repositorio limpio en bc4844e; convocatorias revisadas y guardadas por el usuario. Leídos AGENTS, REL_FAVORITO del modelo/diccionario y referencias visuales de favoritas/detalle.

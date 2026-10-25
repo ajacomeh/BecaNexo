@@ -3,6 +3,8 @@ import { useAuth } from '../auth/context'
 import { offersApi } from '../api/client'
 import Button from './Button'
 import Message from './Message'
+import { Link } from 'react-router-dom'
+import { safeReturnPath } from '../auth/returnPath'
 
 export default function FavoriteButton({ offerId, initialId = null, onRemoved }) {
   const { user } = useAuth()
@@ -10,7 +12,11 @@ export default function FavoriteButton({ offerId, initialId = null, onRemoved })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const pending = useRef(false)
-  if (user?.rol !== 'postulante') return null
+  if (!user) {
+    const next = safeReturnPath(`/becas/${offerId}`)
+    return next === '/inicio' ? null : <Link className="secondary-link" to={`/login?${new URLSearchParams({ next })}`}>Guardar en favoritos</Link>
+  }
+  if (user.rol !== 'postulante') return null
   async function toggle() {
     if (pending.current) return
     pending.current = true; setBusy(true); setError('')

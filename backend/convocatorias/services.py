@@ -25,6 +25,11 @@ def detalle(obj, publico=False):
     data["requisitos"] = s.RequisitoSerializer(requisitos, many=True).data
     if publico:
         for key in ("revision", "activa", "version"): data.pop(key, None)
+        for opcion in data["opciones"]:
+            opcion.pop("activa", None)
+        for requisito in data["requisitos"]:
+            for key in ("validado", "activo"):
+                requisito.pop(key, None)
     return data
 
 

@@ -38,12 +38,13 @@ describe('favoritos', () => {
     expect(screen.getByRole('button', { name: 'Guardar en favoritos' })).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('no muestra controles a administradores ni anónimos', () => {
+  it('no muestra controles administrativos y ofrece login a visitantes', () => {
     auth.user = { rol: 'administrador' }
-    const { rerender } = render(<FavoriteButton offerId={3} />)
+    const { rerender } = render(<MemoryRouter><FavoriteButton offerId={3} /></MemoryRouter>)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    auth.user = null; rerender(<FavoriteButton offerId={3} />)
+    auth.user = null; rerender(<MemoryRouter><FavoriteButton offerId={3} /></MemoryRouter>)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Guardar en favoritos' })).toHaveAttribute('href', '/login?next=%2Fbecas%2F3')
   })
 
   it('restaura favoritos desde el servidor y permite quitar una oferta oculta', async () => {

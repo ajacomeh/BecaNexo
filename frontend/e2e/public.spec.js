@@ -1,0 +1,30 @@
+import { test, expect } from '@playwright/test'
+
+test('consulta pública y acceso al login sin escribir datos', async ({ page }, testInfo) => {
+  const mutations = []
+  page.on('request', (request) => { if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && request.url().includes('/api/')) mutations.push(request.url()) })
+  await page.goto('/becas')
+  await expect(page.getByRole('heading', { name: 'Catálogo de becas' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Iniciar sesión' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Crear cuenta' })).toBeVisible()
+  await expect(page.getByText('Crear convocatoria', { exact: true })).toHaveCount(0)
+  const response = await page.request.get('/api/becas/', { params: { page_size: 1 } })
+  expect(response.ok()).toBeTruthy()
+  const offer = (await response.json()).results[0]
+  expect(offer, 'Se necesita al menos una oferta pública existente; no se crean datos.').toBeTruthy()
+  await page.getByLabel('Buscar título, institución o área').fill(offer.titulo)
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click()
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: offer.titulo, exact: true }) }).getByRole('link', { name: 'Ver convocatoria' }).click()
+  await expect(page.getByRole('heading', { name: offer.titulo })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Ir al sitio oficial' })).toHaveAttribute('href', offer.url_oficial)
+  await expect(page.getByText('La postulación se realiza en la plataforma de la entidad oferente.')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('public-detail.png'), fullPage: true })
+  await page.getByRole('link', { name: 'Guardar en favoritos' }).click()
+  await expect(page).toHaveURL(new RegExp(`/login\\?next=%2Fbecas%2F${offer.id}$`))
+  await expect(page.getByRole('heading', { name: 'Inicia sesión' })).toBeVisible()
+  await page.reload()
+  await expect(page).toHaveURL(new RegExp(`/login\\?next=%2Fbecas%2F${offer.id}$`))
+  await page.goto('/favoritos')
+  await expect(page).toHaveURL(/\/login$/)
+  expect(mutations).toEqual([])
+})

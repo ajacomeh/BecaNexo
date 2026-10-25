@@ -16,7 +16,7 @@ Agregar usa exactamente la visibilidad del catálogo (activa, revisión validada
 
 Para una oferta disponible, cada resultado contiene id del favorito, creado_en, disponible=true y un resumen de convocatoria (id, título, institución, tipo, estado, cierre). Si deja de ser pública, se devuelve únicamente `{id, disponible: false, convocatoria: null, aviso: "Esta oportunidad ya no está disponible."}`. No se devuelve título, enlace, ID de convocatoria ni copia de datos antiguos. El favorito permanece hasta que su propietario lo quite; si vuelve a ser pública, vuelve a mostrarse su resumen.
 
-Catálogo y detalle `/api/becas/` añaden `favorito_id` (ID propio o null) únicamente para postulantes autenticados. La consulta usa una subconsulta por propietario, no expone IDs de otros usuarios. El frontend obtiene siempre el estado desde PostgreSQL, sin guardarlo en localStorage. Los controles no aparecen para administradores ni anónimos.
+Catálogo y detalle `/api/becas/` añaden `favorito_id` (ID propio o null) únicamente para postulantes autenticados. La consulta usa una subconsulta por propietario, no expone IDs de otros usuarios. El frontend obtiene siempre el estado desde PostgreSQL, sin guardarlo en localStorage. Los administradores no ven controles. Los visitantes ven un enlace «Guardar en favoritos» al login con retorno interno al detalle; no se guarda nada hasta que, autenticados, pulsen nuevamente. Validación del retorno en [consulta-publica.md](consulta-publica.md).
 
 ## Comprobación manual
 

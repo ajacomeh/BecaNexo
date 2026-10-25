@@ -5,6 +5,7 @@ import AuthLayout from '../components/AuthLayout'
 import Button from '../components/Button'
 import Field from '../components/Field'
 import Message from '../components/Message'
+import { loginReturnPath } from '../auth/returnPath'
 
 export default function Login() {
   const { login } = useAuth()
@@ -33,7 +34,7 @@ export default function Login() {
     setBusy(true)
     try {
       await login(data)
-      navigate('/inicio', { replace: true })
+      navigate(loginReturnPath(location.search), { replace: true })
     } catch (failure) {
       setError(failure.message)
       setFields(failure.fields || {})
