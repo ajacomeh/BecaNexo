@@ -1,6 +1,6 @@
 # Ejecución local de BecaNexo
 
-Estado actual: autenticación, perfiles, gestión administrativa de convocatorias y catálogo. Pruebas backend: 62 aprobadas; frontend: 30 aprobadas; navegador: tres recorridos aprobados. Detalles y limitaciones en [avance.md](avance.md).
+Estado actual: autenticación, perfiles, gestión administrativa de convocatorias, catálogo y favoritos. Ver api-favoritos.md para endpoints y recorrido de /favoritos. Con favoritos: 70 pruebas backend y 37 frontend aprobadas; recorrido nuevo de favoritos aprobado. Los tres recorridos anteriores corresponden a la etapa de convocatorias. Detalles y limitaciones en [avance.md](avance.md).
 
 El catálogo público está en `/becas` y su detalle en `/becas/:id`. Los administradores acceden desde Inicio a `/gestion/convocatorias` y `/gestion/instituciones`; el backend comprueba el rol. La guía [api-convocatorias.md](api-convocatorias.md) contiene el flujo crear → publicar → consultar → editar → republicar.
 
@@ -68,7 +68,7 @@ Backend, desde la raíz:
 ```powershell
 .\.venv\Scripts\python.exe backend\manage.py check
 .\.venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run
-.\.venv\Scripts\python.exe backend\manage.py test usuarios perfiles convocatorias --keepdb --verbosity 2
+.\.venv\Scripts\python.exe backend\manage.py test usuarios perfiles convocatorias favoritos --keepdb --verbosity 2
 ```
 
 Estas pruebas usan exclusivamente test_becanexo_db, sin paralelismo. La nueva prueba de origen Vite confirma tanto la aceptación de su origen con token como el rechazo sin token.

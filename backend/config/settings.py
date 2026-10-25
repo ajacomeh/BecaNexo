@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "usuarios.apps.UsuariosConfig",
     "perfiles.apps.PerfilesConfig",
     "convocatorias.apps.ConvocatoriasConfig",
+    "favoritos.apps.FavoritosConfig",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

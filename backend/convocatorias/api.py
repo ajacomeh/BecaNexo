@@ -9,7 +9,7 @@ from usuarios.api import AuthView
 from perfiles.api import CatalogosView as CatalogosPerfil
 from . import models as m, serializers as s
 from .reglas import CONTRATOS, esquema
-from .services import detalle, audit, touch, publicar
+from .services import detalle, audit, touch, publicar, publicas
 
 
 class Administrador(permissions.BasePermission):
@@ -140,11 +140,20 @@ class Consulta(AuthView):
     http_method_names = ["get", "options"]
 
     def get(self, request, pk=None):
-        qs = m.Convocatoria.objects.filter(activa=True, revision="validada", institucion__pais__codigo="EC").select_related("institucion", "tipo_beca")
+        qs = publicas()
+        postulante = request.user.is_authenticated and request.user.rol == "postulante"
+        if postulante:
+            from django.db.models import OuterRef, Subquery
+            from favoritos.models import Favorito
+            qs = qs.annotate(favorito_id=Subquery(Favorito.objects.filter(usuario=request.user, convocatoria_id=OuterRef("pk")).values("pk")[:1]))
+        def render(obj):
+            data = detalle(obj, publico=True)
+            if postulante: data["favorito_id"] = obj.favorito_id
+            return data
         if pk is not None:
             parametros(request, set())
-            return Response(detalle(get_object_or_404(qs, pk=pk), publico=True))
-        return paginar(request, filtrar(request, qs), lambda obj: detalle(obj, publico=True))
+            return Response(render(get_object_or_404(qs, pk=pk)))
+        return paginar(request, filtrar(request, qs), render)
 
 
 class Convocatorias(AuthView):

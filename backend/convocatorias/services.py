@@ -5,6 +5,10 @@ from rest_framework.exceptions import ValidationError
 from . import models as m, serializers as s
 
 
+def publicas():
+    return m.Convocatoria.objects.filter(activa=True, revision="validada", institucion__pais__codigo="EC").select_related("institucion", "tipo_beca")
+
+
 def detalle(obj, publico=False):
     data = dict(s.ConvocatoriaSerializer(obj).data)
     data["institucion"] = s.InstitucionSerializer(obj.institucion).data

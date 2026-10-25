@@ -1,6 +1,17 @@
 # Avance de BecaNexo
 
-## Estado actual — convocatorias y catálogo (25 de octubre de 2026)
+## Estado actual — favoritos (25 de octubre de 2026)
+
+- Estado inicial verificado: repositorio limpio en bc4844e; convocatorias revisadas y guardadas por el usuario. Leídos AGENTS, REL_FAVORITO del modelo/diccionario y referencias visuales de favoritas/detalle.
+- Escritos modelo, API propia, controles de catálogo/detalle y /favoritos con navegación de postulante. La visibilidad se comparte con el catálogo; las oportunidades ocultas solo muestran un aviso y permiten quitar el favorito propio.
+- Migración inicial generada y revisada: una CreateModel, tabla REL_FAVORITO con sus FK y restricción única. Django check aprobado y makemigrations --check --dry-run sin cambios. Se comprobó tabla ausente e historial pendiente en desarrollo; tras aprobar las pruebas se aplicó `favoritos.0001_initial` en becanexo_db y showmigrations confirmó [X]. No se borraron ni reconstruyeron tablas.
+- Pruebas ejecutadas: 70 backend aprobadas en test_becanexo_db con --keepdb sin paralelismo (37,709 s), incluyendo las 62 anteriores; 37 frontend aprobadas (13,88 s). Cero fallidas, errores u omitidas. Lint y build aprobados.
+- Recorrido `npm.cmd run test:e2e -- e2e/favorites.spec.js`: 1 aprobado (15,4 s). Guardar desde catálogo, recargar, abrir detalle, listar, cerrar sesión, abrir nueva sesión del mismo postulante, listar y quitar. Persistencia tras login real con contraseña comprobada además en backend. El navegador usa sesiones de fixture sin contraseñas, como el recorrido previo de convocatorias; no se afirma haber escrito credenciales en ese recorrido.
+- Capturas de favoritos en 1440×1000 y 390×844 revisadas; sin desbordamiento móvil. Estado vacío capturado. No se repitieron los otros recorridos de navegador: sus módulos sí se incluyeron en las suites completas de backend/frontend.
+- Datos: reutilizadas la oferta y cuentas DEMOSTRACIÓN existentes, sin cambiar sus credenciales ni last_login. Solo se creó y quitó el favorito propio de la prueba; no se borraron favoritos anteriores (el test comprueba su ausencia antes de guardar). Sesiones nuevas cerradas al terminar; el cierre repetido de una sesión ya cerrada devolvió el 403 esperado. Servidores locales detenidos por Playwright.
+- Contrato y pasos manuales en [api-favoritos.md](api-favoritos.md). No hay pruebas solicitadas pendientes. Límites: comprobación visual en Edge, no auditoría completa de accesibilidad ni otros navegadores. La actualización entre pestañas requiere recargar/consultar otra vez; no hay sincronización en tiempo real. No se implementaron notificaciones, IA ni rastreo. Sin commit ni publicación; referencia conservada bc4844e.
+
+## Registro histórico — convocatorias y catálogo (25 de octubre de 2026)
 
 - Perfiles guardado en el commit local `5523eb8`; convocatorias sin commit.
 - Se verificaron archivos parciales y ausencia de migraciones. Se conservaron modelos y contratos, y se añadieron API, servicios, auditoría y carga idempotente.

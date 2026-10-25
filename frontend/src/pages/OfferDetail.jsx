@@ -4,6 +4,7 @@ import { offersApi } from '../api/client'
 import OffersLayout from '../components/OffersLayout'
 import Message from '../components/Message'
 import Button from '../components/Button'
+import FavoriteButton from '../components/FavoriteButton'
 import { display, date, stateLabel } from './offerDisplay'
 
 export function BenefitList({ records }) {
@@ -53,6 +54,7 @@ export default function OfferDetail() {
     {!data && !error && <p role="status">Cargando convocatoria…</p>}
     {offer && <><div className="page-heading"><div><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p>{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div></div>
       {offer.estado === 'cerrada' && <Message kind="info">La fecha de cierre ya pasó. Esta oferta se conserva para consulta.</Message>}
+      <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} />
       <section className="profile-card"><h2>Descripción y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
         <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Cobertura publicada</dt><dd>{display(offer.cobertura_tipo)}</dd></div>
           <div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div><div><dt>Cierre</dt><dd>{date(offer.cierre)}</dd></div><div><dt>Cierre según fuente</dt><dd>{display(offer.cierre_original)}</dd></div>

@@ -36,6 +36,7 @@ export default function Home() {
       </section>
       {user.rol === 'postulante' && <nav className="form-actions" aria-label="Tu perfil"><Link className="secondary-link" to="/perfil">Completar mi perfil</Link><Link className="secondary-link" to="/preferencias">Idiomas y preferencias</Link></nav>}
       <nav className="form-actions" aria-label="Convocatorias"><Link className="secondary-link" to="/becas">Explorar becas</Link>{user.rol === 'administrador' && <Link className="secondary-link" to="/gestion/convocatorias">Gestionar convocatorias</Link>}</nav>
+      {user.rol === 'postulante' && <Link className="secondary-link" to="/favoritos">Mis favoritas</Link>}
       <p className="scope-note">Consulta ofertas publicadas y sus condiciones. La postulación y la verificación documental se realizan ante la entidad oferente.</p>
     </main>
     <footer className="home-footer">BecaNexo · Proyecto de tesis · Avance inicial</footer>

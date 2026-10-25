@@ -5,6 +5,7 @@ import OffersLayout from '../components/OffersLayout'
 import OfferForm from '../components/OfferForm'
 import Message from '../components/Message'
 import Button from '../components/Button'
+import FavoriteButton from '../components/FavoriteButton'
 import { choices, enumOptions } from './offerFields'
 import { display, date, stateLabel } from './offerDisplay'
 
@@ -35,7 +36,8 @@ export default function Offers({ admin = false }) {
       <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h2>{offer.titulo}</h2><p>{offer.institucion.nombre}</p><p>Tipo: {display(offer.tipo_beca_nombre)}</p>
       <p className="accent-note">{offer.beneficios.length ? offer.beneficios.map((b) => `${b.concepto}: ${b.porcentaje != null ? `${b.porcentaje} %` : 'porcentaje no especificado'}`).join(' · ') : 'Beneficios no especificados'}</p>
       <p>{offer.opciones.map((o) => `${o.nivel} / ${o.modalidad}`).join(' · ') || 'Opciones no especificadas'}</p><p>Cierre: {date(offer.cierre)}</p>
-      <Link className="secondary-link" to={admin ? `/gestion/convocatorias/${offer.id}` : `/becas/${offer.id}`}>{admin ? 'Editar y revisar' : 'Ver convocatoria'}</Link></article>)}</div>
+      <Link className="secondary-link" to={admin ? `/gestion/convocatorias/${offer.id}` : `/becas/${offer.id}`}>{admin ? 'Editar y revisar' : 'Ver convocatoria'}</Link>
+      {!admin && <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} />}</article>)}</div>
       {data.count === 0 && <section className="profile-card"><h2>No hay convocatorias con estos filtros</h2><p>Puedes cambiar la búsqueda o restablecer los filtros.</p><Button onClick={() => setParams({})}>Restablecer filtros</Button></section>}
       <nav className="pagination" aria-label="Paginación"><Button disabled={data.page <= 1} onClick={() => setParams({ ...Object.fromEntries(params), page: data.page - 1 })}>Anterior</Button><span>Página {data.page}</span><Button disabled={data.page * data.page_size >= data.count} onClick={() => setParams({ ...Object.fromEntries(params), page: data.page + 1 })}>Siguiente</Button></nav></>}
     <p className="profile-note">Los porcentajes corresponden al concepto indicado, no al costo total. Revisa las condiciones de cada opción.</p>
