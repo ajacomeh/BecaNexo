@@ -28,7 +28,7 @@ export default function Offers({ admin = false }) {
     { name: 'estado', label: 'Estado', options: enumOptions(admin ? ['borrador', 'pausada', 'abierta', 'cerrada', 'proxima', 'sin_fecha'] : ['abierta', 'cerrada', 'proxima', 'sin_fecha']) },
     { name: 'orden', label: 'Ordenar por', options: enumOptions(['recientes', 'titulo', 'cierre']) }]
   return <OffersLayout><div className="page-heading"><div><p className="eyebrow">{admin ? 'ADMINISTRACIÓN' : 'EXPLORA TU PRÓXIMO PASO'}</p><h1>{admin ? 'Convocatorias' : 'Catálogo de becas'}</h1><p>Ofertas de entidades ecuatorianas · Destinos nacionales e internacionales</p></div>
-    {admin && <div className="form-actions"><Link className="secondary-link" to="/gestion/convocatorias/nueva">Crear convocatoria</Link><Link to="/gestion/instituciones">Gestionar oferentes</Link></div>}</div>
+    {admin && <div className="heading-actions"><Link className="secondary-link" to="/gestion/convocatorias/nueva">Crear convocatoria</Link><Link to="/gestion/instituciones">Gestionar oferentes</Link></div>}</div>
     {error && <><Message>{error}</Message><Button onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
     {!catalogs && !error && <p role="status">Cargando catálogo…</p>}
     {filters && <section className="profile-card"><h2>Filtros de búsqueda</h2><OfferForm key={query} fields={filters} initial={Object.fromEntries(params)} label="Aplicar filtros" onSubmit={async (values) => { setData(null); setParams(Object.fromEntries(Object.entries(values).filter(([, v]) => v != null && v !== ''))) }} /></section>}

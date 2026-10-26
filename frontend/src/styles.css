@@ -84,6 +84,12 @@
 :root { font-family: var(--font-sans); color: #17243b; background: #f5f7fb; font-synthesis: none; text-rendering: optimizeLegibility; }
 .public-topbar { display: flex; justify-content: space-between; align-items: center; padding: 24px 5%; background: white; gap: 24px; }
 .public-topbar nav { display: flex; gap: 24px; align-items: center; }
+.heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.heading-actions > a, .heading-actions > .button { display: inline-flex; align-items: center; justify-content: center; align-self: center; min-height: 46px; min-width: 0; width: auto; margin: 0; padding: 12px 16px; text-align: center; }
+.page-heading > .heading-actions { align-self: center; }
+.page-heading > .secondary-link { margin-top: 0; min-width: 0; width: auto; }
+.list-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
+.profile-card .list-heading h2 { margin: 0; }
 .catalog-main { max-width: 1200px; margin: auto; padding: 48px 24px; }
 .page-heading { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
 .page-heading p { color: #53647e; line-height: 1.7; }
@@ -97,7 +103,7 @@
 .state-abierta { background: #e4f5ef; color: #086e50; }
 .results-count { margin: 28px 0 18px; color: #53647e; }
 .pagination { display: flex; gap: 24px; align-items: center; justify-content: center; margin: 28px 0; }
-.pagination button { width: auto; min-width: 0; max-width: 220px; flex: 1; padding: 12px; }
+.pagination button { width: auto; min-width: 0; flex: 0 1 auto; padding: 12px 16px; }
 .pagination span { white-space: nowrap; }
 .multi-field { border: 1px solid #d7dfed; border-radius: 8px; padding: 12px; }
 .multi-field legend { font-weight: 600; padding: 0 6px; }
@@ -119,11 +125,22 @@
 .profile-sidebar { padding: 30px 16px; background: #17345c; color: white; display: flex; flex-direction: column; gap: 8px; }
 .profile-sidebar .brand, .sidebar-tag { padding: 0 12px; }
 .sidebar-tag { font-size: .68rem; color: #c2d3e8; }
-.profile-sidebar nav { display: grid; gap: 12px; margin-top: 50px; }
+.profile-sidebar nav { display: grid; align-content: start; gap: 12px; margin-top: 32px; }
 .profile-sidebar nav a { padding: 14px; border-radius: 8px; text-decoration: none; font-size: .9rem; }
 .profile-sidebar nav a.active { background: #2d507a; font-weight: 700; }
 .profile-sidebar nav a:hover { background: #26466d; }
-.sidebar-account { margin-top: auto; display: grid; gap: 14px; padding: 60px 12px 0; font-size: .85rem; overflow-wrap: anywhere; }
+.sidebar-account { margin-top: auto; display: grid; gap: 14px; padding: 20px 12px 0; font-size: .85rem; overflow-wrap: anywhere; }
+@media (min-width: 951px) {
+  .profile-sidebar { position: sticky; top: 0; height: 100dvh; align-self: start; }
+  .profile-sidebar > .brand, .profile-sidebar > .sidebar-tag, .sidebar-account { flex-shrink: 0; }
+  .profile-sidebar nav { min-height: 0; overflow-y: auto; padding: 6px; margin-inline: -6px; }
+  .sidebar-account { max-height: 45dvh; overflow-y: auto; padding-bottom: 6px; }
+}
+@media (min-width: 951px) and (max-height: 600px) {
+  .profile-sidebar { padding-block: 12px; }
+  .profile-sidebar nav { margin-top: 8px; gap: 4px; }
+  .sidebar-account { padding-top: 8px; gap: 8px; }
+}
 .profile-body { min-width: 0; display: flex; flex-direction: column; }
 .profile-topbar { display: flex; justify-content: space-between; gap: 20px; padding: 24px 36px; background: #fff; color: #53647e; font-size: .9rem; }
 .profile-topbar span { font-size: .75rem; }
@@ -161,6 +178,10 @@
   .profile-topbar { padding: 18px 24px; }
 }
 @media (max-width: 600px) {
+  .page-heading > .heading-actions { align-self: flex-start; }
+  .public-topbar nav { flex-wrap: wrap; }
+  .pagination { gap: 8px; font-size: .8rem; }
+  .pagination button { padding: 10px 8px; font-size: .8rem; }
   .field-grid { grid-template-columns: 1fr; }
   .profile-card { padding: 20px; }
   .record-list li { align-items: start; flex-direction: column; }

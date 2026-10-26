@@ -1,5 +1,15 @@
 # Avance de BecaNexo
 
+## Ajuste visual acotado de layouts (26 de octubre de 2026)
+
+- El árbol de trabajo estaba limpio al iniciar. Cambiados únicamente estilos/componentes frontend, pruebas visuales y este documento; no se tocaron API, permisos, reglas, modelo, datos ni dependencias.
+- Barra lateral compartida de postulante y administrador: sticky, top 0, altura 100dvh y align-self start en escritorio. Ancestros sin overflow que interfiera. Menú con desplazamiento propio y bloque de cuenta inferior; ajuste para poca altura y espacio para el foco. En móvil permanece la navegación flexible existente, sin panel fijo superpuesto.
+- Grupo heading-actions para cabecera pública y acciones administrativas: elimina margen/ancho de formulario heredado, centra controles y permite envolverlos. Ajustado también el enlace directo del encabezado de favoritos. Oferentes: título y creación antes de la lista, paginación como cierre con etiqueta accesible. Botones de paginación proporcionados en catálogo, administración, favoritos y oferentes, sin modificar filtros ni tamaño de página.
+- Verificación con Node 24: `npm.cmd test` aprobó 75 pruebas en 8 archivos; `npm.cmd run lint` y `npm.cmd run build` aprobaron, repetidos después del ajuste final del foco. `git diff --check` sin errores de espacios.
+- `npm.cmd run test:e2e -- --config playwright.layout.config.js`: 4 pruebas finales aprobadas (15,8 s) en Edge, un trabajador. API y roles simulados mediante interceptación, sin crear sesiones ni escribir en PostgreSQL. Se verificaron visitante, postulante y administrador, 1440×900, 1366×768, 390×844 y 320×700; capturas del viewport al inicio y tras desplazamiento real hasta abajo, controles de cabecera alineados, ausencia de desbordamiento horizontal, filtros, anterior/siguiente y estados deshabilitados, favoritos, enlaces a login/registro y apertura/cancelación de creación de oferente. Capturas en frontend/test-results (ignoradas por Git), revisadas visualmente, incluidos inicio/final de la barra lateral y menú desplazable a 1366×400.
+- Los primeros intentos de las pruebas visuales detectaron errores del arnés: interceptación accidental del módulo src/api/client.js, comparación estricta de cero negativo y escritura antes de completarse el cambio de página. Corregidos sin cambiar comportamiento de la aplicación ni quitar las comprobaciones correspondientes. Un ensayo con CSS zoom no reprodujo correctamente el zoom nativo y no se cuenta como verificación aprobada de zoom.
+- Pendiente visual: zoom **nativo** del navegador al 200 % y recorrido con sesiones reales. Se comprobó reflujo a 720×450 (equivalente al viewport CSS de 1440×900 al 200 %) y acceso al cierre de sesión con poco espacio, pero no se presenta como prueba del control de zoom de Edge. Esta revisión no sustituye una auditoría de accesibilidad completa. No se repitió backend porque no cambió. Sin commit ni publicación.
+
 ## Estado actual — reglas aprobadas v2 (26 de octubre de 2026)
 
 - Conservados los cambios previos sin commit. Propuesta previa en propuesta-reglas-comparacion-v2.md; desarrollo tenía aplicada solo convocatorias.0001_initial.
