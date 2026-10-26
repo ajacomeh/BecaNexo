@@ -8,8 +8,13 @@ import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
 import { choices, enumOptions } from './offerFields'
 import { display, date, stateLabel } from './offerDisplay'
+import PublicCatalog from './PublicCatalog'
 
 export default function Offers({ admin = false }) {
+  return admin ? <AdministrativeOffers admin /> : <PublicCatalog />
+}
+
+function AdministrativeOffers({ admin }) {
   const [params, setParams] = useSearchParams()
   const [data, setData] = useState(null)
   const [catalogs, setCatalogs] = useState(null)

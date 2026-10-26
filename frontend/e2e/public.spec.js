@@ -51,7 +51,7 @@ test('panel y retorno al detalle en navegador con autenticación simulada, sin e
     return route.continue()
   })
   await page.goto('/becas')
-  await page.getByRole('link', { name: 'Ver convocatoria' }).first().click()
+  await page.getByRole('link', { name: 'Ver detalle' }).first().click()
   const detail = new URL(page.url()).pathname
   await page.getByRole('link', { name: 'Guardar en favoritos' }).click()
   await page.getByLabel('Correo electrónico').fill(user.email)
@@ -82,7 +82,7 @@ test('consulta pública y acceso al login sin escribir datos', async ({ page }, 
   expect(offer, 'Se necesita al menos una oferta pública existente; no se crean datos.').toBeTruthy()
   await page.getByLabel('Buscar título, institución o área').fill(offer.titulo)
   await page.getByRole('button', { name: 'Aplicar filtros' }).click()
-  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: offer.titulo, exact: true }) }).getByRole('link', { name: 'Ver convocatoria' }).click()
+  await page.getByRole('article').filter({ has: page.getByRole('heading', { name: offer.titulo, exact: true }) }).getByRole('link', { name: 'Ver detalle' }).click()
   await expect(page.getByRole('heading', { name: offer.titulo })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Ir al sitio oficial' })).toHaveAttribute('href', offer.url_oficial)
   await expect(page.getByText('La postulación se realiza en la plataforma de la entidad oferente.')).toBeVisible()

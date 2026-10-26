@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 
 // Fixtures locales interceptadas: ninguna solicitud llega a la base de datos.
-const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }], areas: [], idiomas: [], tipos_beca: [], tipos_requisito: [], niveles: [], modalidades: [] }
-const offers = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, titulo: `Prueba visual ${i + 1}`, estado: 'abierta', institucion: { nombre: 'Entidad ficticia' }, beneficios: [], opciones: [{ nivel: 'grado', modalidad: 'virtual' }] }))
+const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }], areas: [], idiomas: [], tipos_beca: [], tipos_requisito: [], niveles: [], modalidades: [] }
+const offers = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, titulo: `Prueba visual ${i + 1}`, estado: i === 0 ? 'sin_fecha' : 'abierta', cierre: i === 0 ? null : '2027-12-01T04:59:00Z', institucion: { nombre: 'Entidad ficticia' }, beneficios: i === 1 ? [{ concepto: 'Matrícula', porcentaje: '80.00', opcion_estudio: null }] : [], opciones: [{ nivel: 'grado', modalidad: 'virtual', paises: [1, 2] }, { nivel: 'maestria', modalidad: 'presencial', paises: [1] }] }))
 
 async function fixtures(page, role) {
   await page.route('**/api/**', async route => {
@@ -108,4 +108,32 @@ test('menú con altura reducida y reflujo equivalente a zoom 200 %', async ({ pa
   await page.getByRole('button', { name: 'Cerrar sesión' }).focus()
   await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeInViewport()
   await page.screenshot({ path: info.outputPath('reflujo-720.png') })
+})
+
+test('catálogo compacto: secundarios, ordenación, limpieza y tarjeta', async ({ page }, info) => {
+  await fixtures(page, null)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/becas?page=2&estado=abierta')
+  await expect(page.locator('.catalog-card')).toHaveCount(12)
+  await page.getByText('Más filtros · 1 aplicados').click()
+  await page.getByLabel('Estado', { exact: true }).selectOption('cerrada')
+  await page.getByText('Más filtros · 1 aplicados').click()
+  await page.getByRole('button', { name: 'Aplicar filtros' }).click()
+  await expect(page).toHaveURL(/estado=cerrada$/)
+  await page.getByLabel('Ordenar por', { exact: false }).selectOption('titulo')
+  await expect(page).toHaveURL(/orden=titulo/)
+  await page.getByRole('button', { name: 'Limpiar filtros' }).click()
+  await expect(page).toHaveURL(/\/becas$/)
+  await expect(page.getByText('80 % de matrícula')).toBeVisible()
+  await expect(page.locator('.catalog-card').getByText('Fecha de cierre no informada', { exact: true })).toHaveCount(1)
+  await page.locator('.catalog-card').first().scrollIntoViewIfNeeded()
+  await page.screenshot({ path: info.outputPath('catalogo-tarjetas-desktop.png') })
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    await noOverflow(page)
+    await page.locator('.catalog-card').first().scrollIntoViewIfNeeded()
+    await page.screenshot({ path: info.outputPath(`catalogo-tarjeta-${width}.png`) })
+  }
+  await page.locator('.catalog-card').first().getByRole('link', { name: 'Guardar en favoritos' }).click()
+  await expect(page).toHaveURL(/\/login\?next=%2Fbecas%2F1$/)
 })

@@ -35,7 +35,7 @@ test('favoritos persisten al recargar y renovar sesión, y se pueden quitar', as
     createdFavorite = (await (await page.request.get(`/api/becas/${offer.id}/`)).json()).favorito_id
     await page.reload()
     await expect(card.getByRole('button', { name: 'Quitar de favoritos' })).toBeVisible()
-    await card.getByRole('link', { name: 'Ver convocatoria' }).click()
+    await card.getByRole('link', { name: 'Ver detalle' }).click()
     await expect(page.getByRole('button', { name: 'Quitar de favoritos' })).toBeVisible()
     await page.getByRole('link', { name: 'Mis favoritas', exact: true }).click()
     await expect(page.getByRole('heading', { name: offer.titulo })).toBeVisible()
