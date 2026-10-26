@@ -63,15 +63,19 @@ def publicar(obj):
         serializer = s.RequisitoSerializer(r, data=payload, context={"convocatoria": obj})
         serializer.is_valid(raise_exception=True)
     for opcion in opciones:
-        reglas = [r for r in requisitos if r.opcion_estudio_id in (None, opcion.pk)]
-        # Evitar combinar reglas escalares incompatibles; idiomas/experiencias pueden repetirse por idioma/área.
-        seen = set()
-        for r in reglas:
-            codigo = r.tipo_requisito.codigo
-            if codigo in ("ACREDITACION", "DOCUMENTO", "OTRO"): continue
-            key = (codigo, (r.valor_estructurado or {}).get("codigo_idioma") if codigo == "IDIOMA" else (r.valor_estructurado or {}).get("area") if codigo == "EXPERIENCIA" else None)
-            if key in seen: errors.append(f"Unifica las condiciones {codigo} comunes y de la opción {opcion.pk} antes de publicar.")
-            seen.add(key)
+        for destino in list(opcion.paises.all()) or [None]:
+            reglas = [r for r in requisitos if r.opcion_estudio_id in (None, opcion.pk) and
+                      (r.destino_id is None or (destino and r.destino_id == destino.pk))]
+            seen = set()
+            for r in reglas:
+                codigo = r.tipo_requisito.codigo
+                if codigo in ("ACREDITACION", "DOCUMENTO", "OTRO"): continue
+                discriminante = (r.valor_estructurado or {}).get("codigo_idioma") if codigo == "IDIOMA" else (r.valor_estructurado or {}).get("area") if codigo == "EXPERIENCIA" else None
+                if codigo in ("FORMACION", "TITULO_AREA", "PROMEDIO"):
+                    discriminante = r.grupo_formacion if r.relacion_formacion == "misma_formacion" else r.pk if r.relacion_formacion == "independiente" else None
+                key = (codigo, discriminante)
+                if key in seen: errors.append(f"Unifica las condiciones {codigo} comunes y de la opción {opcion.pk} antes de publicar.")
+                seen.add(key)
         beneficios = [b for b in obj.beneficios.all() if b.opcion_estudio_id in (None, opcion.pk)]
         conceptos = set()
         for b in beneficios:

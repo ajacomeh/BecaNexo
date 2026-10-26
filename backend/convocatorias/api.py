@@ -7,6 +7,8 @@ from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from usuarios.api import AuthView
 from perfiles.api import CatalogosView as CatalogosPerfil
+from perfiles.api import EsPostulante
+from .comparacion import evaluar_convocatoria
 from . import models as m, serializers as s
 from .reglas import CONTRATOS, esquema
 from .services import detalle, audit, touch, publicar, publicas
@@ -154,6 +156,18 @@ class Consulta(AuthView):
             parametros(request, set())
             return Response(render(get_object_or_404(qs, pk=pk)))
         return paginar(request, filtrar(request, qs), render)
+
+
+class Comparacion(AuthView):
+    permission_classes = [EsPostulante]
+    http_method_names = ["get", "options"]
+
+    def get(self, request, pk):
+        parametros(request, set())
+        if request.data:
+            raise serializers.ValidationError({"detail": "Esta consulta no acepta campos ni un usuario objetivo."})
+        convocatoria = get_object_or_404(publicas(), pk=pk)
+        return Response(evaluar_convocatoria(request.user, convocatoria))
 
 
 class Convocatorias(AuthView):

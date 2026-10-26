@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+.comparison-option { margin-top: 28px; padding: 24px; border: 1px solid #d7dfed; border-left: 5px solid #087f8c; border-radius: 10px; overflow-wrap: anywhere; }
+.comparison-no_cumple { border-left-color: #a22018; }
+.comparison-desconocido { border-left-color: #8a6519; }
+.comparison h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 14px; }
+.comparison h4 { font-size: 1rem; font-weight: 700; margin-top: 24px; }
+.comparison h5 { font-weight: 650; margin-bottom: 10px; }
+.comparison p { line-height: 1.7; }
+.comparison-summary { font-weight: 700; margin: 20px 0; }
+.comparison-destination { border: 1px solid #d7dfed; border-radius: 8px; margin-top: 18px; padding: 16px; }
+.comparison-destination summary { cursor: pointer; font-weight: 650; padding: 8px; line-height: 1.7; }
+.comparison-external { background: #fff7df; color: #644b12; border-radius: 8px; padding: 14px; margin: 16px 0; }
+.comparison-incompatible { margin-top: 36px; border-top: 1px solid #d7dfed; padding-top: 24px; }
+.comparison .profile-note { margin-top: 24px; }
+@media (max-width: 600px) { .comparison-option { padding: 16px; } }
+
 .welcome { background: #f5f7fb; }
 .welcome-header, .welcome-footer { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 24px max(24px, calc((100% - 1200px) / 2)); background: white; }
 .welcome .brand { color: #17345c; text-decoration: none; }

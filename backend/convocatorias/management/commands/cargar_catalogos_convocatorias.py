@@ -5,7 +5,7 @@ from convocatorias.reglas import CONTRATOS, esquema
 
 
 class Command(BaseCommand):
-    help = "Carga idempotente de clasificaciones iniciales y contratos v0.5; no crea ofertas."
+    help = "Carga idempotente de clasificaciones y contratos vigentes; no crea ni reinterpreta ofertas."
 
     @transaction.atomic
     def handle(self, *args, **options):

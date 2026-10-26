@@ -2,8 +2,10 @@ import { useRef, useState } from 'react'
 import ProfileField from './ProfileField'
 import Button from './Button'
 import Message from './Message'
+import EquivalenceFields from './EquivalenceFields'
 
 const initialValue = (field, value) => {
+  if (field.kind === 'equivalencias') return value || []
   if (field.multiple) return value || []
   if (field.kind === 'textos') return (value || []).join('\n')
   if (field.type === 'datetime-local' && value) return new Date(new Date(value).getTime() - 5 * 3600000).toISOString().slice(0, 16)
@@ -25,7 +27,8 @@ export default function OfferForm({ fields, initial = {}, onSubmit, label = 'Gua
     const data = Object.fromEntries(fields.map((f) => {
       const v = values[f.name]
       let result = v
-      if (f.multiple) result = (v || []).map((x) => f.kind === 'ids' ? Number(x) : x)
+      if (f.kind === 'equivalencias') result = v
+      else if (f.multiple) result = (v || []).map((x) => f.kind === 'ids' ? Number(x) : x)
       else if (v === '') result = f.required || f.blank ? '' : null
       else if (f.kind === 'boolean') result = v === 'true'
       else if (['id', 'number', 'integer'].includes(f.kind)) result = Number(v)
@@ -38,7 +41,7 @@ export default function OfferForm({ fields, initial = {}, onSubmit, label = 'Gua
     finally { lock.current = false; setBusy(false) }
   }
   return <form noValidate onSubmit={submit} aria-busy={busy}>
-    <div className="field-grid">{fields.map((f) => f.multiple ? <fieldset className="field field-wide multi-field" key={f.name} disabled={busy}>
+    <div className="field-grid">{fields.map((f) => f.kind === 'equivalencias' ? <EquivalenceFields key={f.name} field={f} values={values[f.name]} onChange={v => change(f.name, v)} disabled={busy} error={errors[f.name]} /> : f.multiple ? <fieldset className="field field-wide multi-field" key={f.name} disabled={busy}>
       <legend>{f.label}</legend><div className="multi-options">{f.options.map((o) => <label key={o.value}>
         <input type="checkbox" checked={(values[f.name] || []).map(String).includes(String(o.value))} onChange={(e) => change(f.name, e.target.checked ? [...values[f.name], String(o.value)] : values[f.name].filter((x) => String(x) !== String(o.value)))} />{o.label}</label>)}</div>
       {errors[f.name] && <p className="field-error">{String(errors[f.name])}</p>}

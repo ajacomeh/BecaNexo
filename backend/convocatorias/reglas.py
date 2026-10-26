@@ -1,4 +1,4 @@
-"""Contrato versionado de requisitos v0.5; no evalúa postulantes."""
+"""Contratos versionados v0.6; conserva representaciones antiguas sin inferirlas."""
 from decimal import Decimal, InvalidOperation
 from rest_framework.exceptions import ValidationError
 from perfiles.models import Pais, Idioma, Area, NIVELES, MCER
@@ -11,7 +11,8 @@ def campo(label, kind="text", required=True, options=None):
 CONTRATOS = {
     "NACIONALIDAD": ("Nacionalidad", "pertenece", {"codigos_pais": campo("Nacionalidades admitidas", "paises")}),
     "FORMACION": ("Estudios mínimos", "minimo", {
-        "nivel_minimo": campo("Nivel mínimo", options=[v for v, _ in NIVELES]),
+        "nivel_minimo": campo("Mínimo original (sin lista admitida queda pendiente)", required=False, options=[v for v, _ in NIVELES]),
+        "niveles_admitidos": campo("Niveles admitidos expresamente en las bases", "lista", False, options=[v for v, _ in NIVELES]),
         "estado_exigido": campo("Estado exigido", options=["en_curso", "concluidos"]), "titulo_obtenido": campo("Título obtenido", "boolean")}),
     "TITULO_AREA": ("Título y área", "pertenece", {
         "titulos_admitidos": campo("Títulos admitidos (uno por línea)", "textos", False), "areas_admitidas": campo("Áreas admitidas", "areas", False)}),
@@ -20,7 +21,7 @@ CONTRATOS = {
         "minimo": campo("Promedio mínimo", "number"), "escala_min": campo("Mínimo de la escala", "number"),
         "escala_max": campo("Máximo de la escala", "number"), "equivalencia_documentada": campo("Equivalencia expresamente publicada", required=False)}),
     "IDIOMA": ("Idioma y nivel", "minimo", {"codigo_idioma": campo("Idioma", "idioma"), "nivel_minimo": campo("Nivel MCER mínimo", options=[v for v, _ in MCER])}),
-    "EXPERIENCIA": ("Experiencia", "minimo", {"meses_minimos": campo("Meses mínimos", "integer"), "area": campo("Área requerida", "area", False)}),
+    "EXPERIENCIA": ("Experiencia", "minimo", {"meses_minimos": campo("Meses mínimos", "integer"), "area": campo("Área requerida", "area", False), "convencion_documentada": campo("Convención literal publicada (no se ejecuta como fórmula)", required=False)}),
     "DEDICACION": ("Dedicación", "pertenece", {"valores_admitidos": campo("Dedicaciones admitidas", "lista", options=["completa", "parcial", "ambas"])}),
     "TRASLADO": ("Disponibilidad de traslado", "igual", {"requerido": campo("Traslado requerido", "boolean"), "destino": campo("País de destino", "pais", False)}),
     "RESIDENCIA": ("Residencia", "pertenece", {"codigos_pais": campo("Países de residencia", "paises", False),
@@ -33,7 +34,7 @@ CONTRATOS = {
 
 def esquema(codigo):
     nombre, operador, campos = CONTRATOS[codigo]
-    return {"version": 1, "operadores": [operador], "campos": campos}
+    return {"version": 2 if codigo in ("FORMACION", "EXPERIENCIA") else 1, "operadores": [operador], "campos": campos}
 
 
 def validar(codigo, valor, fecha, modo, operador):
@@ -81,6 +82,7 @@ def validar(codigo, valor, fecha, modo, operador):
         if not fecha: raise ValidationError({"fecha_referencia": "Indica la fecha de referencia publicada."})
         if valor.get("minimo") is not None and valor.get("maximo") is not None and valor["minimo"] > valor["maximo"]: fail("El mínimo supera al máximo.")
     if codigo == "FORMACION" and valor["titulo_obtenido"] and valor["estado_exigido"] != "concluidos": fail("Un título obtenido requiere estudios concluidos.")
+    if codigo == "FORMACION" and not (valor.get("nivel_minimo") or valor.get("niveles_admitidos")): fail("Indica los niveles admitidos o conserva el mínimo original como pendiente.")
     if codigo == "PROMEDIO" and not valor["escala_min"] <= valor["minimo"] <= valor["escala_max"]: fail("El promedio debe estar dentro de la escala.")
     if codigo == "PROMEDIO" and valor["escala_min"] >= valor["escala_max"]: fail("Escala inválida.")
     if codigo == "TRASLADO" and not valor["requerido"] and valor.get("destino"): fail("Un destino no puede exigir traslado si este no se requiere.")

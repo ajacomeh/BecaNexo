@@ -1,5 +1,5 @@
-# BecaNexo · Diccionario lógico v0.5
-Diseño pendiente de programación. No contiene SQL. PK primero, FK después y atributos del negocio.
+# BecaNexo · Diccionario lógico v0.6
+Base v0.5 con ampliación de comparación del 26/10/2026. Modelo parcialmente implementado; el avance distingue tablas existentes de las futuras. No contiene SQL. PK primero, FK después y atributos del negocio. Véase Ampliacion_comparacion_v06.md para contratos y diferencias respecto al ER histórico.
 
 ## CAT_PAIS
 | Atributo | Tipo lógico | Clave | Referencia | Regla / significado |
@@ -194,6 +194,10 @@ Diseño pendiente de programación. No contiene SQL. PK primero, FK después y a
 | detalle_acreditacion | text |  | - | Opcional; ausencia no implica incumplimiento.  |
 | referencia_bases | text |  | - | Opcional; ausencia no implica incumplimiento.  |
 | fecha_referencia | date |  | - | Opcional; ausencia no implica incumplimiento. Para edad o vigencia cuando aplique |
+| destino_id | bigint | FK | CAT_PAIS.id | Opcional. País de la opción al que se limita la condición; requiere opcion_estudio_id. |
+| relacion_formacion | varchar(20) | | - | Obligatorio, inicial pendiente. pendiente / independiente / misma_formacion. |
+| grupo_formacion | varchar(64) | | - | Clave local a convocatoria obligatoria solo en misma_formacion. Miembros de igual obligatoriedad. |
+| equivalencias | jsonb | | - | Obligatorio, inicial []. Tipo, origen, admitido, referencia y contexto país/provincia; contrato cerrado en Ampliacion_comparacion_v06.md. |
 ## CFG_MOTOR_RECOMENDACION
 | Atributo | Tipo lógico | Clave | Referencia | Regla / significado |
 |---|---|---|---|---|

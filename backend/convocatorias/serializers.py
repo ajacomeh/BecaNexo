@@ -9,6 +9,7 @@ from perfiles.serializers import StrictModelSerializer
 from perfiles.models import Pais, Area
 from . import models as m
 from .reglas import CONTRATOS, validar
+from .equivalencias import ACADEMICOS, validar_equivalencias
 
 
 def safe_url(value):
@@ -88,6 +89,8 @@ class OpcionSerializer(StrictModelSerializer):
 
     def validate_paises(self, value):
         if len(set(value)) != len(value): raise serializers.ValidationError("No repitas países.")
+        if self.instance and m.Requisito.objects.filter(opcion_estudio=self.instance, destino__isnull=False).exclude(destino__in=value).exists():
+            raise serializers.ValidationError("No retires destinos con requisitos asociados; revisa primero su ámbito.")
         return value
 
 
@@ -130,4 +133,27 @@ class RequisitoSerializer(AmbitoSerializer):
         operador = attrs.get("operador", CONTRATOS[tipo][1])
         validar(tipo, v("valor_estructurado"), v("fecha_referencia"), v("modo_comprobacion"), operador)
         attrs["operador"] = operador
+        destino = v("destino")
+        opcion = v("opcion_estudio")
+        if destino and (not opcion or not opcion.paises.filter(pk=destino.pk).exists()):
+            raise serializers.ValidationError({"destino": "El destino requiere una opción que incluya ese país."})
+        if destino and tipo == "TRASLADO" and v("valor_estructurado").get("destino") not in (None, destino.codigo):
+            raise serializers.ValidationError({"destino": "El ámbito y el destino indicado en la condición deben coincidir."})
+        relacion = v("relacion_formacion") or "pendiente"
+        grupo = v("grupo_formacion")
+        if grupo == "":
+            attrs["grupo_formacion"] = grupo = None
+        if grupo and (not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", grupo)):
+            raise serializers.ValidationError({"grupo_formacion": "Usa una clave de letras sin acentos, números, guion o subrayado."})
+        if (relacion == "misma_formacion") != bool(grupo):
+            raise serializers.ValidationError({"grupo_formacion": "Solo misma formación requiere una clave de grupo."})
+        if tipo not in ACADEMICOS and (relacion != "pendiente" or grupo):
+            raise serializers.ValidationError({"relacion_formacion": "Solo se agrupan condiciones académicas."})
+        if grupo:
+            others = m.Requisito.objects.filter(convocatoria=self.context["convocatoria"], grupo_formacion=grupo)
+            if self.instance: others = others.exclude(pk=self.instance.pk)
+            obligatorio = attrs.get("obligatorio", getattr(self.instance, "obligatorio", True))
+            if others.exclude(obligatorio=obligatorio).exists():
+                raise serializers.ValidationError({"grupo_formacion": "Los miembros de un grupo deben tener la misma obligatoriedad."})
+        validar_equivalencias(tipo, v("valor_estructurado"), attrs.get("equivalencias", getattr(self.instance, "equivalencias", [])))
         return attrs

@@ -5,6 +5,7 @@ import OffersLayout from '../components/OffersLayout'
 import Message from '../components/Message'
 import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
+import Comparison from '../components/Comparison'
 import { display, date, stateLabel } from './offerDisplay'
 
 export function BenefitList({ records }) {
@@ -31,6 +32,8 @@ export function RequirementList({ records, catalogs }) {
     return <li key={r.id}><h3>{type?.nombre || 'Requisito'} <span className="small-note">· {r.obligatorio ? 'Obligatorio' : 'Preferencia'}</span></h3><p className="preserve-text">{r.texto_original}</p>
       <dl className="detail-data">{Object.entries(r.valor_estructurado || {}).map(([key, value]) => <div key={key}><dt>{type?.esquema_valor.campos[key]?.label || key}</dt><dd>{ruleText(value, type?.esquema_valor.campos[key], catalogs)}</dd></div>)}</dl>
       <p>Fecha de referencia: {display(r.fecha_referencia)}</p><p>Referencia en las bases: {display(r.referencia_bases)}</p>
+      {r.destino && <p>Condición del destino: {catalogs.paises.find(p => p.id === r.destino)?.nombre || 'No especificado'}</p>}
+      {r.grupo_formacion && <p>Debe cumplirse con una misma formación junto al grupo: {r.grupo_formacion}.</p>}
       <p>Documento exigido: {display(r.documento_exigido)}</p><p>Condiciones documentales: {display(r.detalle_acreditacion)}</p>
       <p className="accent-note">{r.modo_comprobacion === 'entidad_oferente' ? 'Verificación externa por la entidad oferente. BecaNexo no acredita este requisito.' : 'Condición sobre datos declarados. No constituye una verificación documental.'}</p>
     </li>
@@ -55,6 +58,7 @@ export default function OfferDetail() {
     {offer && <><div className="page-heading"><div><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p>{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div></div>
       {offer.estado === 'cerrada' && <Message kind="info">La fecha de cierre ya pasó. Esta oferta se conserva para consulta.</Message>}
       <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} />
+      <Comparison key={offer.id} offerId={offer.id} catalogs={data.catalogs} />
       <section className="profile-card"><h2>Descripción y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
         <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Cobertura publicada</dt><dd>{display(offer.cobertura_tipo)}</dd></div>
           <div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div><div><dt>Cierre</dt><dd>{date(offer.cierre)}</dd></div><div><dt>Cierre según fuente</dt><dd>{display(offer.cierre_original)}</dd></div>

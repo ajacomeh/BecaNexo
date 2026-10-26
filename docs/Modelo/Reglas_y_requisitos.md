@@ -1,5 +1,7 @@
 # BecaNexo v0.5 · Contrato lógico de requisitos
 
+Actualización de implementación 26/10/2026: las decisiones aprobadas de comparación v0.6 en [Ampliacion_comparacion_v06.md](Ampliacion_comparacion_v06.md) sustituyen la inferencia de mínimos académicos por niveles admitidos explícitos y añaden grupos/equivalencias/destinos. Este documento conserva el contrato v0.5 de referencia; consultar también ../api-comparacion.md.
+
 Diseño propuesto; no es una base de datos implementada. El administrador revisa la información de la oferta, no los documentos del postulante. Todos los ejemplos del prototipo son ficticios.
 
 ## Qué cambia y por qué

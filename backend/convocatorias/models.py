@@ -151,6 +151,10 @@ class TipoRequisito(models.Model):
 
 
 class Requisito(models.Model):
+    relacion_formacion = models.CharField(max_length=20, default="pendiente", choices=[("pendiente", "Relación no definida"), ("independiente", "Independiente"), ("misma_formacion", "Misma formación")])
+    grupo_formacion = models.CharField(max_length=64, null=True, blank=True)
+    equivalencias = models.JSONField(default=list, blank=True)
+    destino = models.ForeignKey(Pais, on_delete=models.PROTECT, null=True, blank=True, related_name="requisitos_destino")
     convocatoria = models.ForeignKey(Convocatoria, on_delete=models.PROTECT, related_name="requisitos")
     texto_original = models.TextField()
     obligatorio = models.BooleanField(default=True)
@@ -169,7 +173,10 @@ class Requisito(models.Model):
     class Meta:
         db_table = "MAE_REQUISITO"
         ordering = ["id"]
-        constraints = [dominio("modo_comprobacion", MODOS, "requisito_modo")]
+        constraints = [dominio("modo_comprobacion", MODOS, "requisito_modo"),
+            models.CheckConstraint(condition=Q(destino__isnull=True) | Q(opcion_estudio__isnull=False), name="requisito_destino_opcion"),
+            models.CheckConstraint(condition=(Q(relacion_formacion="misma_formacion", grupo_formacion__isnull=False, grupo_formacion__regex=r"\S") |
+                Q(relacion_formacion__in=["pendiente", "independiente"], grupo_formacion__isnull=True)), name="requisito_grupo_coherente")]
 
 
 class Evento(models.Model):

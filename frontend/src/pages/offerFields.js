@@ -26,9 +26,14 @@ export const benefitFields = (options) => [scope(options), text('concepto', 'Con
   text('moneda', 'Moneda (código de tres letras)', { maxLength: 3 }), select('periodicidad', 'Periodicidad', enumOptions(['unico', 'mensual', 'anual', 'otra'])), text('detalle', 'Detalle de cobertura', { type: 'textarea' })]
 export const requirementFields = (type, c, options) => {
   const fields = [scope(options), text('texto_original', 'Texto original del requisito', { type: 'textarea', required: true }),
+    select('destino', 'Destino específico (requiere opción; vacío = todos)', choices(c.paises), { kind: 'id' }),
     select('obligatorio', 'Condición obligatoria', bool, { kind: 'boolean', required: true }), select('validado', 'Transcripción revisada por administrador', bool, { kind: 'boolean', required: true }),
     select('activo', 'Requisito activo', bool, { kind: 'boolean', required: true }), text('fecha_referencia', 'Fecha de referencia según las bases', { type: 'date' }),
     text('referencia_bases', 'Referencia en las bases'), text('documento_exigido', 'Documento exigido (lo verifica el oferente)'), text('detalle_acreditacion', 'Condiciones de acreditación externa', { type: 'textarea' })]
+  if (['FORMACION', 'TITULO_AREA', 'PROMEDIO'].includes(type.codigo)) fields.push(
+    select('relacion_formacion', 'Relación entre condiciones académicas', [{ value: 'pendiente', label: 'No definida (pendiente)' }, { value: 'independiente', label: 'Condición independiente' }, { value: 'misma_formacion', label: 'Debe cumplirse en una misma formación' }], { required: true }),
+    text('grupo_formacion', 'Clave del grupo de misma formación', { maxLength: 64 }))
+  if (['TITULO_AREA', 'RESIDENCIA'].includes(type.codigo)) fields.push({ name: 'equivalencias', label: 'Equivalencias revisadas en las bases', kind: 'equivalencias', codigo: type.codigo, paises: c.paises, wide: true })
   for (const [name, spec] of Object.entries(type.esquema_valor.campos)) {
     const f = { name: `regla_${name}`, label: spec.label, required: spec.required, kind: spec.kind }
     if (['paises', 'pais'].includes(spec.kind)) f.options = choices(c.paises, 'codigo')

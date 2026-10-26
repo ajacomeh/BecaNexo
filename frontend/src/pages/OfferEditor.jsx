@@ -25,7 +25,7 @@ function Records({ name, title, offer, catalogs, onSaved }) {
   const records = offer[name]
   const type = catalogs.tipos_requisito.find((t) => t.id === Number(typeId))
   const fields = name === 'opciones' ? optionFields(catalogs) : name === 'beneficios' ? benefitFields(offer.opciones) : type ? requirementFields(type, catalogs, offer.opciones) : []
-  const initial = editing ? { activa: true, activo: true, obligatorio: true, validado: false, ...editing,
+  const initial = editing ? { activa: true, activo: true, obligatorio: true, validado: false, relacion_formacion: 'pendiente', ...editing,
     ...Object.fromEntries(Object.entries(editing.valor_estructurado || {}).map(([key, value]) => [`regla_${key}`, value])) } : {}
   async function save(values) {
     let data = values
