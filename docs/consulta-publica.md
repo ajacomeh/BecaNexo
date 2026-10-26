@@ -1,5 +1,7 @@
 # Consulta pública de becas
 
+La ruta `/` presenta la bienvenida pública. Sus accesos, diseño y rutas se documentan en [bienvenida.md](bienvenida.md).
+
 El catálogo `/becas` y detalle `/becas/:id` ya permitían visitantes, al igual que sus endpoints GET `/api/becas/`, `/api/becas/:id/` y `/api/becas/catalogos/`. Se conservan filtros, paginación y reglas existentes: activa, revisión validada y oferente ecuatoriano. Borradores y pausadas nunca aparecen y devuelven 404 por ID. Las cerradas publicadas conservan su estado de cierre.
 
 Se mantienen los enlaces públicos de iniciar sesión y crear cuenta y la navegación por rol. Perfil, preferencias, favoritos y administración siguen protegidos en frontend y backend; no se cambia CSRF ni los permisos de escritura.
@@ -21,5 +23,7 @@ Las respuestas públicas ya omitían revision, activa, version y clave de dedupl
 Las pruebas de integración del frontend simulan exclusivamente la API para verificar login, retorno, sesión existente, roles, rutas protegidas y ausencia de guardado automático. Las pruebas backend usan test_becanexo_db con --keepdb y comprueban publicación, filtros/paginación, no exposición por ID y permisos.
 
 El recorrido `npm.cmd run test:e2e -- --config playwright.public.config.js` abre Edge sin sesión y consulta una oferta pública existente, aplica búsqueda, abre su detalle, comprueba el enlace oficial, entra al login desde favoritos y conserva next al recargar. Esta configuración solo selecciona public.spec.js y permite reutilizar los servidores locales activos; los otros recorridos mantienen su configuración independiente. Solo hace GET a las APIs: no inicia sesión real, crea cuentas, guarda favoritos, modifica ofertas ni visita el sitio externo. El login y retorno completos se prueban en integración frontend; la autenticación real se mantiene cubierta en backend. Se ejecuta este recorrido específico para respetar la prohibición de modificar datos existentes, sin ejecutar los otros recorridos que crean demostraciones.
+
+El archivo de recorridos públicos también incluye bienvenida adaptable y navegación al panel/retorno con autenticación interceptada en el navegador. Estas respuestas simuladas impiden escrituras de sesiones o usuarios en desarrollo; el resto de consultas públicas usa la API real. Véase bienvenida.md.
 
 No hay migraciones ni modificaciones del respaldo. Resultados reales en avance.md.

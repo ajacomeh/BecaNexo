@@ -1,8 +1,10 @@
+import { Link } from 'react-router-dom'
+
 export default function AuthLayout({ children }) {
   return (
     <div className="auth-layout">
       <aside className="brand-panel" aria-label="BecaNexo">
-        <span className="brand">BecaNexo</span>
+        <Link className="brand" to="/" aria-label="BecaNexo, volver al inicio">BecaNexo</Link>
         <div className="brand-copy">
           <p className="brand-heading">Tu próximo paso <br />puede empezar <br />con una beca.</p>
           <p className="brand-description">Un espacio para conectar tu futuro<br className="hidden lg:block" /> con nuevas oportunidades.</p>

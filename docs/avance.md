@@ -1,5 +1,15 @@
 # Avance de BecaNexo
 
+## Estado actual — bienvenida pública (25 de octubre de 2026)
+
+- Reanudación: comprobados AGENTS, git status/diff y Welcome.jsx sin versionar. Base 001af22; conservados los cambios parciales de App/AuthLayout/Welcome y toda la consulta pública. Referencia visual de presentación revisada en el PDF v05, página 2.
+- Terminada `/` con contenido propio, encabezado, presentación, ilustración SVG local, beneficios actuales, pasos, cierre y aclaración externa. Todas las clases welcome tienen estilos; identidad Inter/azul marino/azul/verde azulado, diseño adaptable, enlaces nativos y foco visible. Login y registro enlazan a `/`; usuarios con sesión ven Mi panel. No se cambian permisos, CSRF ni retorno seguro.
+- Verificación real: 65 pruebas frontend aprobadas en 6 archivos (12,64 s), cero fallidas u omitidas en la ejecución final. Incluyen los 59 casos existentes y 6 nuevos. Primer intento: 4 fallos en pruebas nuevas por devolver el mock como limpieza de beforeEach y pulsar el enlace antes de terminar la restauración de sesión; corregida la preparación y la espera, manteniendo las aserciones. Lint y build aprobados; Django check sin incidencias; git diff --check sin errores de espacios.
+- Navegador Edge: 3 recorridos aprobados con playwright.public.config.js, un trabajador. Bienvenida anónima, login/registro y regreso por logotipo, catálogo/detalle reales en lectura; panel y login/retorno con autenticación interceptada, sin guardar favorito automáticamente. No se enviaron escrituras al servidor ni se alteraron datos. No se ejecutó login real contra desarrollo.
+- Capturas de escritorio (1440 px) y móvil (390 y 320 px) inspeccionadas: sin superposiciones, cortes ni desbordamiento horizontal. Tab comprobado sobre salto al contenido y logotipo; foco visible conservado. No es una auditoría completa de accesibilidad ni de todos los navegadores/dispositivos.
+- Playwright completó los casos pero quedó esperando cerrar sus servidores en Windows. Se identificaron sus árboles de procesos y se cerraron únicamente los servidores creados por esa ejecución; tras ello terminó con código 0 y 3 passed (3,1 min). No se detuvieron servidores ajenos.
+- Rutas y reproducción en bienvenida.md; consulta-publica.md actualizada. Sin migraciones, paquetes nuevos, cambios de base de datos, commit ni publicación. Implementación completada; queda fuera de esta verificación repetir autenticación real en navegador, pues escribiría sesión/last_login y esta etapa prohíbe modificar datos.
+
 ## Estado actual — ajuste de consulta pública (25 de octubre de 2026)
 
 - Repositorio limpio comprobado en 3f11de4. Ya funcionaban consulta anónima de catálogo/detalle, filtros, paginación, reglas de publicación y enlaces públicos de cuenta. Conservados permisos y CSRF.

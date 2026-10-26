@@ -13,6 +13,7 @@ import OfferDetail from './pages/OfferDetail'
 import OfferEditor from './pages/OfferEditor'
 import Institutions from './pages/Institutions'
 import Favorites from './pages/Favorites'
+import Welcome from './pages/Welcome'
 
 export default function App() {
   const { status, error, retry, user } = useAuth()
@@ -28,6 +29,7 @@ export default function App() {
   return <>
     <a className="skip-link" href="#contenido">Saltar al contenido</a>
     <Routes>
+      <Route path="/" element={<Welcome />} />
       <Route path="/favoritos" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Favorites /> : <Navigate to="/inicio" replace />} />
       <Route path="/becas" element={<Offers />} />
       <Route path="/becas/:id" element={<OfferDetail />} />

@@ -1,5 +1,64 @@
 @import "tailwindcss";
 
+.welcome { background: #f5f7fb; }
+.welcome-header, .welcome-footer { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 24px max(24px, calc((100% - 1200px) / 2)); background: white; }
+.welcome .brand { color: #17345c; text-decoration: none; }
+.welcome .brand span { color: #087f8c; }
+.welcome-header nav { display: flex; align-items: center; gap: 28px; font-size: .9rem; font-weight: 600; }
+.welcome-header nav > a:not(.button) { padding: 12px 0; }
+.welcome-header nav > a:not(.button):hover { color: #1d4ed8; text-decoration: underline; }
+.welcome .button, .welcome .secondary-link { min-width: 0; width: auto; margin: 0; justify-content: center; text-decoration: none; gap: 20px; }
+.welcome-hero { max-width: 1248px; margin: auto; padding: 80px 24px 72px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 64px; align-items: center; }
+.welcome h1 { font-size: clamp(2.25rem, 3.6vw, 3.5rem); line-height: 1.12; color: #17345c; letter-spacing: -.045em; }
+.welcome h1 span { color: #08707c; }
+.welcome-description { color: #53647e; line-height: 1.8; margin: 26px 0 30px; font-size: 1.05rem; }
+.welcome-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+.welcome-note { color: #53647e; font-size: .8rem; margin-top: 18px; }
+.welcome-art { background: #17345c; color: white; padding: 32px; border-radius: 24px 24px 80px 24px; box-shadow: 0 24px 50px -30px #17345c80; }
+.welcome-art .eyebrow { color: #c2d3e8; font-size: .68rem; margin-bottom: 0; }
+.welcome-art svg { width: 100%; height: auto; display: block; }
+.welcome-art-caption { border-top: 1px solid #486585; padding-top: 22px; line-height: 1.6; }
+.welcome-art-caption p { color: #c2d3e8; font-size: .85rem; margin-top: 8px; }
+.welcome-section { max-width: 1248px; margin: auto; padding: 48px 24px; }
+.welcome h2 { color: #17345c; font-size: clamp(1.5rem, 2.3vw, 2rem); line-height: 1.25; letter-spacing: -.025em; }
+.welcome-benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 32px; }
+.welcome-benefits article { background: white; border: 1px solid #d7dfed; border-radius: 12px; padding: 28px; }
+.welcome-number { display: inline-flex; background: #e8f4f4; color: #08707c; border-radius: 10px; padding: 10px 13px; font-weight: 700; margin-bottom: 24px; }
+.welcome-benefits h3 { color: #17345c; font-size: 1.1rem; line-height: 1.5; font-weight: 700; }
+.welcome-benefits p, .welcome-how p:not(.eyebrow) { color: #53647e; line-height: 1.75; margin-top: 14px; }
+.welcome-how { display: grid; grid-template-columns: 1fr 1.4fr; gap: 80px; padding-top: 72px; padding-bottom: 80px; }
+.welcome-how ol { list-style: none; counter-reset: steps; margin: 0; padding: 0; }
+.welcome-how li { counter-increment: steps; display: flex; align-items: center; gap: 18px; padding: 18px 0; border-bottom: 1px solid #d7dfed; line-height: 1.6; }
+.welcome-how li:first-child { padding-top: 0; }
+.welcome-how li::before { content: counter(steps); display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; background: #17345c; color: white; border-radius: 50%; font-size: .8rem; font-weight: 700; }
+.welcome-closing { padding: 56px 24px; text-align: center; background: #e7eff9; }
+.welcome-closing > p:not(.eyebrow) { color: #53647e; line-height: 1.7; margin: 20px auto 26px; max-width: 600px; }
+.welcome-closing .welcome-actions { justify-content: center; }
+.welcome-footer { padding-top: 36px; padding-bottom: 36px; }
+.welcome-footer p { max-width: 650px; font-size: .8rem; color: #53647e; line-height: 1.8; }
+@media (max-width: 900px) {
+  .welcome-hero { gap: 32px; padding-top: 48px; }
+  .welcome-art { padding: 24px; }
+  .welcome-how { gap: 32px; }
+  .welcome-benefits { gap: 16px; }
+  .welcome-benefits article { padding: 22px; }
+}
+@media (max-width: 700px) {
+  .welcome-header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; }
+  .welcome-header nav { width: 100%; gap: 12px; flex-wrap: wrap; font-size: .8rem; }
+  .welcome-header .button { padding: 10px 14px; font-size: .8rem; }
+  .welcome-hero { grid-template-columns: 1fr; padding: 40px 20px; gap: 36px; }
+  .welcome-art { max-width: 460px; width: 100%; justify-self: center; }
+  .welcome-section { padding: 36px 20px; }
+  .welcome-benefits, .welcome-how { grid-template-columns: 1fr; }
+  .welcome-how { gap: 28px; }
+  .welcome-footer { flex-direction: column; align-items: flex-start; gap: 12px; padding: 28px 20px; }
+}
+@media (max-width: 380px) {
+  .welcome-actions { flex-direction: column; }
+  .welcome-actions a { width: 100% !important; }
+}
+
 @theme {
   --color-brand: #17345c;
   --color-action: #2563eb;
