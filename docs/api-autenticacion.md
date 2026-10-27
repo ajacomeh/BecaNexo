@@ -12,7 +12,18 @@ Implementada el 24 de octubre de 2026 con Django REST Framework. Prefijo `/api/a
 | POST registro/ | nombre, email, password, password_confirm | 201: objeto usuario; no inicia sesión | 400: campos inválidos, adicionales, contraseña débil, confirmación incorrecta o duplicado; 429: límite |
 | POST login/ | email, password | 200: `{"usuario": {...}, "csrfToken": "..."}` y cookie sessionid | 400: entrada inválida o credenciales rechazadas; 429: límite |
 | GET me/ | Cookie de sesión | 200: objeto usuario | 403: sin sesión válida |
+| PATCH me/ | Sesión, X-CSRFToken y `{"nombre":"María José"}` | 200: `{"nombre":"María José"}` | 400: campos adicionales, nombre inválido/ausente o query params; 403: sin sesión o CSRF inválido |
 | POST logout/ | Cookie de sesión; cuerpo vacío o `{}` | 204: sin cuerpo; sesión invalidada | 403: sin sesión válida |
+
+### Edición del nombre visible propio
+
+`PATCH /api/auth/me/` está disponible para postulantes y administradores activos. Obtiene el destino exclusivamente de `request.user`, sin ID en ruta, cuerpo ni parámetros de consulta. Solo acepta texto en `nombre`: elimina espacios exteriores, requiere contenido no vacío y respeta los 180 caracteres del modelo. Admite tildes, espacios, apóstrofos y otros caracteres legítimos; el frontend lo presenta como texto, no HTML. Los campos adicionales se rechazan en conjunto antes de guardar.
+
+Se guarda únicamente `nombre` mediante `update_fields`; no cambia correo, contraseña, rol, permisos, estado ni datos académicos. Mantiene sesión, CSRF y `never_cache`. La respuesta solo incluye el nombre guardado. GET me sigue siendo la fuente del nombre al restaurar una sesión/recargar.
+
+En la barra lateral de ambos roles, «Editar nombre» abre un diálogo con nombre actual, aclaración de independencia del perfil, Guardar y Cancelar. Escape/cancelar no escriben. Durante la petición se bloquea el doble envío y el cierre del diálogo. El éxito actualiza el contexto y muestra confirmación; el error conserva el nombre anterior y la entrada para corregir/reintentar. El foco regresa al botón que abrió el diálogo.
+
+Comprobación manual: iniciar sesión con una cuenta de pruebas distinta de las cuentas de reunión, abrir `/becas`, pulsar «Editar nombre», cancelar una edición y luego guardar otra. Verificar barra lateral, saludo en `/inicio` y recarga; cerrar sesión y volver a ingresar. Una petición PATCH sin X-CSRFToken debe devolver 403. No usar `revision-avances@example.com` para esta prueba: su fixture detectaría el cambio de identidad como una diferencia.
 
 Todos los POST requieren cookie CSRF y encabezado `X-CSRFToken`; ausencia, token inválido u origen no autorizado producen 403. La comprobación ocurre antes del procesamiento de datos y también para anónimos. En DRF, SessionAuthentication por sí sola omite CSRF para anónimos; la clase CSRFSesionAuthentication lo exige explícitamente con el mecanismo de verificación de Django.
 

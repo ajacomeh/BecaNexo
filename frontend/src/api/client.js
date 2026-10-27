@@ -59,6 +59,10 @@ async function post(path, data, freshToken = false) {
 
 export const authApi = {
   me: () => request('me'),
+  async updateName(nombre) {
+    if (!csrfToken) await prepareCsrf()
+    return request('me', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ nombre }) })
+  },
   register: (data) => post('registro', data, true),
   async login(data) {
     const result = await post('login', data, true)

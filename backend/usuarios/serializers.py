@@ -35,6 +35,16 @@ class LoginSerializer(StrictSerializer):
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
 
+class NombreSerializer(StrictSerializer):
+    nombre = serializers.CharField(max_length=Usuario._meta.get_field("nombre").max_length)
+
+    def to_internal_value(self, data):
+        # CharField admite números convirtiéndolos a texto; aquí se exige texto.
+        if isinstance(data, dict) and "nombre" in data and not isinstance(data["nombre"], str):
+            raise serializers.ValidationError({"nombre": ["Debe ser texto."]})
+        return super().to_internal_value(data)
+
+
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario

@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Usuario
-from .serializers import LoginSerializer, RegistroSerializer, UsuarioSerializer
+from .serializers import LoginSerializer, RegistroSerializer, UsuarioSerializer, NombreSerializer
 from .throttles import LoginThrottle, RegistroThrottle
 
 
@@ -70,11 +70,21 @@ class LoginView(AuthView):
 
 
 class MeView(AuthView):
-    http_method_names = ["get", "options"]
+    http_method_names = ["get", "patch", "options"]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response(UsuarioSerializer(request.user).data)
+
+    def patch(self, request):
+        if request.query_params:
+            return Response({"detail": "Esta operación no acepta parámetros de consulta."}, status=400)
+        serializer = NombreSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = request.user
+        user.nombre = serializer.validated_data["nombre"]
+        user.save(update_fields=["nombre"])
+        return Response({"nombre": user.nombre})
 
 
 class LogoutView(AuthView):

@@ -31,5 +31,10 @@ export default function AuthProvider({ children }) {
     await authApi.logout()
     setSession({ status: 'anonymous', user: null, error: null })
   }
-  return <AuthContext.Provider value={{ ...session, retry, login, logout }}>{children}</AuthContext.Provider>
+  async function updateName(nombre) {
+    const id = session.user?.id
+    const result = await authApi.updateName(nombre)
+    setSession(current => current.user?.id === id ? { ...current, user: { ...current.user, nombre: result.nombre } } : current)
+  }
+  return <AuthContext.Provider value={{ ...session, retry, login, logout, updateName }}>{children}</AuthContext.Provider>
 }

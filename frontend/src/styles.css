@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+.sidebar-name { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; min-width: 0; }
+.sidebar-name > span { min-width: 0; overflow-wrap: anywhere; }
+.edit-name-link { color: #c2d3e8; text-decoration: underline; padding: 8px 0; cursor: pointer; font-size: .8rem; }
+.name-dialog { width: min(520px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.name-dialog .button { min-width: 0; }
+
 .public-catalog .catalog-filters { padding: 22px; }
 .public-catalog .catalog-filters h2 { margin-bottom: 18px; }
 .public-catalog .catalog-filters form { gap: 16px; }

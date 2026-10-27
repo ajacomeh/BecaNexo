@@ -1,5 +1,38 @@
 import { test, expect } from '@playwright/test'
 
+test('editar nombre en diálogo, cancelar, guardar y recargar con API simulada', async ({ page }) => {
+  let nombre = 'Persona de prueba'
+  let writes = 0
+  await fixtures(page, 'postulante')
+  await page.route('**/api/auth/me/', async route => {
+    if (route.request().method() === 'PATCH') {
+      expect(route.request().headers()['x-csrftoken']).toBeTruthy()
+      nombre = route.request().postDataJSON().nombre.trim(); writes++
+      return route.fulfill({ json: { nombre } })
+    }
+    return route.fulfill({ json: { id: 99999, nombre, email: 'visual@example.com', rol: 'postulante' } })
+  })
+  await page.setViewportSize({ width: 320, height: 700 })
+  await page.goto('/becas')
+  const trigger = page.getByRole('button', { name: 'Editar nombre' })
+  await trigger.click()
+  await expect(page.getByLabel('Nombre visible')).toBeFocused()
+  await page.getByLabel('Nombre visible').fill('No guardar')
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+  expect(writes).toBe(0)
+  await trigger.click()
+  await page.getByLabel('Nombre visible').fill('María de Prueba')
+  await noOverflow(page)
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click()
+  await expect(page.locator('.sidebar-name')).toContainText('María de Prueba')
+  await expect(trigger).toBeFocused()
+  await page.reload()
+  await expect(page.locator('.sidebar-name')).toContainText('María de Prueba')
+  expect(writes).toBe(1)
+  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
+})
+
 // Fixtures locales interceptadas: ninguna solicitud llega a la base de datos.
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }], areas: [], idiomas: [], tipos_beca: [], tipos_requisito: [], niveles: [], modalidades: [] }
 const offers = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, titulo: `Prueba visual ${i + 1}`, estado: i === 0 ? 'sin_fecha' : 'abierta', cierre: i === 0 ? null : '2027-12-01T04:59:00Z', institucion: { nombre: 'Entidad ficticia' }, beneficios: i === 1 ? [{ concepto: 'Matrícula', porcentaje: '80.00', opcion_estudio: null }] : [], opciones: [{ nivel: 'grado', modalidad: 'virtual', paises: [1, 2] }, { nivel: 'maestria', modalidad: 'presencial', paises: [1] }] }))
