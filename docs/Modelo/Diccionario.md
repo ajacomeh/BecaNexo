@@ -1,6 +1,21 @@
 # BecaNexo · Diccionario lógico v0.6
 Base v0.5 con ampliación de comparación del 26/10/2026. Modelo parcialmente implementado; el avance distingue tablas existentes de las futuras. No contiene SQL. PK primero, FK después y atributos del negocio. Véase Ampliacion_comparacion_v06.md para contratos y diferencias respecto al ER histórico.
 
+## Ampliación implementada de rastreo — 27/10/2026
+
+El JSON Modelo_logico_v06.json se conserva histórico. Las definiciones v0.6 de este documento no se reescriben silenciosamente: el [suplemento Persistencia_rastreo_bloque1.md](Persistencia_rastreo_bloque1.md) especifica **todos los campos, tipos SQL, nulabilidad, claves y reglas efectivos** de las seis tablas implementadas por rastreo.0001/0002.
+
+| Tabla existente tras el bloque 1 | Finalidad y diferencia frente a v0.6 |
+| --- | --- |
+| CFG_FUENTE | Configuración auditada, política cerrada y activación separada de aprobación automática (CHECK false) |
+| TRA_EJECUCION_RASTREO | Invocación UUID, actor manual real, snapshot, estados y contadores de publicación restringidos a cero |
+| TEC_DOCUMENTO_RASTREO | Nueva; huella/tamaño/MIME/clave de archivo privado, inmutable |
+| TRA_ACCESO_RASTREO | Nueva; intento de red con tiempos, HTTP y documento opcional según resultado; incluye redirigido |
+| TRA_INCIDENCIA_RASTREO | Nueva; fuente/ejecución/acceso coherentes, sin usuario o convocatoria ficticios |
+| AUD_REVISION_RASTREO | Nueva; solo configuración/incidencias, administrador real, antes/después y sello técnico transaccion_id |
+
+TRA_PUBLICACION_FUENTE y el diseño de versiones/observaciones/propuestas siguen pendientes. No se añadieron sus FKs al bloque actual. AUD_EVENTO existente no cambió. PostgreSQL impide mutación del historial incluso mediante ORM que omita save; FK SQL NO ACTION diferibles y Django PROTECT, sin cascadas destructivas. No se cambian campos de convocatorias, beneficios ni perfiles. Los campos específicos implementados prevalecen según el suplemento al consultar el estado actual, no según las tablas futuras del ER histórico.
+
 ## CAT_PAIS
 | Atributo | Tipo lógico | Clave | Referencia | Regla / significado |
 |---|---|---|---|---|

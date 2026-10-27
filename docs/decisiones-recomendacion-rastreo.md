@@ -55,3 +55,26 @@ Propuesta previa: propuesta-reglas-comparacion-v2.md. Modelo vigente: modelo/Mod
 ## Persistencia y alcance
 
 Cada consulta calcula los datos actuales, con no-store. TRA_RECOMENDACION exige configuración, similitud y afinidad; TRA_EVALUACION_REQUISITO depende de ella. No se crean ni se guardan ceros ficticios. La única migración nueva añade cuatro campos y restricciones de MAE_REQUISITO, sin convertir sus valores antiguos. No se implementan todavía IA, rastreo ni notificaciones; las reglas de fuentes y afinidad de arriba siguen siendo decisiones para etapas posteriores.
+
+## Primera vista previa SIAU y nuevas decisiones aprobadas (26/10/2026)
+
+El párrafo anterior describe el cierre de la comparación. Ahora se incorpora exclusivamente un comando manual de **descarga y observación local** de dos fichas SIAU, sin persistencia de negocio, publicación ni ejecución periódica. Véase [rastreo-fuentes-iniciales.md](rastreo-fuentes-iniciales.md). Las candidatas no quedan aprobadas automáticamente como fuentes publicables.
+
+Decisiones aprobadas para la etapa posterior, **no implementadas por esta vista previa**:
+
+- Los cambios observados en una fuente sobre una convocatoria publicada se proponen para revisión; se conserva la versión publicada hasta una decisión administrativa explícita.
+- No sobrescribir correcciones manuales.
+- Desaparición o fallo de acceso genera una incidencia; no cancela automáticamente una convocatoria.
+- Las vencidas se conservan como cerradas, consultables por filtro y favoritos, fuera de las abiertas por defecto. El catálogo actual no se modifica en esta tarea; el ajuste de su selección predeterminada y sus regresiones quedan para el bloque correspondiente.
+
+No se añadieron modelos, campos, migraciones, datos, IA, notificaciones ni rastreo programado. PUSAK se conserva únicamente como enlace de postulación; no se consulta ni se autentica automáticamente.
+
+## Primer bloque de persistencia aprobado e implementado (27/10/2026)
+
+La conclusión anterior corresponde a la vista previa. El usuario autorizó después las seis tablas de fuente, ejecución, documento, acceso, incidencia y revisión de configuración/incidencias; archivo privado separado, sin eliminación automática; ejecución manual al activar mediante administrador real; publicación automática deshabilitada.
+
+Implementado en la app rastreo, con migraciones 0001/0002 y protección PostgreSQL del historial/auditoría. Almacenamiento efectivo D:\Datos_BecaNexo\rastreo. SIAU se registró desactivada y luego se activó mediante dos revisiones del administrador ID 1, elegido por coincidencia exacta de la cuenta indicada por el usuario, sin modificarla. La atribución CLI no es autenticación web.
+
+La ejecución real 1 finalizó técnicamente con seis accesos/documentos y dos avisos de revisión documental pendiente. Ninguna aprobación documental o publicación se deriva de ese éxito. El módulo no cambia datos del catálogo ante 404, timeout, PDF cambiado o vigencia. No hay cron, IA ni notificaciones. El resto de la propuesta de persistencia sigue pendiente, no aprobado por extensión implícita de este bloque.
+
+Véanse [suplemento efectivo](Modelo/Persistencia_rastreo_bloque1.md), [comandos](comandos-rastreo.md), [respaldo](respaldo-rastreo.md) y resultados reales en avance.md. Se conserva v0.6 histórico y se documenta por separado la ampliación.

@@ -30,6 +30,7 @@ dist/
 coverage/
 
 # Archivos generados
+outputs/rastreo/
 *.log
 db.sqlite3
 media/

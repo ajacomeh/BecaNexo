@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "perfiles.apps.PerfilesConfig",
     "convocatorias.apps.ConvocatoriasConfig",
     "favoritos.apps.FavoritosConfig",
+    "rastreo.apps.RastreoConfig",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -161,3 +162,6 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Archivo privado, fuera del repositorio; nunca añadido a MEDIA_URL.
+RASTREO_STORAGE_ROOT = env('RASTREO_STORAGE_ROOT', default='')
