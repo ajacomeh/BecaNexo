@@ -1,10 +1,12 @@
 # Propuesta de persistencia del rastreo
 
-Estado actualizado al 27/10/2026: **primer bloque aprobado e implementado**; resto del diseño pendiente. El JSON v0.6 se conserva histórico. Las secciones siguientes conservan el diseño original para trazabilidad y no deben interpretarse como que las once tablas ya existen. Se leyeron AGENTS, Diccionario, decisiones aprobadas, contrato SIAU e informe real `outputs/rastreo/20261027T043208793284Z/informe.json` y su HTML.
+Estado actualizado al 28/10/2026: **bloques 1 y 2 aprobados e implementados**; resto del diseño pendiente. El JSON v0.6 se conserva histórico. Las secciones siguientes conservan el diseño original para trazabilidad y no deben interpretarse como que las once tablas ya existen. Se leyeron AGENTS, Diccionario, decisiones aprobadas, contrato SIAU e informe real `outputs/rastreo/20261027T043208793284Z/informe.json` y su HTML.
 
 Implementadas CFG_FUENTE, TRA_EJECUCION_RASTREO, TEC_DOCUMENTO_RASTREO, TRA_ACCESO_RASTREO, TRA_INCIDENCIA_RASTREO y AUD_REVISION_RASTREO (solo configuración/incidencias). Migraciones 0001_initial y 0002_integridad_historial aplicadas en pruebas y desarrollo. Se aprobó archivo privado separado, conservación sin borrado automático y ejecución manual con administrador real; aprobación automática permanece bloqueada. Campos, diferencias y restricciones efectivas en [suplemento implementado](Modelo/Persistencia_rastreo_bloque1.md). No se modificaron entidades del catálogo.
 
-Continúan **sin implementar** TRA_PUBLICACION_FUENTE, TRA_VERSION_PUBLICACION, REL_VERSION_DOCUMENTO, TRA_OBSERVACION_RASTREO, TRA_PROPUESTA_CAMBIO y las FK/dimensiones de revisión que dependen de ellas. Tampoco publicación, planificación diaria, convenios ni integración de fechas/topes. Las expresiones «propuesto», «pendiente» y el plan de bloques del documento original se refieren al diseño de entonces; el estado operativo actual se resume aquí y en avance.md.
+El bloque 2 añade TRA_PUBLICACION_FUENTE, TRA_VERSION_PUBLICACION, REL_VERSION_DOCUMENTO y TRA_OBSERVACION_RASTREO, con relaciones opcionales en accesos/incidencias. Migraciones 0003/0004/0005 aplicadas en pruebas y desarrollo; ejecución real 2 finalizada con dos publicaciones/versiones/observaciones y cuatro relaciones documentales. El [suplemento del bloque 2](Modelo/Persistencia_rastreo_bloque2.md) especifica ajustes técnicos y límites reales. La ejecución 1 permanece sin asociaciones retrospectivas.
+
+Continúan **sin implementar** TRA_PROPUESTA_CAMBIO, las dimensiones de revisión editorial y el vínculo/creación de convocatorias. Tampoco publicación automática, planificación diaria, convenios ni integración de fechas/topes. Las expresiones «propuesto», «pendiente» y el plan de bloques del documento original se refieren al diseño de entonces; el estado operativo actual se resume aquí y en avance.md.
 
 ## Correcciones comprobadas
 

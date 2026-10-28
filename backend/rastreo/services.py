@@ -13,7 +13,8 @@ from django.utils import timezone
 
 from convocatorias.siau_red import Downloader, AccessError, ROOT, INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
 from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
-from .models import Fuente, Ejecucion, Documento, Acceso, Incidencia, Revision
+from .models import Fuente, Ejecucion, Documento, Acceso, Incidencia, Revision, Publicacion
+from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
 
 
@@ -86,8 +87,9 @@ def exclusion(source_id):
                 cursor.execute('SELECT pg_advisory_unlock(%s,%s)', lock)
 
 
-def incident(execution, code, detail, access=None, severity='error'):
+def incident(execution, code, detail, access=None, severity='error', publication=None):
     return Incidencia.objects.create(fuente_id=execution.fuente_id, ejecucion=execution, acceso=access,
+                                    publicacion_id=access.publicacion_id if access else getattr(publication, 'pk', None),
                                     codigo=code, detalle=detail, gravedad=severity)
 
 
@@ -96,13 +98,15 @@ class PersistentDownloader(Downloader):
         super().__init__(pause=max(2, source.espera_seg), timeout=min(15, source.timeout_seg))
         self.execution = execution
         self.sequence = 0
+        self.publication = None
+        self.page_url = None
 
     def record(self, url, record, status, result, document=None, error=None, headers=None):
         self.sequence += 1
         admitted = datetime.fromisoformat(record['consulta_utc'])
         started = datetime.fromisoformat(record['inicio_peticion_utc']) if record.get('inicio_peticion_utc') else None
         finished = timezone.now()
-        return Acceso.objects.create(ejecucion=self.execution, secuencia=self.sequence,
+        return Acceso.objects.create(ejecucion=self.execution, secuencia=self.sequence, publicacion=self.publication,
             rol='robots' if url == ROBOTS else 'indice' if url == INDEX else 'bases' if url in PDFS else 'ficha',
             url_original=url, url_normalizada=url, url_final=url, admitido_en=admitted,
             inicio_peticion_en=started, fin=max(finished, started or admitted, admitted),
@@ -129,6 +133,8 @@ class PersistentDownloader(Downloader):
                 prepared = prepare_document(content, mime)
                 with transaction.atomic():
                     document, created = register_document(prepared)
+                    if self.page_url and url in PAGES and self.publication is None:
+                        self.publication = identity(self.execution, self.page_url)
                     prior = Acceso.objects.filter(url_normalizada=url, documento__isnull=False).order_by('-id').first()
                     access = self.record(url, entry, status, 'descargado' if created else 'reutilizado', document, headers=headers)
                     if url in PDFS and prior and prior.documento_id != document.pk:
@@ -136,6 +142,8 @@ class PersistentDownloader(Downloader):
                     if url in PDFS:
                         incident(self.execution, 'REVISION_DOCUMENTAL_PENDIENTE', 'Descarga técnica correcta; bases no aprobadas.', access, 'aviso')
             except (StorageError, OSError, DatabaseError) as exc:
+                if self.page_url:
+                    self.publication = Publicacion.objects.filter(fuente_id=self.execution.fuente_id, url_normalizada=normalize_url(self.page_url)).first()
                 access = self.record(url, entry, status, 'error', error=type(exc).__name__)
                 incident(self.execution, 'ALMACENAMIENTO', str(exc) if isinstance(exc, StorageError) else type(exc).__name__, access)
                 raise AccessError('No se pudo conservar evidencia íntegra.') from exc
@@ -153,7 +161,9 @@ def summary(execution):
     return {'id': execution.pk, 'clave': str(execution.clave_idempotencia), 'estado': execution.estado,
             'accesos': execution.accesos.count(), 'documentos_distintos': execution.accesos.exclude(documento=None).values('documento').distinct().count(),
             'incidencias': list(execution.incidencias.values('id', 'codigo', 'gravedad', 'detalle')),
-            'publicaciones_creadas': 0, 'revision_documental': 'pendiente'}
+            'publicaciones_observadas': execution.publicaciones_observadas, 'versiones_nuevas': execution.versiones_nuevas,
+            'observaciones_sin_cambios': execution.observaciones_sin_cambios,
+            'convocatorias_creadas': 0, 'revision_documental': 'pendiente'}
 
 
 def run_manual(source_id, actor_id, key):
@@ -212,20 +222,46 @@ def run_manual(source_id, actor_id, key):
                 download(INDEX)
             except AccessError:
                 pass  # Fichas autorizadas se investigan aunque falle el índice.
-            pdf_seen = set()
+            pdf_cache = {}
             for url in PAGES:
+                downloader.page_url = url
+                downloader.publication = Publicacion.objects.filter(fuente=source, url_normalizada=normalize_url(url)).first()
                 try:
-                    item = extract_html(download(url))
+                    page = download(url)
+                    item = extract_html(page)
+                    publication = downloader.publication
+                    if publication is None:
+                        raise ValueError('Ficha sin identidad persistida.')
+                    html_access = execution.accesos.filter(url_normalizada=page['url'], documento__isnull=False).select_related('documento').latest('id')
+                    evidence = [{'rol': 'ficha_html', 'url': url, 'url_original': url, 'documento': html_access.documento}]
+                    pending = []
                     if not item['seccion_completa']:
-                        incident(execution, 'ESTRUCTURA', 'HTML fuera de contrato; no estructurar automáticamente.')
+                        incident(execution, 'ESTRUCTURA', 'HTML fuera de contrato; no estructurar automáticamente.', publication=publication)
                     for link in item['enlaces_bases']:
                         if link['url'] not in PDFS:
-                            incident(execution, 'BASE_NO_PERMITIDA', 'Enlace de bases fuera de lista cerrada.')
-                        elif link['url'] not in pdf_seen:
-                            pdf_seen.add(link['url'])
-                            download(link['url'])
-                except (AccessError, ValueError) as exc:
-                    incident(execution, 'FICHA_INCOMPLETA', type(exc).__name__)
+                            pending.append({'url': link['url'], 'estado': 'fuera_de_lista'})
+                            incident(execution, 'BASE_NO_PERMITIDA', 'Enlace de bases fuera de lista cerrada.', publication=publication)
+                            continue
+                        if link['url'] not in pdf_cache:
+                            try:
+                                pdf = download(link['url'])
+                                pdf_cache[link['url']] = execution.accesos.filter(url_normalizada=pdf['url'], documento__isnull=False).select_related('documento').latest('id').documento
+                            except (AccessError, ValueError):
+                                pdf_cache[link['url']] = None
+                        document = pdf_cache[link['url']]
+                        if document is None:
+                            pending.append({'url': link['url'], 'estado': 'inaccesible'})
+                            incident(execution, 'BASE_INACCESIBLE', 'Evidencia parcial; no se sustituye por un PDF histórico.', publication=publication)
+                        else:
+                            evidence.append({'rol': 'bases_pdf', 'url': link['url'], 'url_original': link['url_original'], 'documento': document})
+                    observe(execution, publication, item, evidence, pending)
+                except (AccessError, ValueError, ValidationError) as exc:
+                    publication = downloader.publication
+                    incident(execution, 'FICHA_INCOMPLETA', type(exc).__name__, publication=publication)
+                    if publication:
+                        observe(execution, publication, detail='Fallo de ficha; no se fabricó versión.')
+            downloader.publication = None
+            downloader.page_url = None
             failures = execution.incidencias.filter(gravedad='error').exists()
             state = 'parcial' if failures else 'finalizada'
             if not execution.accesos.filter(documento__isnull=False).exists():
@@ -234,6 +270,8 @@ def run_manual(source_id, actor_id, key):
         except Exception as exc:
             # Sin mensajes de drivers/paths privados ni credenciales en historial.
             incident(execution, 'EJECUCION_FALLIDA', type(exc).__name__)
+            for publication in Publicacion.objects.filter(fuente=source, url_normalizada__in=PAGES):
+                observe(execution, publication, detail='Ejecución interrumpida por fallo técnico; sin versión nueva.')
             Ejecucion.objects.filter(pk=execution.pk).update(estado='fallida', fin=timezone.now(), error_resumen=type(exc).__name__)
         # BaseException/interrupción dura deja en_curso; el lock se libera y se recupera explícitamente.
         return execution

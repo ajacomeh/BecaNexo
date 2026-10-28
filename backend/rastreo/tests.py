@@ -105,7 +105,8 @@ class RastreoTests(TransactionTestCase):
         self.assertEqual(Acceso.objects.count(), accesses * 2)
         self.assertTrue(Acceso.objects.filter(resultado='reutilizado').exists())
         self.assertEqual(integrity_report()['problemas'], [])
-        self.assertEqual(summary(run)['publicaciones_creadas'], 0)
+        self.assertEqual(summary(run)['convocatorias_creadas'], 0)
+        self.assertEqual(summary(run)['publicaciones_observadas'], 2)
 
     def test_history_and_finished_execution_immutable(self):
         source = self.source()

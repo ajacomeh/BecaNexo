@@ -78,3 +78,9 @@ Implementado en la app rastreo, con migraciones 0001/0002 y protección PostgreS
 La ejecución real 1 finalizó técnicamente con seis accesos/documentos y dos avisos de revisión documental pendiente. Ninguna aprobación documental o publicación se deriva de ese éxito. El módulo no cambia datos del catálogo ante 404, timeout, PDF cambiado o vigencia. No hay cron, IA ni notificaciones. El resto de la propuesta de persistencia sigue pendiente, no aprobado por extensión implícita de este bloque.
 
 Véanse [suplemento efectivo](Modelo/Persistencia_rastreo_bloque1.md), [comandos](comandos-rastreo.md), [respaldo](respaldo-rastreo.md) y resultados reales en avance.md. Se conserva v0.6 histórico y se documenta por separado la ampliación.
+
+## Segundo bloque aprobado e implementado (28/10/2026)
+
+Identidad por fuente/URL, versiones inmutables, relaciones documentales exactas y observaciones por ejecución incorporadas con migraciones 0003/0004/0005. La ejecución real 2 confirmó dos publicaciones sin convocatoria, dos versiones y dos observaciones; no reconstruye la ejecución 1. Cambios/repetición se probaron con fixtures, no con descargas adicionales. No se hereda aprobación documental: ambos PDF siguen pendientes de revisión.
+
+El [suplemento del bloque 2](Modelo/Persistencia_rastreo_bloque2.md) documenta manifiesto JSON, sello de transacción, pertenencia/inmutabilidad en PostgreSQL y contadores reales. Continúan pendientes revisión editorial, vinculación/creación de convocatorias, propuestas y publicación automática. Fuente activa sigue siendo distinta de fuente aprobada: SIAU conserva aprobación automática false. No se alteran decisiones académicas, precisión temporal, topes económicos ni reglas del catálogo.

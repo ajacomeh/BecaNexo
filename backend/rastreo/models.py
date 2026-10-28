@@ -53,7 +53,7 @@ class Ejecucion(models.Model):
                        check('rast_ejec_actor', Q(origen='manual', solicitado_por__isnull=False) | Q(origen='programada', solicitado_por__isnull=True)),
                        check('rast_ejec_estado', Q(estado='en_curso', fin__isnull=True) | Q(estado__in=['finalizada', 'parcial', 'fallida', 'omitida'], fin__isnull=False)),
                        check('rast_ejec_fechas', Q(fin__isnull=True) | Q(fin__gte=F('inicio'))),
-                       check('rast_ejec_sin_publicaciones', Q(publicaciones_observadas=0, versiones_nuevas=0, observaciones_sin_cambios=0))]
+                       check('rast_ejec_contadores', Q(versiones_nuevas__lte=F('publicaciones_observadas'), observaciones_sin_cambios__lte=F('publicaciones_observadas')))]
 
 
 class Documento(models.Model):
@@ -71,6 +71,7 @@ class Documento(models.Model):
 
 
 class Acceso(models.Model):
+    publicacion = models.ForeignKey('Publicacion', null=True, on_delete=models.PROTECT)
     ejecucion = models.ForeignKey(Ejecucion, on_delete=models.PROTECT, related_name='accesos')
     documento = models.ForeignKey(Documento, null=True, on_delete=models.PROTECT)
     secuencia = models.PositiveIntegerField()
@@ -100,6 +101,8 @@ class Acceso(models.Model):
 
 
 class Incidencia(models.Model):
+    publicacion = models.ForeignKey('Publicacion', null=True, on_delete=models.PROTECT)
+    version = models.ForeignKey('Version', null=True, on_delete=models.PROTECT)
     fuente = models.ForeignKey(Fuente, on_delete=models.PROTECT)
     ejecucion = models.ForeignKey(Ejecucion, null=True, on_delete=models.PROTECT, related_name='incidencias')
     acceso = models.ForeignKey(Acceso, null=True, on_delete=models.PROTECT)
@@ -134,3 +137,73 @@ class Revision(models.Model):
         constraints = [check('rast_revision_objeto', Q(dimension='configuracion', fuente__isnull=False, incidencia__isnull=True) | Q(dimension='incidencia', fuente__isnull=True, incidencia__isnull=False)),
                        check('rast_revision_decision', Q(decision__in=['pendiente', 'aprobada', 'rechazada', 'resuelta', 'aplicada'])),
                        check('rast_revision_motivo', Q(motivo__regex=r'\S'))]
+
+
+class Publicacion(models.Model):
+    fuente = models.ForeignKey(Fuente, on_delete=models.PROTECT)
+    convocatoria = models.ForeignKey('convocatorias.Convocatoria', null=True, on_delete=models.PROTECT)
+    url_original = models.TextField()
+    url_normalizada = models.CharField(max_length=2048)
+    normalizacion_version = models.CharField(max_length=60)
+    primera_deteccion = models.DateTimeField(default=timezone.now)
+    ultima_deteccion = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'TRA_PUBLICACION_FUENTE'
+        constraints = [models.UniqueConstraint(fields=['fuente', 'url_normalizada'], name='rast_publicacion_identidad'),
+                       check('rast_publicacion_fechas', Q(ultima_deteccion__gte=F('primera_deteccion'))),
+                       check('rast_publicacion_sin_vinculo', Q(convocatoria__isnull=True))]
+
+
+class Version(models.Model):
+    publicacion = models.ForeignKey(Publicacion, on_delete=models.PROTECT, related_name='versiones')
+    numero = models.PositiveIntegerField()
+    creada_en = models.DateTimeField(default=timezone.now)
+    version_extractor = models.CharField(max_length=80)
+    version_normalizador = models.CharField(max_length=60)
+    version_contrato = models.PositiveIntegerField()
+    hash_manifiesto = models.CharField(max_length=64)
+    hash_contenido_relevante = models.CharField(max_length=64)
+    manifiesto = models.JSONField()
+    datos_extraidos = models.JSONField()
+    texto_extraido = models.TextField(null=True)
+    advertencias = models.JSONField()
+    estado_extraccion = models.CharField(max_length=20)
+    transaccion_id = models.BigIntegerField(db_default=models.Func(function='txid_current', output_field=models.BigIntegerField()), editable=False)
+
+    class Meta:
+        db_table = 'TRA_VERSION_PUBLICACION'
+        constraints = [models.UniqueConstraint(fields=['publicacion', 'numero'], name='rast_version_numero'),
+                       models.UniqueConstraint(fields=['publicacion', 'hash_manifiesto', 'version_extractor', 'version_normalizador', 'version_contrato'], name='rast_version_identidad'),
+                       check('rast_version_positivos', Q(numero__gt=0, version_contrato__gt=0)),
+                       check('rast_version_hashes', Q(hash_manifiesto__regex=r'^[0-9a-f]{64}$', hash_contenido_relevante__regex=r'^[0-9a-f]{64}$')),
+                       check('rast_version_estado', Q(estado_extraccion__in=['completa', 'parcial', 'fallida']))]
+
+
+class VersionDocumento(models.Model):
+    version = models.ForeignKey(Version, on_delete=models.PROTECT, related_name='documentos')
+    documento = models.ForeignKey(Documento, on_delete=models.PROTECT)
+    rol = models.CharField(max_length=20)
+    url_original = models.TextField()
+    url_normalizada = models.CharField(max_length=2048)
+    localizador = models.TextField(null=True)
+
+    class Meta:
+        db_table = 'REL_VERSION_DOCUMENTO'
+        constraints = [models.UniqueConstraint(fields=['version', 'rol', 'url_normalizada'], name='rast_version_documento_url'),
+                       check('rast_version_documento_rol', Q(rol__in=['ficha_html', 'bases_pdf', 'anexo']))]
+
+
+class Observacion(models.Model):
+    ejecucion = models.ForeignKey(Ejecucion, on_delete=models.PROTECT, related_name='observaciones')
+    publicacion = models.ForeignKey(Publicacion, on_delete=models.PROTECT, related_name='observaciones')
+    version = models.ForeignKey(Version, null=True, on_delete=models.PROTECT)
+    observada_en = models.DateTimeField(default=timezone.now)
+    resultado = models.CharField(max_length=24)
+    detalle = models.TextField(null=True)
+
+    class Meta:
+        db_table = 'TRA_OBSERVACION_RASTREO'
+        indexes = [models.Index(fields=['publicacion', 'observada_en'], name='rast_obs_publicacion_fecha')]
+        constraints = [models.UniqueConstraint(fields=['ejecucion', 'publicacion'], name='rast_observacion_unica'),
+                       check('rast_observacion_resultado', Q(resultado='fallo', version__isnull=True) | Q(resultado__in=['nueva', 'sin_cambios', 'cambio_bytes', 'cambio_relevante'], version__isnull=False))]

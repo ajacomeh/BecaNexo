@@ -1,10 +1,45 @@
-# Rastreo manual persistente: bloque 1
+# Rastreo manual persistente: bloques 1 y 2
 
 Desde la raíz del proyecto en PowerShell. No hay frontend nuevo, cron, publicación, usuarios ficticios ni acceso autenticado a PUSAK. Se conservan las seis URLs del adaptador SIAU. `previsualizar_siau` sigue escribiendo únicamente salidas locales ignoradas, sin ORM de rastreo.
 
 La CLI es una operación local de confianza. `--actor-id` **atribuye** la operación; no es autenticación web. Debe corresponder a un administrador activo existente. Para esta verificación el usuario autorizó seleccionar su cuenta por coincidencia exacta de correo: ID 1. No se modificó la cuenta ni se usó su contraseña.
 
 ## Configuración y comandos
+
+Consultas nuevas del bloque 2, **sin red y sin escrituras** (sustituir IDs por los listados):
+
+```powershell
+.\.venv\Scripts\python.exe backend/manage.py rastreo publicaciones --fuente-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo versiones --publicacion-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo documentos --version-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo observaciones --ejecucion-id 2
+# Comparación solo entre versiones de la misma publicación; admite comparar una consigo misma.
+.\.venv\Scripts\python.exe backend/manage.py rastreo diferencias --version-id 1 --otra-version-id 1
+```
+
+`versiones` incluye manifiesto, huellas, número, extractor/normalizador/contrato y advertencias; `documentos` muestra referencias exactas, no interpreta ni aprueba el PDF. `diferencias` muestra campos pertinentes antes/después y ambos manifiestos/extractores; no calcula similitud ni propone aplicar cambios. IDs inexistentes o versiones de distintas publicaciones se rechazan. Listados sin paginación en esta CLI local acotada a dos fichas; no es API pública.
+
+`resumen` ahora expone `publicaciones_observadas`, `versiones_nuevas`, `observaciones_sin_cambios` y `convocatorias_creadas: 0`. Se retira el ambiguo `publicaciones_creadas: 0` del bloque 1. Una falla conocida cuenta como observación con versión NULL; una ficha inicialmente desconocida que no logra conservar HTML no fabrica identidad/versión. La ejecución 1 conserva contadores cero y no recibe observaciones retrospectivas.
+
+Una misma evidencia/contrato reutiliza versión, pero deja observación y accesos nuevos. Cambio solo decorativo produce otra versión con igual huella relevante; PDF distinto siempre cambia manifiesto. Bases inaccesibles permanecen pendientes sin reemplazo por las antiguas. Revisión documental y publicación siguen deshabilitadas en este bloque.
+
+Estado real comprobado el 28/10/2026: ejecución **2**, UUID `aefd2102-e4a0-4651-8175-a73eb673df0b`, finalizada; publicaciones 1/2, versiones 1/2 (número 1), observaciones 1/2, cuatro relaciones documentales. Jóvenes es publicación 1 y Productivo publicación 2. Seis accesos HTTP 200, avisos 3/4 de revisión documental pendiente. Nueve documentos totales íntegros. No lanzar `ejecutar` para consultar estos resultados:
+
+```powershell
+.\.venv\Scripts\python.exe backend/manage.py showmigrations rastreo
+.\.venv\Scripts\python.exe backend/manage.py migrate --plan
+.\.venv\Scripts\python.exe backend/manage.py rastreo resumen --ejecucion-id 2
+.\.venv\Scripts\python.exe backend/manage.py rastreo publicaciones --fuente-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo versiones --publicacion-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo versiones --publicacion-id 2
+.\.venv\Scripts\python.exe backend/manage.py rastreo documentos --version-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo documentos --version-id 2
+.\.venv\Scripts\python.exe backend/manage.py rastreo observaciones --ejecucion-id 2
+.\.venv\Scripts\python.exe backend/manage.py rastreo observaciones --ejecucion-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo integridad
+```
+
+La consulta de observaciones de la ejecución 1 devuelve `[]`: su extracción no se reconstruyó retrospectivamente. Solo existe una versión por publicación; no hay todavía un par real diferente de la misma identidad para comparar. Los cambios A→B→A y de PDF están cubiertos por pruebas sintéticas.
 
 `backend/.env` contiene `RASTREO_STORAGE_ROOT=D:/Datos_BecaNexo/rastreo`. Se comprobó esa carpeta real, sin confusión con «rastro». No se sirve mediante MEDIA_URL. Pruebas usan TemporaryDirectory separado; nunca la carpeta real.
 

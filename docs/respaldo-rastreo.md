@@ -2,6 +2,32 @@
 
 El archivo `pg_dump` de becanexo_db **no incluye** HTML/PDF de `RASTREO_STORAGE_ROOT`. Un respaldo utilizable debe conservar base, documentos y un manifiesto que relacione hashes/rutas con el punto de captura. No borrar evidencia ni sobrescribir respaldos anteriores.
 
+## Respaldo utilizado para el bloque 2
+
+Antes de aplicar 0003/0004/0005 se comprobó la copia informada `D:\Respaldos_BecaNexo\becanexo_rastreo_20261027_183559`: seis documentos y listado legible. No podía garantizarse que incluyera todas las escrituras posteriores de PostgreSQL, por lo que se creó una carpeta nueva, sin sobrescribirla:
+
+**D:\Respaldos_BecaNexo\becanexo_pre_bloque2_20261028T000340Z_b52939e9**
+
+Contiene `becanexo_db.backup` (170062 bytes), `documentos/` (seis archivos), `manifiesto.json` y `pg_restore-list.txt`. Captura mediante snapshot PostgreSQL exportado, compartido con pg_dump, metadatos leídos en la misma transacción REPEATABLE READ y bloqueo de exclusión SIAU durante la copia. Se comprobaron huellas/tamaños, pg_dump exit 0 y pg_restore --list exit 0. Al reanudar el 28/10 se revalidaron SHA-256 del dump y seis archivos, y el listado volvió a salir 0. **No se ejecutó una restauración completa**.
+
+Comprobación de solo lectura, reproducible desde la raíz en PowerShell:
+
+```powershell
+$respaldoBloque2 = 'D:\Respaldos_BecaNexo\becanexo_pre_bloque2_20261028T000340Z_b52939e9'
+$manifiestoBloque2 = Get-Content -LiteralPath (Join-Path $respaldoBloque2 'manifiesto.json') -Raw | ConvertFrom-Json
+$dumpBloque2 = Join-Path $respaldoBloque2 'becanexo_db.backup'
+if ((Get-FileHash -LiteralPath $dumpBloque2 -Algorithm SHA256).Hash.ToLowerInvariant() -ne $manifiestoBloque2.dump_sha256) { throw 'Huella de dump distinta' }
+foreach ($documentoBloque2 in $manifiestoBloque2.archivos) {
+    $archivoBloque2 = Join-Path (Join-Path $respaldoBloque2 'documentos') $documentoBloque2.archivo
+    if ((Get-Item -LiteralPath $archivoBloque2).Length -ne $documentoBloque2.bytes) { throw 'Tamaño distinto' }
+    if ((Get-FileHash -LiteralPath $archivoBloque2 -Algorithm SHA256).Hash.ToLowerInvariant() -ne $documentoBloque2.sha256) { throw 'Huella documental distinta' }
+}
+& 'C:\Program Files\PostgreSQL\16\bin\pg_restore.exe' --list $dumpBloque2
+if ($LASTEXITCODE -ne 0) { throw 'Listado fallido' }
+```
+
+Esta copia es **previa a las migraciones del bloque 2 y a la ejecución real 2**; no contiene sus nuevas publicaciones/versiones ni los tres HTML posteriores. La integridad actual se verificó separadamente con `rastreo integridad`: nueve documentos, cero problemas, cero eliminados. Una captura conjunta posterior y una restauración completa aislada siguen siendo verificaciones operativas pendientes, no implícitas en el listado del dump. Los apartados siguientes conservan la evidencia y el procedimiento del bloque 1.
+
 ## Antes de migrar
 
 1. Ejecutar pruebas, revisar sqlmigrate y migrate --plan. Para este bloque, únicamente rastreo.0001_initial y rastreo.0002_integridad_historial.
