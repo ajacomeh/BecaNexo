@@ -14,6 +14,7 @@ import OfferEditor from './pages/OfferEditor'
 import Institutions from './pages/Institutions'
 import Favorites from './pages/Favorites'
 import Welcome from './pages/Welcome'
+import Crawling from './pages/Crawling'
 
 export default function App() {
   const { status, error, retry, user } = useAuth()
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/gestion/convocatorias/nueva" element={admin(<OfferEditor key="new" />)} />
       <Route path="/gestion/convocatorias/:id" element={admin(<OfferEditor key="edit" />)} />
       <Route path="/gestion/instituciones" element={admin(<Institutions />)} />
+      <Route path="/gestion/rastreo/*" element={admin(<Crawling />)} />
       <Route path="/login" element={authenticated ? <Navigate to={loginReturnPath(location.search)} replace /> : <Login />} />
       <Route path="/registro" element={authenticated ? <Navigate to="/inicio" replace /> : <Register />} />
       <Route path="/inicio" element={authenticated ? <Home /> : <Navigate to="/login" replace />} />

@@ -25,7 +25,7 @@ export default function ProfileLayout({ children }) {
         {user.rol === 'postulante' && <><NavLink to="/perfil">Mi perfil académico</NavLink><NavLink to="/preferencias">Idiomas y preferencias</NavLink></>}
         <NavLink to="/becas">Explorar becas</NavLink>
         {user.rol === 'postulante' && <NavLink to="/favoritos">Mis favoritas</NavLink>}
-        {user.rol === 'administrador' && <><NavLink to="/gestion/convocatorias">Convocatorias</NavLink><NavLink to="/gestion/instituciones">Entidades oferentes</NavLink></>}
+        {user.rol === 'administrador' && <><NavLink to="/gestion/convocatorias">Convocatorias</NavLink><NavLink to="/gestion/instituciones">Entidades oferentes</NavLink><NavLink to="/gestion/rastreo">Rastreo</NavLink></>}
       </nav>
       <div className="sidebar-account"><div className="sidebar-name"><span>{user.nombre}</span><button type="button" className="edit-name-link" disabled={busy} onClick={() => { setSaved(false); setEditing(true) }}>Editar nombre</button></div><span className="capitalize">{user.rol}</span>
         {saved && <span role="status">Nombre actualizado.</span>}
