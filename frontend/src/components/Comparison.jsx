@@ -1,3 +1,4 @@
+import Icon from './Icon'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/context'
@@ -38,7 +39,7 @@ function Evaluation({ item, catalogs }) {
 function Requirements({ items, catalogs }) {
   return groups.map(([state, title]) => {
     const records = items.filter(r => r.resultado === state)
-    return records.length > 0 && <section key={state}><h4>{title}</h4><ul className="detail-list">{records.map(item => <Evaluation key={item.id} item={item} catalogs={catalogs} />)}</ul></section>
+    return records.length > 0 && <section key={state}><h4><Icon name={state === "cumple" ? "success" : state === "no_cumple" ? "failure" : "pending"} />{title}</h4><ul className="detail-list">{records.map(item => <Evaluation key={item.id} item={item} catalogs={catalogs} />)}</ul></section>
   })
 }
 
@@ -47,7 +48,7 @@ function Option({ option, featured, catalogs }) {
     {featured && <p className="eyebrow">OPCIÓN DESTACADA PARA CONSULTA</p>}
     <h3>{option.programa || 'Programa no especificado'}</h3>
     <p>{valueText(option.nivel)} · {valueText(option.modalidad)} · {option.destinos.join(', ') || 'Destino no especificado'}</p>
-    <p className="comparison-summary">{option.resumen}</p>
+    <p className="comparison-summary"><Icon name={option.resultado === "cumple" ? "success" : option.resultado === "no_cumple" ? "failure" : "pending"} />{option.resumen}</p>
     {option.aviso && <Message kind="info">{option.aviso}</Message>}
     {option.verificaciones_externas_pendientes > 0 && <p className="comparison-external">Hay verificaciones externas pendientes, incluso cuando coinciden los datos declarados.</p>}
     {option.resultados_destino ? <div><h4>Resultado por destino</h4><p>Consulta las condiciones de cada país. Las preferencias de destino no determinan este resultado.</p>
@@ -75,12 +76,12 @@ export default function Comparison({ offerId, catalogs }) {
     return () => window.removeEventListener('focus', refresh)
   }, [attempt])
   if (user?.rol === 'administrador') return null
-  if (!user) return <section className="profile-card"><h2>Compara los requisitos con tu información</h2><p>Inicia sesión para consultar coincidencias y datos pendientes. La entidad oferente verifica la documentación.</p><Link className="secondary-link" to={`/login?next=${encodeURIComponent(safeReturnPath(`/becas/${offerId}`))}`}>Iniciar sesión para comparar requisitos</Link></section>
+  if (!user) return <section className="profile-card"><h2>Compara los requisitos con tu información</h2><p>Inicia sesión para consultar coincidencias y datos pendientes. La entidad oferente verifica la documentación.</p><Link className="secondary-link" to={`/login?next=${encodeURIComponent(safeReturnPath(`/becas/${offerId}`))}`}><Icon name="compare" /><span>Iniciar sesión para comparar requisitos</span></Link></section>
   return <section className="profile-card comparison" aria-labelledby="comparison-title">
     <h2 id="comparison-title">Comparación de requisitos</h2>
     <p>Compara cada opción con tu información declarada. No acredita documentos ni garantiza admisión o adjudicación.</p>
-    <Button busy={state.busy} onClick={() => { setState({ data: null, busy: true, error: '' }); setAttempt(n => n + 1) }}>{state.busy ? 'Comparando requisitos…' : attempt ? 'Actualizar comparación' : 'Comparar requisitos'}</Button>
-    {state.busy && <p role="status">Consultando requisitos y datos actuales…</p>}
+    <Button icon={attempt ? "refresh" : "compare"} busy={state.busy} onClick={() => { setState({ data: null, busy: true, error: '' }); setAttempt(n => n + 1) }}>{state.busy ? 'Comparando requisitos…' : attempt ? 'Actualizar comparación' : 'Comparar requisitos'}</Button>
+    {state.busy && <p role="status"><Icon name="loading" />Consultando requisitos y datos actuales…</p>}
     <Message>{state.error}</Message>
     {state.data && <div aria-live="polite">
       <p className="profile-note">{state.data.aviso}</p><p className="small-note">{state.data.criterio_destacada}</p>

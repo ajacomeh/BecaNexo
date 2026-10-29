@@ -12,7 +12,7 @@ const initialValue = (field, value) => {
   return value == null ? '' : String(value)
 }
 
-export default function OfferForm({ fields, initial = {}, onSubmit, label = 'Guardar', onCancel }) {
+export default function OfferForm({ icon = "save", fields, initial = {}, onSubmit, label = 'Guardar', onCancel }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, initialValue(f, initial[f.name])])))
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
@@ -47,6 +47,6 @@ export default function OfferForm({ fields, initial = {}, onSubmit, label = 'Gua
       {errors[f.name] && <p className="field-error">{String(errors[f.name])}</p>}
     </fieldset> : <ProfileField key={f.name} field={f} value={values[f.name]} disabled={busy} onChange={(v) => change(f.name, v)} error={errors[f.name]} />)}</div>
     <Message>{error}</Message>{saved && <Message kind="success">Cambios guardados.</Message>}
-    <div className="form-actions"><Button type="submit" busy={busy}>{busy ? 'Guardando…' : label}</Button>{onCancel && <Button type="button" className="button-light" disabled={busy} onClick={onCancel}>Cancelar</Button>}</div>
+    <div className="form-actions"><Button icon={icon} type="submit" busy={busy}>{busy ? 'Guardando…' : label}</Button>{onCancel && <Button icon="cancel" type="button" className="button-light" disabled={busy} onClick={onCancel}>Cancelar</Button>}</div>
   </form>
 }

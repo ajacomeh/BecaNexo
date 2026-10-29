@@ -85,7 +85,7 @@ test('filtros, páginas, versiones, descarga, error y reintento con API simulada
     failList = true; failDownload = true
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/inicio')
-    await page.getByRole('link', { name: 'Rastreo', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Rastreo', exact: true }).click()
     await expect(page.getByRole('link', { name: p.titulo })).toBeVisible()
     await expect(page.getByRole('button', {name: 'Anterior', exact: true})).toBeDisabled()
     await expect(page.getByRole('button', {name: 'Anterior', exact: true})).toHaveCSS('cursor', 'not-allowed')

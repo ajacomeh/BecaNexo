@@ -33,7 +33,9 @@ it.each(['postulante', 'administrador'])('sesión %s reemplaza accesos de cuenta
   links.forEach(link => expect(link).toHaveAttribute('href', '/inicio'))
   await userEvent.click(links[0])
   expect(await screen.findByRole('heading', { name: 'Hola, Persona de prueba' })).toBeVisible()
-  expect(Boolean(screen.queryByRole('link', { name: 'Gestionar convocatorias' }))).toBe(rol === 'administrador')
+  const modules = within(screen.getByRole('navigation', { name: 'Accesos de Inicio' }))
+  expect(Boolean(modules.queryByRole('link', { name: 'Convocatorias', exact: true }))).toBe(rol === 'administrador')
+  if (rol === 'administrador') expect(modules.getByRole('link', { name: 'Convocatorias', exact: true })).toHaveAttribute('href', '/gestion/convocatorias')
 })
 
 it.each(['/login?next=%2Fbecas%2F12', '/registro'])('permite volver a la bienvenida desde %s', async (path) => {

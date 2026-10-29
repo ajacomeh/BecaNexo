@@ -16,8 +16,8 @@ export default function ConfirmDelete({ title, onConfirm, onCancel, description 
   return <dialog ref={dialog} className="confirm-dialog" aria-labelledby="delete-title" onCancel={(event) => { event.preventDefault(); if (!busy) onCancel() }}>
     <h2 id="delete-title">¿Eliminar {title}?</h2><p>{description}</p>
     <Message>{error}</Message><div className="form-actions">
-      <Button className="button-danger" busy={busy} onClick={remove}>Confirmar eliminación</Button>
-      <Button className="button-light" disabled={busy} onClick={onCancel}>Cancelar</Button>
+      <Button icon="delete" className="button-danger" busy={busy} onClick={remove}>Confirmar eliminación</Button>
+      <Button icon="cancel" className="button-light" disabled={busy} onClick={onCancel}>Cancelar</Button>
     </div>
   </dialog>
 }

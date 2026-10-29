@@ -1,3 +1,4 @@
+import Icon from '../components/Icon'
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '../api/client'
@@ -53,8 +54,8 @@ export default function Register() {
       <Field label="Contraseña" name="password" type="password" autoComplete="new-password" required error={fields.password} disabled={busy}
         hint="Usa al menos 8 caracteres. Evita contraseñas comunes, solo numéricas o similares a tus datos." />
       <Field label="Confirmar contraseña" name="password_confirm" type="password" autoComplete="new-password" required error={fields.password_confirm} disabled={busy} />
-      <Button type="submit" busy={busy}>{busy ? 'Creando tu cuenta…' : 'Crear mi cuenta'}</Button>
+      <Button icon="register" type="submit" busy={busy}>{busy ? 'Creando tu cuenta…' : 'Crear mi cuenta'}</Button>
     </form>
-    <Link className="secondary-link" to="/login">Ya tengo cuenta</Link>
+    <Link className="secondary-link" to="/login"><Icon name="login" /><span>Ya tengo cuenta</span></Link>
   </AuthLayout>
 }

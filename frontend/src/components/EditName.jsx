@@ -29,7 +29,7 @@ export default function EditName({ onClose, onSaved }) {
     <h2 id="name-title">Editar nombre</h2><p id="name-help">Este nombre se muestra en tu cuenta. No modifica los datos de tu perfil académico</p>
     <form onSubmit={submit}><div className="field"><label htmlFor="visible-name">Nombre visible</label><input id="visible-name" value={name} onChange={e => setName(e.target.value)} required maxLength={180} disabled={busy} aria-invalid={Boolean(error)} aria-describedby={error ? 'name-error' : 'name-help'} /></div>
       {error && <div id="name-error"><Message>{error}</Message></div>}
-      <div className="form-actions"><Button type="submit" busy={busy}>{busy ? 'Guardando…' : 'Guardar'}</Button><Button type="button" className="button-light" disabled={busy} onClick={onClose}>Cancelar</Button></div>
+      <div className="form-actions"><Button icon="save" type="submit" busy={busy}>{busy ? 'Guardando…' : 'Guardar'}</Button><Button icon="cancel" type="button" className="button-light" disabled={busy} onClick={onClose}>Cancelar</Button></div>
     </form>
   </dialog>
 }

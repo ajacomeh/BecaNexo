@@ -1,3 +1,4 @@
+import Icon from './Icon'
 import { useRef, useState } from 'react'
 import { useAuth } from '../auth/context'
 import { offersApi } from '../api/client'
@@ -14,7 +15,7 @@ export default function FavoriteButton({ offerId, initialId = null, onRemoved })
   const pending = useRef(false)
   if (!user) {
     const next = safeReturnPath(`/becas/${offerId}`)
-    return next === '/inicio' ? null : <Link className="secondary-link" to={`/login?${new URLSearchParams({ next })}`}>Guardar en favoritos</Link>
+    return next === '/inicio' ? null : <Link className="secondary-link" to={`/login?${new URLSearchParams({ next })}`}><Icon name="favorite" /><span>Guardar en favoritos</span></Link>
   }
   if (user.rol !== 'postulante') return null
   async function toggle() {
@@ -31,6 +32,6 @@ export default function FavoriteButton({ offerId, initialId = null, onRemoved })
     } catch (e) { setError(e.status === 404 ? 'La oportunidad o el favorito ya no está disponible. Actualiza la página.' : e.message) }
     finally { pending.current = false; setBusy(false) }
   }
-  return <div className="favorite-control"><Button className="button-light" busy={busy} aria-pressed={Boolean(favoriteId)} onClick={toggle}>
+  return <div className="favorite-control"><Button icon="favorite" className="button-light" busy={busy} aria-pressed={Boolean(favoriteId)} onClick={toggle}>
     {busy ? 'Guardando cambio…' : favoriteId ? 'Quitar de favoritos' : 'Guardar en favoritos'}</Button><Message>{error}</Message></div>
 }

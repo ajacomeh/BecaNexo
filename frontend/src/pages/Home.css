@@ -1,0 +1,11 @@
+﻿.home-dashboard { min-width: 0; }
+.home-dashboard .home-module-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 28px; }
+.home-dashboard .home-module-card { display: flex; align-items: flex-start; gap: 16px; padding: 24px; background: #fff; border: 1px solid #d7dfed; border-radius: 12px; color: #17243b; text-decoration: none; min-width: 0; }
+.home-dashboard .home-module-card > .ui-icon { width: 22px; height: 22px; margin: 3px 0 0; color: #08707c; }
+.home-dashboard .home-module-card > div { min-width: 0; overflow-wrap: anywhere; }
+.home-dashboard .home-module-card h2 { font-size: 1.1rem; font-weight: 650; margin: 0 0 8px; }
+.home-dashboard .home-module-card p { color: #53647e; line-height: 1.6; margin: 0; }
+.home-dashboard .home-module-card:hover { border-color: #2563eb; background: #f5f8ff; }
+.home-dashboard .home-module-card:focus-visible { outline: 3px solid #087f8c; outline-offset: 4px; }
+.home-dashboard .scope-note { margin-top: 24px; }
+@media (max-width: 600px) { .home-dashboard .home-module-grid { grid-template-columns: 1fr; gap: 16px; } .home-dashboard .home-module-card { padding: 20px; } }

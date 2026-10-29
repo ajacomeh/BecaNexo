@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
-.sidebar-name { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; min-width: 0; }
-.sidebar-name > span { min-width: 0; overflow-wrap: anywhere; }
-.edit-name-link { color: #c2d3e8; text-decoration: underline; padding: 8px 0; cursor: pointer; font-size: .8rem; }
+.sidebar-name { display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; min-width: 0; width: 100%; flex-basis: 100%; }
+.sidebar-name > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.edit-name-link { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; color: #c2d3e8; padding: 10px; border-radius: 8px; cursor: pointer; }
+.edit-name-link:hover:not(:disabled) { background: #2d5078; }
+.edit-name-link:focus-visible { outline: 2px solid #c2d3e8; outline-offset: 2px; }
+.edit-name-link:disabled { cursor: not-allowed; opacity: .65; }
 .name-dialog { width: min(520px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
 .name-dialog .button { min-width: 0; }
 
@@ -286,3 +289,20 @@ dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
   .home-header .button { width: auto; }
   .home-main { padding: 40px 24px; }
 }
+
+/* Iconografía local compartida: decorativa, sin sustituir etiquetas. */
+.ui-icon { display: inline-block; width: 1.125rem; height: 1.125rem; flex: 0 0 auto; vertical-align: -.2em; margin-right: .45em; color: currentColor; }
+.button { gap: .5rem; }
+.button > .ui-icon { margin: 0; }
+.button > span { min-width: 0; }
+a:has(> .ui-icon), button:has(> .ui-icon) { align-items: center; column-gap: .5rem; }
+a:has(> .ui-icon):not(.brand), .text-button:has(> .ui-icon), .edit-name-link:has(> .ui-icon) { display: inline-flex; }
+a > .ui-icon, .text-button > .ui-icon, .edit-name-link > .ui-icon { margin-right: 0; }
+.profile-sidebar nav a:has(> .ui-icon) { display: flex; }
+.profile-sidebar nav .ui-icon { width: 1.3rem; height: 1.3rem; }
+.message { display: flex; align-items: flex-start; gap: .6rem; }
+.message > .ui-icon { margin: .15rem 0 0; }
+.message > div { min-width: 0; }
+.ui-icon-loading { animation: icon-spin 1s linear infinite; }
+@keyframes icon-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ui-icon-loading { animation: none; } }

@@ -1,3 +1,4 @@
+import Icon from '../components/Icon'
 import { useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/context'
@@ -52,8 +53,8 @@ export default function Login() {
     <form noValidate onSubmit={submit} aria-label="Iniciar sesión" aria-busy={busy}>
       <Field label="Correo electrónico" name="email" type="email" autoComplete="username" placeholder="tu@correo.com" required maxLength={254} error={fields.email} disabled={busy} />
       <Field label="Contraseña" name="password" type="password" autoComplete="current-password" required error={fields.password} disabled={busy} />
-      <Button type="submit" busy={busy}>{busy ? 'Iniciando sesión…' : 'Iniciar sesión'}</Button>
+      <Button icon="login" type="submit" busy={busy}>{busy ? 'Iniciando sesión…' : 'Iniciar sesión'}</Button>
     </form>
-    <Link className="secondary-link" to="/registro">Crear una cuenta</Link>
+    <Link className="secondary-link" to="/registro"><Icon name="register" /><span>Crear una cuenta</span></Link>
   </AuthLayout>
 }

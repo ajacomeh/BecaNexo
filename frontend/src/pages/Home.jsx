@@ -1,45 +1,39 @@
-import { useRef, useState } from 'react'
+﻿import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/context'
-import Button from '../components/Button'
-import Message from '../components/Message'
-import { Link } from 'react-router-dom'
+import Icon from '../components/Icon'
+import ProfileLayout from '../components/ProfileLayout'
+import './Home.css'
+
+const modules = {
+  postulante: [
+    { route: '/becas', icon: 'explore', title: 'Explorar becas', description: 'Consulta oportunidades y sus requisitos.' },
+    { route: '/perfil', icon: 'profile', title: 'Mi perfil', description: 'Revisa y actualiza tu información declarada.' },
+    { route: '/preferencias', icon: 'preferences', title: 'Idiomas y preferencias', description: 'Gestiona tus idiomas y preferencias de estudio.' },
+    { route: '/favoritos', icon: 'favorite', title: 'Mis favoritas', description: 'Consulta las becas que has guardado.' },
+  ],
+  administrador: [
+    { route: '/gestion/convocatorias', icon: 'offers', title: 'Convocatorias', description: 'Gestiona las ofertas del catálogo.' },
+    { route: '/gestion/instituciones', icon: 'institutions', title: 'Entidades oferentes', description: 'Consulta y gestiona entidades oferentes.' },
+    { route: '/gestion/rastreo', icon: 'crawling', title: 'Rastreo', description: 'Consulta publicaciones detectadas, documentos y ejecuciones.' },
+  ],
+}
 
 export default function Home() {
-  const { user, logout } = useAuth()
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState(null)
-  const pending = useRef(false)
-  async function leave() {
-    if (pending.current) return
-    pending.current = true
-    setBusy(true)
-    setError(null)
-    try { await logout() } catch (failure) { setError(failure.message) }
-    finally { pending.current = false; setBusy(false) }
-  }
-  return <div className="home-layout">
-    <header className="home-header">
-      <span className="brand">BecaNexo</span>
-      <Button className="button-outline" busy={busy} onClick={leave}>{busy ? 'Cerrando sesión…' : 'Cerrar sesión'}</Button>
-    </header>
-    <main id="contenido" className="home-main">
-      <span className="eyebrow">PANTALLA INICIAL DEL AVANCE</span>
+  const { user } = useAuth()
+  return <ProfileLayout>
+    <div className="home-dashboard">
+      <p className="eyebrow">Tu espacio en BecaNexo</p>
       <h1>Hola, {user.nombre}</h1>
       <p className="subtitle">Te damos la bienvenida a tu espacio en BecaNexo.</p>
-      <Message>{error}</Message>
-      <section className="account-card" aria-labelledby="cuenta-title">
-        <h2 id="cuenta-title">Tu cuenta</h2>
-        <dl className="grid gap-6 sm:grid-cols-2">
-          <div><dt>Nombre</dt><dd>{user.nombre}</dd></div>
-          <div><dt>Rol</dt><dd className="capitalize">{user.rol}</dd></div>
-        </dl>
-      </section>
-      {user.rol === 'postulante' && <nav className="form-actions" aria-label="Tu perfil"><Link className="secondary-link" to="/perfil">Completar mi perfil</Link><Link className="secondary-link" to="/preferencias">Idiomas y preferencias</Link></nav>}
-      <nav className="form-actions" aria-label="Convocatorias"><Link className="secondary-link" to="/becas">Explorar becas</Link>{user.rol === 'administrador' && <Link className="secondary-link" to="/gestion/convocatorias">Gestionar convocatorias</Link>}</nav>
-      {user.rol === 'postulante' && <Link className="secondary-link" to="/favoritos">Mis favoritas</Link>}
-      {user.rol === 'administrador' && <Link className="secondary-link" to="/gestion/rastreo">Rastreo</Link>}
+      <nav className="home-module-grid" aria-label="Accesos de Inicio">
+        {modules[user.rol].map(({ route, icon, title, description }, index) =>
+          <Link key={route} className="home-module-card" to={route} aria-labelledby={`home-module-${index}`} aria-describedby={`home-description-${index}`}>
+            <Icon name={icon} />
+            <div><h2 id={`home-module-${index}`}>{title}</h2><p id={`home-description-${index}`}>{description}</p></div>
+          </Link>
+        )}
+      </nav>
       <p className="scope-note">Consulta ofertas publicadas y sus condiciones. La postulación y la verificación documental se realizan ante la entidad oferente.</p>
-    </main>
-    <footer className="home-footer">BecaNexo · Proyecto de tesis · Avance inicial</footer>
-  </div>
+    </div>
+  </ProfileLayout>
 }

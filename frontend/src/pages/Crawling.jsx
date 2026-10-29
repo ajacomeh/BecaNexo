@@ -1,3 +1,4 @@
+import Icon from '../components/Icon'
 import { useEffect, useRef, useState } from 'react'
 import { Link, Route, Routes, useParams, useLocation } from 'react-router-dom'
 import { offersApi } from '../api/client'
@@ -20,8 +21,8 @@ function Remote({ path, params = {}, children }) {
     offersApi.get(`${prefix}/${path}`, JSON.parse(query)).then((data) => { if (live) setState({ data }) }).catch((error) => { if (live) setState({ error: error.message }) })
     return () => { live = false }
   }, [path, query, retry])
-  if (state.error) return <><Message>{state.error}</Message><Button type="button" onClick={() => { setState({ loading: true }); setRetry(retry + 1) }}>Reintentar</Button></>
-  if (state.loading) return <p role="status">Cargando información de rastreo…</p>
+  if (state.error) return <><Message>{state.error}</Message><Button icon="refresh" type="button" onClick={() => { setState({ loading: true }); setRetry(retry + 1) }}>Reintentar</Button></>
+  if (state.loading) return <p role="status"><Icon name="loading" />Cargando información de rastreo…</p>
   return children(state.data)
 }
 
@@ -29,7 +30,7 @@ function PageList({ path, params = {}, render, title }) {
   const [page, setPage] = useState(1)
   return <section className="profile-card"><h2>{title}</h2><Remote key={`${path}:${JSON.stringify(params)}:${page}`} path={path} params={{ ...params, page }}>
     {(data) => <>{data.results.length ? <ul className="record-list crawl-list">{data.results.map((item) => <li key={item.id}>{render(item)}</li>)}</ul> : <p>No hay registros para esta consulta.</p>}
-      {data.count <= data.page_size ? <p className="crawl-count">{data.count} {data.count === 1 ? 'registro' : 'registros'}</p> : <nav className="pagination" aria-label={`Paginación de ${title}`}><Button disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</Button><span>Página {page} de {Math.ceil(data.count / data.page_size)} · {data.count} registros</span><Button disabled={page * data.page_size >= data.count} onClick={() => setPage(page + 1)}>Siguiente</Button></nav>}</>}
+      {data.count <= data.page_size ? <p className="crawl-count">{data.count} {data.count === 1 ? 'registro' : 'registros'}</p> : <nav className="pagination" aria-label={`Paginación de ${title}`}><Button icon="previous" disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</Button><span>Página {page} de {Math.ceil(data.count / data.page_size)} · {data.count} registros</span><Button icon="next" disabled={page * data.page_size >= data.count} onClick={() => setPage(page + 1)}>Siguiente</Button></nav>}</>}
   </Remote></section>
 }
 
@@ -51,8 +52,8 @@ function SourceFilter() {
     return () => { live = false }
   }, [page, retry])
   return <div className="crawl-source"><label htmlFor="crawl-source">Fuente</label><select id="crawl-source" name="fuente" defaultValue=""><option value="">Todas las fuentes</option>{state.options.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select>
-    {state.loading && <span role="status">Cargando fuentes…</span>}{state.error && <><Message>{state.error}</Message><Button type="button" onClick={() => { setState(s => ({ ...s, loading: true, error: '' })); setRetry(retry + 1) }}>Reintentar fuentes</Button></>}
-    {state.more && !state.error && <Button type="button" busy={state.loading} onClick={() => { setState(s => ({ ...s, loading: true })); setPage(page + 1) }}>Más fuentes</Button>}
+    {state.loading && <span role="status"><Icon name="loading" />Cargando fuentes…</span>}{state.error && <><Message>{state.error}</Message><Button icon="refresh" type="button" onClick={() => { setState(s => ({ ...s, loading: true, error: '' })); setRetry(retry + 1) }}>Reintentar fuentes</Button></>}
+    {state.more && !state.error && <Button icon="add" type="button" busy={state.loading} onClick={() => { setState(s => ({ ...s, loading: true })); setPage(page + 1) }}>Más fuentes</Button>}
   </div>
 }
 
@@ -61,8 +62,8 @@ function Publications() {
   return <><form className="profile-card crawl-filters" onSubmit={(event) => {
     event.preventDefault(); const data = new FormData(event.currentTarget)
     setFilters({ q: data.get('q'), ...(data.get('fuente') ? { fuente: data.get('fuente') } : {}) })
-  }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" /></label><SourceFilter /><Button type="submit">Buscar</Button></form>
-    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><p>{p.fuente.nombre}</p><Origin url={p.url_original} /><p>Primera detección: {date(p.primera_deteccion)}<br />Última detección: {date(p.ultima_deteccion)}</p><p className="profile-note">Publicación detectada · No es una convocatoria del catálogo</p><Link className="secondary-link" to={`publicaciones/${p.id}`}>Abrir publicación</Link></article>} />
+  }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" /></label><SourceFilter /><Button icon="search" type="submit">Buscar</Button></form>
+    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><p>{p.fuente.nombre}</p><Origin url={p.url_original} /><p>Primera detección: {date(p.primera_deteccion)}<br />Última detección: {date(p.ultima_deteccion)}</p><p className="profile-note">Publicación detectada · No es una convocatoria del catálogo</p><Link className="secondary-link" to={`publicaciones/${p.id}`}><Icon name="detail" /><span>Abrir publicación</span></Link></article>} />
   </>
 }
 
@@ -88,7 +89,7 @@ function Download({ document }) {
       link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (failure) { setError(failure.message) } finally { setBusy(false) }
   }
-  return <div><h3>Evidencia {document.id} · {label(document.rol)}</h3><p>{document.mime} · {document.tamano_bytes} bytes</p><details><summary>Datos técnicos</summary><p>SHA256: {document.sha256}</p><p>{document.url_original}</p></details><Button busy={busy} onClick={download}>Descargar evidencia</Button><Message>{error}</Message></div>
+  return <div><h3>Evidencia {document.id} · {label(document.rol)}</h3><p>{document.mime} · {document.tamano_bytes} bytes</p><details><summary>Datos técnicos</summary><p>SHA256: {document.sha256}</p><p>{document.url_original}</p></details><Button icon="download" busy={busy} onClick={download}>Descargar evidencia</Button><Message>{error}</Message></div>
 }
 
 
@@ -129,11 +130,11 @@ function VersionContent({ version: v, focus }) {
 function Publication() {
   const { id } = useParams()
   const [selected, setSelected] = useState(null)
-  return <><Link to="/gestion/rastreo">Volver a publicaciones</Link><Remote key={id} path={`publicaciones/${id}`}>
+  return <><Link to="/gestion/rastreo"><Icon name="back" /><span>Volver a publicaciones</span></Link><Remote key={id} path={`publicaciones/${id}`}>
     {(p) => { const version = selected?.publication === id ? selected.version : p.version_observada_id
       return <><h2>{p.titulo}</h2><p>{p.fuente.nombre} · Publicación detectada, sin revisión editorial</p><Origin url={p.url_original} /><p>Primera detección: {date(p.primera_deteccion)} · Última detección: {date(p.ultima_deteccion)}</p>
         <p>La selección inicial corresponde a la última observación exitosa. Una versión anterior puede haberse observado de nuevo.</p>
-        <PageList key={id} title="Versiones registradas" path={`publicaciones/${id}/versiones`} render={(v) => <div>Versión {v.numero} · Registrada {date(v.creada_en)} <>{Number(version) === v.id ? <span className="crawl-selected">Versión seleccionada</span> : <Button onClick={() => setSelected({ publication: id, version: v.id })}>Consultar versión {v.numero}</Button>}</></div>} />
+        <PageList key={id} title="Versiones registradas" path={`publicaciones/${id}/versiones`} render={(v) => <div>Versión {v.numero} · Registrada {date(v.creada_en)} <>{Number(version) === v.id ? <span className="crawl-selected">Versión seleccionada</span> : <Button icon="detail" onClick={() => setSelected({ publication: id, version: v.id })}>Consultar versión {v.numero}</Button>}</></div>} />
         {version && <Remote key={`${id}:${version}`} path={`publicaciones/${id}/versiones/${version}`}>
           {(v) => <VersionContent version={v} focus={selected?.publication === id} />}
         </Remote>}
@@ -149,7 +150,7 @@ function ExecutionInfo({ item }) {
 
 function Execution() {
   const { id } = useParams()
-  return <><Link to="/gestion/rastreo/ejecuciones">Volver a ejecuciones</Link><h2>Ejecución {id}</h2><Remote key={id} path={`ejecuciones/${id}`}>{(e) => <ExecutionInfo item={e} />}</Remote>
+  return <><Link to="/gestion/rastreo/ejecuciones"><Icon name="back" /><span>Volver a ejecuciones</span></Link><h2>Ejecución {id}</h2><Remote key={id} path={`ejecuciones/${id}`}>{(e) => <ExecutionInfo item={e} />}</Remote>
     <p>Una descarga finalizada no aprueba documentos. Los documentos distintos pueden incluir evidencia almacenada anteriormente.</p>
     <PageList key={`access:${id}`} title="Accesos" path={`ejecuciones/${id}/accesos`} render={(a) => <div><p>{label(a.rol)} · HTTP {a.http_status || 'Sin respuesta'} · {label(a.resultado)}</p><Origin url={a.url_original} /><p>Inicio de petición: {date(a.inicio_peticion_en)} · Fin: {date(a.fin)}</p>{a.publicacion_id && <Link to={`/gestion/rastreo/publicaciones/${a.publicacion_id}`}>Publicación {a.publicacion_id}</Link>}</div>} />
     <PageList key={`issues:${id}`} title="Incidencias" path={`ejecuciones/${id}/incidencias`} render={(i) => <div><h3>{label(i.codigo)}</h3><p>{label(i.gravedad)} · {date(i.detectada_en)}</p></div>} />
@@ -160,6 +161,6 @@ export default function Crawling() {
   const { pathname } = useLocation()
   const executions = pathname.includes("/ejecuciones")
   return <ProfileLayout><div className="crawl"><h1>Rastreo</h1><p>Consulta de evidencia existente. Las publicaciones detectadas no son ofertas aprobadas para el catálogo.</p><nav className="heading-actions crawl-tabs" aria-label="Secciones de rastreo"><Link aria-current={!executions ? "page" : undefined} to="/gestion/rastreo">Publicaciones detectadas</Link><Link aria-current={executions ? "page" : undefined} to="/gestion/rastreo/ejecuciones">Ejecuciones</Link></nav>
-    <Routes><Route index element={<Publications />} /><Route path="publicaciones/:id" element={<Publication />} /><Route path="ejecuciones" element={<PageList title="Ejecuciones" path="ejecuciones" render={(e) => <div><h3><Link to={`/gestion/rastreo/ejecuciones/${e.id}`}>Ejecución {e.id}</Link></h3><ExecutionInfo item={e} /><Link className="secondary-link" to={`/gestion/rastreo/ejecuciones/${e.id}`}>Ver detalle de ejecución</Link></div>} />} /><Route path="ejecuciones/:id" element={<Execution />} /><Route path="*" element={<p>Ruta de rastreo no encontrada.</p>} /></Routes>
+    <Routes><Route index element={<Publications />} /><Route path="publicaciones/:id" element={<Publication />} /><Route path="ejecuciones" element={<PageList title="Ejecuciones" path="ejecuciones" render={(e) => <div><h3><Link to={`/gestion/rastreo/ejecuciones/${e.id}`}>Ejecución {e.id}</Link></h3><ExecutionInfo item={e} /><Link className="secondary-link" to={`/gestion/rastreo/ejecuciones/${e.id}`}><Icon name="detail" /><span>Ver detalle de ejecución</span></Link></div>} />} /><Route path="ejecuciones/:id" element={<Execution />} /><Route path="*" element={<p>Ruta de rastreo no encontrada.</p>} /></Routes>
   </div></ProfileLayout>
 }

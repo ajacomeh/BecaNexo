@@ -1,3 +1,4 @@
+import Icon from '../components/Icon'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { offersApi } from '../api/client'
@@ -52,9 +53,9 @@ export default function OfferDetail() {
     return () => { live = false }
   }, [id, retry])
   const offer = String(data?.offer.id) === id ? data.offer : null
-  return <OffersLayout><Link className="back-link" to="/becas">← Volver al catálogo</Link>
-    {error && <><Message>{error}</Message><Button onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
-    {!data && !error && <p role="status">Cargando convocatoria…</p>}
+  return <OffersLayout><Link className="back-link" to="/becas"><Icon name="back" /><span>Volver al catálogo</span></Link>
+    {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
+    {!data && !error && <p role="status"><Icon name="loading" />Cargando convocatoria…</p>}
     {offer && <><div className="page-heading"><div><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p>{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div></div>
       {offer.estado === 'cerrada' && <Message kind="info">La fecha de cierre ya pasó. Esta oferta se conserva para consulta.</Message>}
       <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} />
@@ -71,6 +72,6 @@ export default function OfferDetail() {
         <h3>Beneficios de esta opción</h3><BenefitList records={offer.beneficios.filter((b) => b.opcion_estudio === o.id)} /><h3>Requisitos de esta opción</h3><RequirementList records={offer.requisitos.filter((r) => r.opcion_estudio === o.id)} catalogs={data.catalogs} /></section>)}
       <section className="profile-card"><h2>Fuente oficial y postulación externa</h2><p>BecaNexo no recibe documentos ni tramita postulaciones. La entidad oferente verifica certificados y decide la adjudicación.</p>
         <p>La postulación se realiza en la plataforma de la entidad oferente.</p>
-        <div className="form-actions"><a className="secondary-link" href={offer.url_oficial} target="_blank" rel="noopener noreferrer">Ir al sitio oficial</a>{offer.url_bases && <a href={offer.url_bases} target="_blank" rel="noopener noreferrer">Consultar bases</a>}</div><p className="small-note">Última actualización: {date(offer.actualizado_en)}</p></section></>}
+        <div className="form-actions"><a className="secondary-link" href={offer.url_oficial} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ir al sitio oficial</span></a>{offer.url_bases && <a href={offer.url_bases} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar bases</span></a>}</div><p className="small-note">Última actualización: {date(offer.actualizado_en)}</p></section></>}
   </OffersLayout>
 }

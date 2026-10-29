@@ -1,3 +1,4 @@
+import Icon from './Icon'
 import { useState } from 'react'
 import { profileApi } from '../api/client'
 import Button from './Button'
@@ -20,14 +21,14 @@ export default function ProfileRecords({ resource, title, singular, fields, init
     {records.length === 0 && <p className="empty-note">Aún no has registrado {title.toLowerCase()}. La ausencia de datos no significa que no cumplas un requisito.</p>}
     <ul className="record-list">{records.map((row) => <li key={row.id}>
       <span>{describe(row)}</span><div className="record-actions">
-        <button className="text-button" onClick={() => { setEditing(row); setNotice(null) }} disabled={editing !== null} aria-label={`Editar ${singular}: ${describe(row)}`}>Editar</button>
-        <button className="text-button danger-text" onClick={() => setDeleting(row)} disabled={editing !== null} aria-label={`Eliminar ${singular}: ${describe(row)}`}>Eliminar</button>
+        <button className="text-button" onClick={() => { setEditing(row); setNotice(null) }} disabled={editing !== null} aria-label={`Editar ${singular}: ${describe(row)}`}><Icon name="edit" /><span>Editar</span></button>
+        <button className="text-button danger-text" onClick={() => setDeleting(row)} disabled={editing !== null} aria-label={`Eliminar ${singular}: ${describe(row)}`}><Icon name="delete" /><span>Eliminar</span></button>
       </div>
     </li>)}</ul>
     <Message kind="success">{notice}</Message>
     {editing ? <div className="record-editor"><h3>{editing.id ? 'Editar' : 'Añadir'} {singular}</h3>
       <ProfileForm key={editing.id || 'new'} fields={fields} initial={editing} onSubmit={save} onCancel={() => setEditing(null)} label={`Guardar ${singular}`} />
-    </div> : <Button type="button" className="button-light" onClick={() => { setEditing({}); setNotice(null) }}>Añadir {singular}</Button>}
+    </div> : <Button icon="add" type="button" className="button-light" onClick={() => { setEditing({}); setNotice(null) }}>Añadir {singular}</Button>}
     {deleting && <ConfirmDelete title={singular} onCancel={() => setDeleting(null)} onConfirm={async () => {
       await profileApi.write(`${resource}/${deleting.id}`, 'DELETE')
       setRecords((current) => current.filter((row) => row.id !== deleting.id))

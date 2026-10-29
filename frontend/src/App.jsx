@@ -23,7 +23,7 @@ export default function App() {
   if (status === 'error') return <AuthLayout>
     <h1>No pudimos comprobar tu sesión</h1>
     <Message>{error}</Message>
-    <Button onClick={retry}>Reintentar conexión</Button>
+    <Button icon="refresh" onClick={retry}>Reintentar conexión</Button>
   </AuthLayout>
   const authenticated = status === 'authenticated'
   const admin = (element) => !authenticated ? <Navigate to="/login" replace /> : user.rol === 'administrador' ? element : <Navigate to="/inicio" replace />

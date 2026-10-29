@@ -1,5 +1,32 @@
 # Avance de BecaNexo
 
+## Cierre del ejecutor de navegador confirmado — 28/10/2026
+
+- Consultada la sesión original 17653, sin repetir pruebas. El runner Playwright PID 20264 seguía activo tras aprobar ambos casos, esperando el cierre de sus servidores web (árboles raíz 11368 Vite y 7020 Django). El código instalado de Playwright espera la terminación de esos procesos en teardown; en Windows utiliza taskkill y espera el cierre incluso si falla la terminación.
+- Se reprodujo `taskkill /PID 11368 /T /F` en el entorno restringido: **Acceso denegado, salida 1**. La limpieza de los servidores no disponía de permisos suficientes; no era una prueba todavía ejecutándose. Tras comprobar nuevamente PID, comando y parentesco, se cerraron exclusivamente ambos árboles hijos con autorización elevada. No se forzó la terminación del runner ni se modificó código para ocultar el fallo.
+- El ejecutor original terminó por sí mismo: **código de salida 0**, resumen **2 passed (6.5m)**. Ese tiempo incluye la espera de limpieza; los casos habían tardado 5,7 y 5,5 segundos. No se repitieron pruebas aprobadas.
+- Conservado el Django iniciado posteriormente fuera del árbol (15800 → 15988 → 13700 → 2424). El Vite de 5173 pertenecía al recorrido y fue cerrado como parte de su limpieza. Sin cambios de cuentas/datos, dependencias ni aplicación; sin commits. Para futuras ejecuciones, reutilizar servidores locales iniciados por separado o ejecutar el runner en un contexto que permita cerrar sus propios hijos.
+
+## Lápiz junto al nombre — 28/10/2026
+
+- Ajuste mínimo de ProfileLayout y estilos de cuenta: nombre y lápiz en la misma fila, rol debajo, cierre de sesión conservado. Eliminado únicamente el texto visible Editar nombre; botón type=button con aria-label/title, SVG decorativo existente, foco visible y área de 44×44 px. No se cambió el diálogo ni la lógica de edición.
+- Conservados cambios pendientes de iconografía e Inicio. Pruebas afectadas: EditName/Home/App, **20 aprobadas**; lint y build correctos. Recorrido Edge con API simulada para ambos roles a 1440/390/320 px: nombres largos sin solapamiento, rol debajo, apertura con Enter, cancelación sin petición, guardado/actualización/recarga y cierre de sesión. Capturas revisadas. No se probaron escrituras contra backend real ni se modificaron cuentas o datos de desarrollo.
+- Sin dependencias, backend, commits ni publicación. Pendiente únicamente revisión visual del usuario.
+
+## Inicio autenticado integrado — 28/10/2026
+
+- `/inicio` reutiliza ProfileLayout y su barra lateral por rol. Inicio activo; edición del nombre y cierre de sesión únicos. Saludo desde contexto, texto Tu espacio en BecaNexo, sin tarjeta Tu cuenta ni Avance inicial. Aclaración de postulación/verificación externa conservada.
+- Cuatro accesos de postulante y tres administrativos, en tarjetas con Icon, título y descripción; enlaces semánticos sin interacción anidada y CSS exclusivo Home.css. No se modificó la bienvenida pública, login, retorno, permisos ni estilos globales.
+- Verificación: 107 casos Vitest cubiertos; 105 aprobaron inicialmente y dos expectativas antiguas de texto se adaptaron a la tarjeta Convocatorias manteniendo rol/ruta. Repetición de los tres archivos afectados: 30/30 aprobadas; los otros 77 ya aprobados. Lint/build correctos. Edge: 6/6 aprobadas, 1440/390/320 px, teclado, nombre/cancelación/recarga/cierre simulados; capturas revisadas sin desbordamientos. Backend real únicamente para visitante protegido, bienvenida pública y rechazos anónimos de rastreo.
+- [Rutas y comprobaciones](inicio-autenticado.md). Pendiente revisión del usuario con sesión habitual; ningún fallo automático pendiente. Conservada iconografía sin commit. Sin cambios de backend, dependencias, cuentas/datos, modelos o migraciones; sin commits ni publicación.
+
+## Iconografía coherente — 28/10/2026
+
+- El usuario confirmó la revisión manual de la bandeja. Se revisaron y guardaron sus 16 archivos en el commit local **56bc387**, `feat: agregar consulta administrativa de rastreo`. Sin archivos ajenos, secretos, outputs o evidencia descargada; no se publicó.
+- Añadida únicamente lucide-react 1.63.0, compatible con React 19. Iconos de contorno locales, importaciones explícitas y criterios comunes en Icon/Button/Message/CSS. Navegación de ambos roles, catálogo/detalle/favoritos, perfil/preferencias, formularios, comparación, gestión y rastreo. Textos, foco, permisos y comportamiento conservados; carga distinta de disabled, animación reducida según preferencia.
+- Pruebas terminadas: **105 frontend aprobadas**, lint y build correctos; **5 Playwright aprobadas**, escritorio 1440 y móvil 390/320. Capturas revisadas, sin desbordamientos observados. Interacciones autenticadas y escrituras simuladas; backend real únicamente para comprobar 403 anónimo en consulta/descarga. No se modificaron datos, cuentas, backend, modelos ni migraciones durante iconización.
+- [Criterios, cobertura y comandos](iconografia.md). Cambios de iconografía sin commit para revisión del usuario; ningún fallo automático pendiente. No se automatizó una sesión personal real. Sin despliegue.
+
 ## Corrección visual de consulta de rastreo — 28/10/2026
 
 - Conservados los cambios pendientes. Sin cambios backend/modelo, migraciones, datos, cuentas, rastreos, aprobaciones ni publicación.

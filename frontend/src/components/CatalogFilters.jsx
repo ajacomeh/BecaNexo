@@ -19,6 +19,6 @@ export default function CatalogFilters({ params, catalogs, onApply, onClear }) {
       {select('tipo_beca', 'Tipo de beca', 'Todos los tipos', catalogs.tipos_beca.map(r => [r.id, r.nombre]))}
       {select('estado', 'Estado', 'Todos los estados', ['abierta', 'cerrada', 'proxima', 'sin_fecha'].map(v => [v, v === 'proxima' ? 'Próxima apertura' : v === 'sin_fecha' ? 'Fecha de cierre no informada' : readable(v)]))}
     </div></details>
-    <div className="form-actions"><Button type="submit">Aplicar filtros</Button><Button className="button-light" type="button" onClick={() => { setValues({}); onClear() }}>Limpiar filtros</Button></div>
+    <div className="form-actions"><Button icon="search" type="submit">Aplicar filtros</Button><Button icon="clear" className="button-light" type="button" onClick={() => { setValues({}); onClear() }}>Limpiar filtros</Button></div>
   </form></section>
 }

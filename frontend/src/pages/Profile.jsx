@@ -1,3 +1,4 @@
+import Icon from '../components/Icon'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { profileApi } from '../api/client'
@@ -24,7 +25,7 @@ export default function Profile({ preferences = false }) {
   }, [preferences, attempt])
   const title = preferences ? 'Idiomas, preferencias y disponibilidad' : 'Mi perfil académico'
   if (state.loading || state.error) return <ProfileLayout><h1>{title}</h1>
-    {state.loading ? <p role="status">Cargando tu perfil…</p> : <><Message>{state.error}</Message><Button onClick={() => { setState({ loading: true, data: null, error: null }); setAttempt(attempt + 1) }}>Reintentar carga</Button></>}
+    {state.loading ? <p role="status"><Icon name="loading" />Cargando tu perfil…</p> : <><Message>{state.error}</Message><Button icon="refresh" onClick={() => { setState({ loading: true, data: null, error: null }); setAttempt(attempt + 1) }}>Reintentar carga</Button></>}
   </ProfileLayout>
   const { profile, catalogs, lists } = state.data
   const fields = profileFields(catalogs)
@@ -49,7 +50,7 @@ export default function Profile({ preferences = false }) {
       <p className="profile-note">Nombre visible: <strong>{user.nombre}</strong>. Nacionalidad: <strong>Ecuatoriana</strong> · Alcance del sistema. Puedes residir en otro país.</p>
       <ProfileForm fields={fields.personal} initial={profile || {}} onSubmit={saveProfile} label="Guardar datos personales" />
     </section>}
-    {!profile && <Message kind="info">Guarda primero los datos personales para empezar tu perfil. Los datos opcionales pueden quedar sin declarar. {preferences && <Link to="/perfil">Ir a datos personales</Link>}</Message>}
+    {!profile && <Message kind="info">Guarda primero los datos personales para empezar tu perfil. Los datos opcionales pueden quedar sin declarar. {preferences && <Link to="/perfil"><Icon name="profile" /><span>Ir a datos personales</span></Link>}</Message>}
     {profile && <>
       {preferences && <p className="profile-note accent-note">Solo solicitamos idioma y nivel declarado. La entidad oferente solicitará y verificará los certificados cuando una beca los exija.</p>}
       {sections.map((section) => <ProfileRecords key={section.resource} {...section} fields={fields[section.resource]} initial={lists[section.resource]} />)}
@@ -58,6 +59,6 @@ export default function Profile({ preferences = false }) {
         <ProfileForm fields={fields.availability} initial={profile} onSubmit={saveProfile} label="Guardar disponibilidad" />
       </section>}
     </>}
-    <Link className="secondary-link" to={preferences ? '/perfil' : '/preferencias'}>{preferences ? 'Volver a formación' : 'Ir a idiomas y preferencias'}</Link>
+    <Link className="secondary-link" to={preferences ? '/perfil' : '/preferencias'}><Icon name={preferences ? "back" : "preferences"} /><span>{preferences ? 'Volver a formación' : 'Ir a idiomas y preferencias'}</span></Link>
   </ProfileLayout>
 }

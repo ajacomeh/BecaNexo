@@ -28,7 +28,7 @@ export default function ProfileForm({ fields, initial = {}, onSubmit, onCancel, 
       onChange={(value) => { setValues({ ...values, [field.name]: value }); setSaved(false) }} error={errors[field.name]} />)}</div>
     <Message>{message}</Message>
     {saved && <Message kind="success">Cambios guardados.</Message>}
-    <div className="form-actions"><Button type="submit" busy={busy}>{busy ? 'Guardando…' : label}</Button>
-      {onCancel && <Button type="button" className="button-light" disabled={busy} onClick={onCancel}>Cancelar</Button>}</div>
+    <div className="form-actions"><Button icon="save" type="submit" busy={busy}>{busy ? 'Guardando…' : label}</Button>
+      {onCancel && <Button icon="cancel" type="button" className="button-light" disabled={busy} onClick={onCancel}>Cancelar</Button>}</div>
   </form>
 }

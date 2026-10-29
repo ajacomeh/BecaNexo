@@ -1,10 +1,11 @@
+import Icon from '../components/Icon'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/context'
 
 function Actions({ user }) {
   return <div className="welcome-actions">
-    <Link className="button" to="/becas">Explorar becas <span aria-hidden="true">↗</span></Link>
-    <Link className="secondary-link" to={user ? '/inicio' : '/registro'}>{user ? 'Mi panel' : 'Crear cuenta'}</Link>
+    <Link className="button" to="/becas"><Icon name="explore" /><span>Explorar becas</span></Link>
+    <Link className="secondary-link" to={user ? '/inicio' : '/registro'}><Icon name={user ? "home" : "register"} /><span>{user ? 'Mi panel' : 'Crear cuenta'}</span></Link>
   </div>
 }
 
@@ -21,10 +22,10 @@ export default function Welcome() {
     <header className="welcome-header">
       <Link className="brand" to="/" aria-label="BecaNexo, inicio">BecaNexo<span aria-hidden="true">.</span></Link>
       <nav aria-label="Navegación principal">
-        <Link to="/becas">Explorar becas</Link>
-        {user ? <Link className="button" to="/inicio">Mi panel</Link> : <>
-          <Link to="/login">Iniciar sesión</Link>
-          <Link className="button" to="/registro">Crear cuenta</Link>
+        <Link to="/becas"><Icon name="explore" /><span>Explorar becas</span></Link>
+        {user ? <Link className="button" to="/inicio"><Icon name="home" /><span>Mi panel</span></Link> : <>
+          <Link to="/login"><Icon name="login" /><span>Iniciar sesión</span></Link>
+          <Link className="button" to="/registro"><Icon name="register" /><span>Crear cuenta</span></Link>
         </>}
       </nav>
     </header>

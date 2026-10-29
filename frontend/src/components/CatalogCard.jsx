@@ -1,3 +1,4 @@
+import Icon from './Icon'
 import { Link } from 'react-router-dom'
 import FavoriteButton from './FavoriteButton'
 import { stateLabel } from '../pages/offerDisplay'
@@ -18,6 +19,6 @@ export default function CatalogCard({ offer, catalogs }) {
     {options.length > 1 && <div><p><strong>{options.length} opciones de estudio</strong></p><p>Niveles: {unique(options.map(o => readable(o.nivel))).join(', ')}</p><p>Modalidades disponibles: {unique(options.map(o => readable(o.modalidad))).join(', ')}</p><p className="small-note">Consulta las combinaciones de cada opción en el detalle.</p></div>}
     {destinations.length > 1 ? <p>{destinations.length} destinos</p> : countries.length === 1 && <p>Destino: {countries[0]}</p>}
     <p>{closing ? `Cierre: ${closing}` : offer.cierre_original?.trim() ? `Cierre según la fuente: ${offer.cierre_original}` : 'Fecha de cierre no informada'}</p>
-    <div className="catalog-card-actions"><Link className="secondary-link catalog-detail-link" to={`/becas/${offer.id}`}>Ver detalle</Link><FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div>
+    <div className="catalog-card-actions"><Link className="secondary-link catalog-detail-link" to={`/becas/${offer.id}`}><Icon name="detail" /><span>Ver detalle</span></Link><FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div>
   </article>
 }
