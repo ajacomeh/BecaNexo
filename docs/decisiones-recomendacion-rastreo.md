@@ -1,5 +1,11 @@
 # Decisiones aprobadas para la segunda entrega
 
+## Revisión administrativa implementada — 29/10/2026
+
+Se habilita registrar decisiones independientes sobre extracción, documentación y oferente en una versión exacta. Se reutiliza AUD_REVISION_RASTREO y se conserva su inmutabilidad; rectificaciones son filas nuevas. Ausencia de revisión no genera un actor ni decisión ficticios. Una descarga correcta, una fuente activa o una oferta cerrada no determinan la aprobación o rechazo editorial. No se heredan decisiones entre versiones/documentos y no existe «beca aprobada» general.
+
+Oferente exige evidencia documental exacta y referencia justificada. Convenios no pueden aprobarse mientras falte representar suficientemente la participación formal ecuatoriana; tampoco basta la difusión por un portal ecuatoriano. No se crean/vinculan/publican convocatorias, no se resuelven incidencias y no se habilita publicación automática. Contrato, restricciones y diferencias en [suplemento de revisión](Modelo/Revision_administrativa_rastreo.md); instrucciones en [guía administrativa](consulta-administrativa-rastreo.md). Las secciones históricas siguientes describen etapas anteriores.
+
 Meta de entrega: 3 de noviembre de 2026. Esta etapa programa únicamente comparación explicable de requisitos; las decisiones de rastreo y afinidad siguientes son reglas para etapas futuras, no funciones disponibles.
 
 ## Alcance y fuentes

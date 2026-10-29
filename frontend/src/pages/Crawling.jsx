@@ -5,6 +5,7 @@ import { offersApi } from '../api/client'
 import ProfileLayout from '../components/ProfileLayout'
 import Button from '../components/Button'
 import Message from '../components/Message'
+import CrawlingReviews from '../components/CrawlingReviews'
 import './Crawling.css'
 
 const prefix = 'gestion/rastreo'
@@ -115,7 +116,7 @@ function VersionContent({ version: v, focus }) {
   const original = value => typeof value === 'string' ? value : value?.texto_original || value?.original
   return <section className="profile-card">
     <h2 ref={heading} tabIndex={-1}>Información de la versión {v.numero}</h2>
-    <h3>Resumen</h3><p>{label(v.estado_extraccion)} · Revisión documental pendiente</p>
+    <h3>Resumen</h3><p>{label(v.estado_extraccion)} · Consulte las decisiones documentales de esta versión en Revisiones administrativas.</p>
     <p>Procedencia: extracción HTML. No acredita documentos ni aprobación de las bases PDF. Las notas manuales documentales conservan su autoría; no son extracción automática.</p>
     <h3>Información extraída</h3>
     <p>Son menciones de la fuente, no requisitos u opciones confirmados. Se conserva el significado original de fechas y cantidades.</p>
@@ -132,13 +133,14 @@ function Publication() {
   const [selected, setSelected] = useState(null)
   return <><Link to="/gestion/rastreo"><Icon name="back" /><span>Volver a publicaciones</span></Link><Remote key={id} path={`publicaciones/${id}`}>
     {(p) => { const version = selected?.publication === id ? selected.version : p.version_observada_id
-      return <><h2>{p.titulo}</h2><p>{p.fuente.nombre} · Publicación detectada, sin revisión editorial</p><Origin url={p.url_original} /><p>Primera detección: {date(p.primera_deteccion)} · Última detección: {date(p.ultima_deteccion)}</p>
+      return <><h2>{p.titulo}</h2><p>{p.fuente.nombre} · Publicación detectada, no publicada en el catálogo</p><Origin url={p.url_original} /><p>Primera detección: {date(p.primera_deteccion)} · Última detección: {date(p.ultima_deteccion)}</p>
         <p>La selección inicial corresponde a la última observación exitosa. Una versión anterior puede haberse observado de nuevo.</p>
         <PageList key={id} title="Versiones registradas" path={`publicaciones/${id}/versiones`} render={(v) => <div>Versión {v.numero} · Registrada {date(v.creada_en)} <>{Number(version) === v.id ? <span className="crawl-selected">Versión seleccionada</span> : <Button icon="detail" onClick={() => setSelected({ publication: id, version: v.id })}>Consultar versión {v.numero}</Button>}</></div>} />
         {version && <Remote key={`${id}:${version}`} path={`publicaciones/${id}/versiones/${version}`}>
           {(v) => <VersionContent version={v} focus={selected?.publication === id} />}
         </Remote>}
         {version && <PageList key={`docs:${id}:${version}`} title="Documentos de esta versión" path={`publicaciones/${id}/versiones/${version}/documentos`} render={(d) => <Download document={d} />} />}
+        {version && <CrawlingReviews key={`reviews:${id}:${version}`} publication={id} version={version} />}
         <PageList key={`obs:${id}`} title="Historial de observaciones" path={`publicaciones/${id}/observaciones`} render={(o) => <div>{date(o.observada_en)} · {label(o.resultado)} · Versión ID {o.version_id || 'No disponible'}<p><Link to={`/gestion/rastreo/ejecuciones/${o.ejecucion_id}`}>Consultar ejecución {o.ejecucion_id}</Link> · {label(o.estado_ejecucion)}</p></div>} />
       </> }}
   </Remote></>

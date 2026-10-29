@@ -1,5 +1,7 @@
 # Propuesta de persistencia del rastreo
 
+Actualización 29/10/2026: se implementó el subconjunto editorial autorizado del bloque 3, reutilizando AUD_REVISION_RASTREO para extracción, documento exacto y oferente. Véase [suplemento efectivo](Modelo/Revision_administrativa_rastreo.md). No incluye TRA_PROPUESTA_CAMBIO, vinculación, publicación ni resolución de incidencias. La propuesta original que sigue conserva esos elementos como futuros, no implementados.
+
 Estado actualizado al 28/10/2026: **bloques 1 y 2 aprobados e implementados**; resto del diseño pendiente. El JSON v0.6 se conserva histórico. Las secciones siguientes conservan el diseño original para trazabilidad y no deben interpretarse como que las once tablas ya existen. Se leyeron AGENTS, Diccionario, decisiones aprobadas, contrato SIAU e informe real `outputs/rastreo/20261027T043208793284Z/informe.json` y su HTML.
 
 Implementadas CFG_FUENTE, TRA_EJECUCION_RASTREO, TEC_DOCUMENTO_RASTREO, TRA_ACCESO_RASTREO, TRA_INCIDENCIA_RASTREO y AUD_REVISION_RASTREO (solo configuración/incidencias). Migraciones 0001_initial y 0002_integridad_historial aplicadas en pruebas y desarrollo. Se aprobó archivo privado separado, conservación sin borrado automático y ejecución manual con administrador real; aprobación automática permanece bloqueada. Campos, diferencias y restricciones efectivas en [suplemento implementado](Modelo/Persistencia_rastreo_bloque1.md). No se modificaron entidades del catálogo.

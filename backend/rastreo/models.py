@@ -119,6 +119,8 @@ class Incidencia(models.Model):
 
 
 class Revision(models.Model):
+    version = models.ForeignKey('Version', null=True, on_delete=models.PROTECT)
+    evidencia = models.ForeignKey('VersionDocumento', null=True, on_delete=models.PROTECT)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     creada_en = models.DateTimeField(default=timezone.now)
     fuente = models.ForeignKey(Fuente, null=True, on_delete=models.PROTECT)
@@ -134,9 +136,14 @@ class Revision(models.Model):
 
     class Meta:
         db_table = 'AUD_REVISION_RASTREO'
-        constraints = [check('rast_revision_objeto', Q(dimension='configuracion', fuente__isnull=False, incidencia__isnull=True) | Q(dimension='incidencia', fuente__isnull=True, incidencia__isnull=False)),
+        constraints = [check('rast_revision_objeto', Q(dimension='configuracion', fuente__isnull=False, incidencia__isnull=True, version__isnull=True, evidencia__isnull=True) | Q(dimension='incidencia', fuente__isnull=True, incidencia__isnull=False, version__isnull=True, evidencia__isnull=True) | Q(dimension__in=['extraccion', 'documental', 'oferente'], fuente__isnull=True, incidencia__isnull=True, version__isnull=False)),
                        check('rast_revision_decision', Q(decision__in=['pendiente', 'aprobada', 'rechazada', 'resuelta', 'aplicada'])),
-                       check('rast_revision_motivo', Q(motivo__regex=r'\S'))]
+                       check('rast_revision_motivo', Q(motivo__regex=r'\S')),
+                       check('rast_revision_editorial', ~Q(dimension__in=['extraccion', 'documental', 'oferente']) | Q(decision__in=['pendiente', 'aprobada', 'rechazada'])),
+                       check('rast_revision_evidencia', Q(dimension__in=['documental', 'oferente'], evidencia__isnull=False) | (~Q(dimension__in=['documental', 'oferente']) & Q(evidencia__isnull=True))),
+                       models.UniqueConstraint(fields=['sustituye'], condition=Q(version__isnull=False), name='rast_revision_un_sucesor'),
+                       models.UniqueConstraint(fields=['version', 'dimension'], condition=Q(sustituye__isnull=True, dimension__in=['extraccion', 'oferente']), name='rast_revision_raiz_dimension'),
+                       models.UniqueConstraint(fields=['version', 'evidencia'], condition=Q(sustituye__isnull=True, dimension='documental'), name='rast_revision_raiz_documento')]
 
 
 class Publicacion(models.Model):

@@ -33,3 +33,9 @@
 .crawl h2:focus { outline: 3px solid #167b88; outline-offset: 4px; }
 .crawl details { border: 1px solid #d6e3ed; border-radius: 8px; padding: .8rem; }
 @media(max-width: 800px) { .crawl .crawl-filters { grid-template-columns: 1fr; } }
+.crawl-review-form { display: grid; gap: 16px; margin-block: 16px; }
+.crawl-review-form label { display: grid; gap: 6px; min-width: 0; }
+.crawl-review-form select, .crawl-review-form textarea { width: 100%; min-width: 0; border: 1px solid #8195b2; border-radius: 8px; padding: 10px; background: white; color: #173354; }
+.crawl-review-form textarea { min-height: 100px; resize: vertical; }
+.crawl-review-form :is(select, textarea):focus-visible { outline: 2px solid #245df0; outline-offset: 3px; }
+.crawl-reviews { overflow-wrap: anywhere; }

@@ -1,4 +1,6 @@
 # BecaNexo · Diccionario lógico v0.6
+
+Estado vigente del rastreo al 29/10/2026: [revisión administrativa](Revision_administrativa_rastreo.md) amplía AUD_REVISION_RASTREO con version_id y evidencia_id opcionales, dimensiones extracción/documental/oferente, sustitución e integridad. Migraciones 0006/0007; sin tablas nuevas ni cambios en el JSON histórico. Las descripciones de bloques anteriores que siguen se conservan como evolución del modelo.
 Base v0.5 con ampliación de comparación del 26/10/2026. Modelo parcialmente implementado; el avance distingue tablas existentes de las futuras. No contiene SQL. PK primero, FK después y atributos del negocio. Véase Ampliacion_comparacion_v06.md para contratos y diferencias respecto al ER histórico.
 
 ## Ampliación implementada de rastreo — 27/10/2026

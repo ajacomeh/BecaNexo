@@ -1,5 +1,74 @@
 # Avance de BecaNexo
 
+## Cierre definitivo del hito de rastreo y revisión — 29/10/2026
+
+- El usuario confirmó validación con su sesión real: acceso, dos publicaciones, detalles/versiones/documentos y apertura/cancelación del formulario correctos; ningún error y ninguna decisión guardada. Queda completada la comprobación manual antes pendiente.
+- Verificación final: **116 pruebas backend aprobadas**, 0 fallidas/omitidas (106,253 s), rastreo + usuarios + convocatorias.test_siau, test_becanexo_db --keepdb sin paralelismo de suite; **110 frontend aprobadas**, 13 archivos (49,85 s); **3 Playwright aprobadas** (8,7 s), escritorio/móvil con API simulada. Todos los ejecutores terminaron con salida 0. Lint/build, Django check y comprobaciones de migraciones correctos.
+- Integración real nuevamente comprobada: 14 GET administrativos 200 en transacción READ ONLY/autenticación en memoria, 42 rechazos 403; Edge anónimo sin interceptores dirigido al login y cinco GET 403, sin errores JavaScript. No se sustituye esa integración por el recorrido simulado de escritura.
+- 0006/0007 aplicadas; sin nuevas migraciones ni operaciones pendientes. Se conservan dos publicaciones/versiones/observaciones/ejecuciones, cuatro relaciones documentales, dos revisiones de configuración y cero editoriales. Huellas de 34 tablas tras consultas y de 32 principales respecto al estado previo a migración, sin diferencias; restricciones validadas/triggers activos.
+- Respaldo previo `D:\Respaldos_BecaNexo\becanexo_pre_revisiones_20261029T103140Z_bd8aa7ea` verificado: dump y nueve documentos con huellas correctas, pg_restore --list salida 0; no se creó otro ni se restauró.
+- Documento de cierre: [CIERRE_ETAPA_1.md](CIERRE_ETAPA_1.md), con alcance, comandos, evidencia, límites y referencia permanente al commit local que lo incorpora, mensaje `feat(rastreo): cerrar revision administrativa y validacion integral`. Se excluyen configuración privada, outputs, documentos descargados y respaldos. Sin push/despliegue; la etapa 2 queda preparada, no iniciada. Las notas siguientes conservan la evolución histórica y sus pendientes de entonces.
+
+## Integración real y preparación de validación manual — 29/10/2026
+
+- Conservados los cambios previos: Git muestra 11 archivos versionados con contenido modificado y 9 nuevos sin seguimiento, no únicamente los 12 de la referencia visual. No se hicieron commits ni cambios de aplicación. Esta comprobación actualiza documentación y deja scripts locales ignorados en outputs/rastreo.
+- Reutilizada la instancia ya activa en http://127.0.0.1:5173, sin iniciar otro servidor ni cambiar puerto. Proxy /api hacia Django real en 127.0.0.1:8000. Respuestas HTTP anónimas coincidentes (403). Los source maps de main.jsx, api/client.js, Crawling.jsx y CrawlingReviews.jsx coinciden con los archivos locales actuales. setup.js se utiliza exclusivamente por Vitest; las interceptaciones de reviews.spec.js pertenecen a Playwright, no al frontend normal.
+- **14 GET administrativos reales** mediante APIRequestFactory, administrador autenticado en memoria y transacción PostgreSQL READ ONLY: fuentes, publicaciones, ambos detalles, versiones, observaciones, documentos y revisiones. Todos 200/no-store. Una fuente, dos publicaciones, una versión por publicación (ambas número 1; IDs globales 1 y 2), dos relaciones documentales por versión. La selección coincide con la última observación exitosa.
+- Extracción técnica completa en ambas versiones; **cero revisiones editoriales**, cero decisiones vigentes y cero rectificaciones editoriales. Las dos revisiones históricas de configuración permanecen separadas. El componente servido deriva aprobaciones únicamente de registros vigentes y muestra pendiente sin decisión para las dimensiones/documentos restantes. No se crearon filas para poblar el historial vacío. La visualización de un historial poblado sigue respaldada por las pruebas sintéticas anteriores, no por datos reales que no existen.
+- **42 GET rechazados 403** sobre los mismos 14 recursos: anónimo, postulante e inactivo. Los dos últimos se representaron mediante copias del usuario solo en memoria, sin guardar cuentas. Inspeccionados AuthView/CSRF, AdministradorActivo y actor=request.user del POST; no se enviaron escrituras para probar CSRF en desarrollo. Las pruebas de escritura/CSRF anteriores en test_becanexo_db no se repitieron ni se presentan como nuevas.
+- Huellas de **34 tablas**, incluidas relaciones auxiliares, idénticas antes/después. No se descargaron documentos, iniciaron rastreos, guardaron decisiones o sesiones, ni se modificaron cuentas/datos. Se consultaron los metadatos documentales; no se volvió a comprobar el contenido binario.
+- Edge contra la instancia existente, **sin API simulada ni interceptores**: /gestion/rastreo redirige al login; cinco GET HTTP administrativos a través de Vite devuelven 403; cero errores JavaScript. El navegador temporal se cerró y el ejecutor terminó con **salida 0**. No se usó la sesión personal ni se detuvieron servidores.
+- Django check correcto; makemigrations --check --dry-run sin cambios; showmigrations confirma 0006/0007 aplicadas. No nuevas migraciones, respaldos/restauraciones, suites con escrituras ni cambios de dependencias. Scripts de comprobación local: outputs/rastreo/integracion_lectura.py e integracion_anonima.cjs.
+
+**Resultado:** conexión con Django real y consultas verificadas, sin errores de integración detectados en este alcance. Preparado para validación con la sesión administradora del usuario. No se afirma haber recorrido la interfaz autenticada conectada de extremo a extremo: se verificaron por separado navegador anónimo real y API administrativa real con autenticación inyectada. Abrir http://127.0.0.1:5173/gestion/rastreo, luego publicaciones/1 y publicaciones/2; comprobar versión seleccionada, documentos, pendientes y el historial vacío. Puede abrir/cancelar el formulario, pero no pulsar Guardar si solo quiere validar visualmente sin modificar historial.
+
+## Revisión administrativa de rastreo completada — 29/10/2026
+
+### Estado recuperado e implementación
+
+Se recuperó la instrucción adjunta, AGENTS, Git, código, modelo y resultados. Base: commit bcb71b8; conservados los cambios pendientes. Existían 0006_revision_editorial (depende de 0005) y 0007_integridad_revision_editorial (depende de 0006), ambas pendientes en desarrollo; no existía respaldo de esta etapa. No se renumeraron ni generaron duplicados.
+
+AUD_REVISION_RASTREO incorpora versión y relación documental exactas, sin tabla duplicada. GET/POST requieren sesión de administrador activo, CSRF en escritura, actor del servidor, campos cerrados y no-store. Extracción/documental/oferente tienen decisiones independientes pendiente/aprobada/rechazada; ausencia de fila no crea decisión ficticia. Rectificaciones mediante nuevas filas, UUID idempotente y bloqueo transaccional; historial y pertenencia protegidos en PostgreSQL. Convenios no pueden aprobarse y no hay publicación, vinculación ni resolución de incidencias.
+
+Interfaz integrada en detalle: decisiones vigentes e historial, selección documental, justificación y destino explícitos, versión histórica/última observada, errores y conservación del texto. Se completaron las etiquetas accesibles de los selectores y la identificación de documento físico frente a relación documental. Guardar sí modifica historial; Cancelar no escribe.
+
+### Pruebas terminadas
+
+- Backend: **53 casos distintos con resultado aprobado**, entre bloques: 8 de revisiones + 18 de persistencia (26, 30,247 s, antes de la interrupción); 9 de API de consulta aprobados individualmente en el bloque inicial; 18 de observaciones al retomar (29,599 s). La primera ejecución combinada de 17 acabó con un error del serializer al rechazar campos adicionales; se corrigió y se repitieron revisiones junto a persistencia, todas aprobadas. No se atribuye éxito global a aquella ejecución fallida.
+- Al retomar se reforzó la concurrencia con **dos administradores distintos** y se ejecutó de nuevo ese caso: 1 aprobado, 1,234 s. Mismo UUID produce una fila; decisiones concurrentes con el mismo antecedente producen inserción y 409. Suite sin paralelismo; solo el caso concurrente usa dos conexiones/hilos. Todas las escrituras de prueba exclusivamente en test_becanexo_db y documentos sintéticos temporales.
+- Frontend: **31 aprobadas**, cero fallidas/omitidas, CrawlingReviews/Crawling/App (14,40 s al retomar). Guardado/cancelación, clave y texto conservados ante fallo, doble envío bloqueado, versión histórica y evidencia exacta. Tras afinar la identificación documental se repitieron las 3 pruebas afectadas de CrawlingReviews: todas aprobadas (3,77 s), más lint y build finales correctos, salida 0.
+- Edge/Playwright: **3 aprobadas, 10,5 s, salida 0**, a 1440, 390 y 320 px. API y sesión simuladas. Teclado/foco, evidencia histórica, selección documental, justificación obligatoria, conflicto/reintento, texto conservado, confirmación e historial. Capturas de escritorio/móvil revisadas, sin desbordamientos observados. El último ejecutor cerró correctamente su servidor; no queda cierre pendiente ni se detuvieron procesos ajenos.
+- Los intentos anteriores de navegador fallaron: el simulador interceptaba también /src/api/client.js; corregido para limitarlo a /api/. Después, el selector exacto de etiqueta incluía las opciones del select; corregida la etiqueta accesible sin debilitar aserciones. No se presentan esos intentos como aprobados.
+- Lint/build correctos; Django check sin incidencias; makemigrations --check --dry-run sin cambios. SQL de 0006/0007 revisado: FK opcionales, ampliación de CHECK, índices y trigger; sin borrado/reinterpretación de filas. Plan posterior sin operaciones pendientes.
+- Desarrollo real: dos GET de revisiones de publicaciones 1/2 devolvieron 200/no-store, cero revisiones editoriales, usando APIRequestFactory con autenticación inyectada en memoria y transacción READ ONLY. No fue login real ni escritura. Dos revisiones históricas de configuración conservadas; aprobación automática false. Integridad documental: nueve documentos, cero problemas, cero eliminados.
+
+### Respaldo y migración
+
+Respaldo nuevo: `D:\Respaldos_BecaNexo\becanexo_pre_revisiones_20261029T103140Z_bd8aa7ea`. Dump custom 210545 bytes, documentos y manifiesto; snapshot exportado y exclusión del rastreo. Nueve referencias/archivos verificados por tamaño/SHA-256. pg_dump y pg_restore --list salieron 0; hashes revalidados antes de migrar. **No se realizó restauración completa**.
+
+Aplicadas únicamente rastreo.0006_revision_editorial y 0007_integridad_revision_editorial en becanexo_db tras pruebas y respaldo. showmigrations confirma ambas X. Huellas de las columnas preexistentes de **32 tablas principales en mayúsculas** idénticas antes/después, incluidas cuentas, catálogo, perfil, favoritos e historial. Nuevas columnas NULL en revisiones históricas. Sin decisiones editoriales reales ni nuevos rastreos. Evidencia operativa ignorada: outputs/rastreo/respaldo-revisiones.json, revisiones-antes.json y revisiones-conservacion.json. Respaldos/documentos fuera del repositorio.
+
+### Comandos y comprobación manual
+
+Desde raíz:
+
+```powershell
+.\.venv\Scripts\python.exe backend/manage.py test rastreo.test_revisiones rastreo.tests --keepdb --verbosity 1
+.\.venv\Scripts\python.exe backend/manage.py test rastreo.test_observaciones --keepdb --verbosity 1
+.\.venv\Scripts\python.exe backend/manage.py test rastreo.test_revisiones.RevisionTests.test_concurrent_decisions_and_retries --keepdb --verbosity 2
+.\.venv\Scripts\python.exe backend/manage.py check
+.\.venv\Scripts\python.exe backend/manage.py makemigrations --check --dry-run
+.\.venv\Scripts\python.exe backend/manage.py showmigrations rastreo
+.\.venv\Scripts\python.exe backend/manage.py migrate --plan
+.\.venv\Scripts\python.exe backend/manage.py rastreo integridad
+```
+
+Desde frontend con Node 24 en PATH: `npm.cmd test -- --run src/CrawlingReviews.test.jsx src/Crawling.test.jsx src/App.test.jsx`, `npm.cmd run lint`, `npm.cmd run build`, `npm.cmd run test:e2e -- --config playwright.reviews.config.js`. Navegador con API simulada, sin iniciar Django.
+
+Abrir `http://127.0.0.1:5173/gestion/rastreo` con sesión administradora, luego publicaciones/1 o publicaciones/2. Examinar evidencia antes de decidir; Cancelar permite inspeccionar sin escribir. **Guardar modifica el historial real**. Contrato y pasos: [guía](consulta-administrativa-rastreo.md), [suplemento](Modelo/Revision_administrativa_rastreo.md), [respaldo](respaldo-rastreo.md). Actualizados también decisiones, diccionario y propuesta; v0.6 histórico intacto.
+
+Pendiente manual: recorrido del usuario con su sesión real y revisión sustantiva de SIAU; no se probaron aprobaciones en desarrollo. Restauración completa no ensayada en esta tarea. Convenios estructurados, propuestas de cambio, publicación, IA y planificación diaria siguen fuera de alcance. Sin commits ni despliegue.
+
 ## Cierre del ejecutor de navegador confirmado — 28/10/2026
 
 - Consultada la sesión original 17653, sin repetir pruebas. El runner Playwright PID 20264 seguía activo tras aprobar ambos casos, esperando el cierre de sus servidores web (árboles raíz 11368 Vite y 7020 Django). El código instalado de Playwright espera la terminación de esos procesos en teardown; en Windows utiliza taskkill y espera el cierre incluso si falla la terminación.

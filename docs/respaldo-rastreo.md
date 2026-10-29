@@ -1,5 +1,30 @@
 # Respaldo conjunto de PostgreSQL y documentos
 
+## Revisión administrativa — 29/10/2026
+
+Copia nueva previa a rastreo.0006/0007: `D:\Respaldos_BecaNexo\becanexo_pre_revisiones_20261029T103140Z_bd8aa7ea`.
+
+Contiene becanexo_db.backup (210545 bytes), documentos/, manifiesto.json y pg_restore-list.txt. pg_dump con snapshot PostgreSQL exportado y exclusión del rastreo durante captura; metadatos documentales leídos desde el mismo snapshot. Nueve referencias y archivos comprobados por tamaño y SHA-256. Se verificaron nuevamente dump y archivos antes de migrar. pg_dump y pg_restore --list: salida 0. **No se realizó restauración completa**. Se conservaron los respaldos anteriores.
+
+Se ejecutó desde raíz: `.\.venv\Scripts\python.exe backend/manage.py shell -c "exec(open('outputs/rastreo/respaldar_revisiones.py', encoding='utf-8').read())"`. Script operativo local ignorado, adaptado del procedimiento del bloque 2; contraseña solo en entorno privado del subproceso. No repetirlo para consultar la copia existente.
+
+Verificación de solo lectura:
+
+```powershell
+$revisionBackup = 'D:\Respaldos_BecaNexo\becanexo_pre_revisiones_20261029T103140Z_bd8aa7ea'
+$revisionManifest = Get-Content -LiteralPath (Join-Path $revisionBackup 'manifiesto.json') -Raw | ConvertFrom-Json
+if ((Get-FileHash -LiteralPath (Join-Path $revisionBackup 'becanexo_db.backup') -Algorithm SHA256).Hash.ToLowerInvariant() -ne $revisionManifest.dump_sha256) { throw 'Dump inconsistente' }
+foreach ($item in $revisionManifest.archivos) {
+    $documentPath = Join-Path (Join-Path $revisionBackup 'documentos') $item.archivo
+    if ((Get-Item -LiteralPath $documentPath).Length -ne $item.bytes) { throw 'Tamaño inconsistente' }
+    if ((Get-FileHash -LiteralPath $documentPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $item.sha256) { throw 'Documento inconsistente' }
+}
+& 'C:\Program Files\PostgreSQL\16\bin\pg_restore.exe' --list (Join-Path $revisionBackup 'becanexo_db.backup')
+if ($LASTEXITCODE -ne 0) { throw 'Listado fallido' }
+```
+
+Las secciones siguientes conservan procedimientos y respaldos anteriores.
+
 El archivo `pg_dump` de becanexo_db **no incluye** HTML/PDF de `RASTREO_STORAGE_ROOT`. Un respaldo utilizable debe conservar base, documentos y un manifiesto que relacione hashes/rutas con el punto de captura. No borrar evidencia ni sobrescribir respaldos anteriores.
 
 ## Respaldo utilizado para el bloque 2

@@ -1,5 +1,50 @@
 # Consulta administrativa del rastreo
 
+## Revisión administrativa disponible — 29/10/2026
+
+La bandeja ahora permite **registrar revisiones** en el detalle, además de consultar. Las secciones posteriores a este apartado documentan la etapa inicial de solo lectura y sus pruebas históricas; esa limitación ya no describe el endpoint de revisión. Ningún GET escribe datos.
+
+Ruta: `http://127.0.0.1:5173/gestion/rastreo/publicaciones/:id`. Publicaciones existentes: `/gestion/rastreo/publicaciones/1` y `/gestion/rastreo/publicaciones/2`. No es necesario lanzar un rastreo. Iniciar Vite/Django con los comandos locales habituales; el recorrido automatizado cierra su propio Vite.
+
+### API de revisión
+
+`GET|POST /api/gestion/rastreo/publicaciones/{id}/versiones/{version_id}/revisiones/`
+
+Solo administrador activo con sesión Django. POST exige CSRF; se reutilizan AuthView, JSONParser y no-store. No hay PATCH/DELETE. El actor procede exclusivamente de request.user. POST no acepta parámetros de consulta ni campos fuera del contrato.
+
+GET acepta page/page_size (1–50, predeterminado 12), devuelve count/page/page_size/results y además `vigentes`, `version_id`, `numero`, `ultima_observada`. Historial descendente por fecha/ID; vigentes excluye filas sustituidas. `ultima_observada` compara con la última observación exitosa, no el número máximo de versión. IDs globales y número de versión no son intercambiables. Las revisiones incluyen ID, dimensión, decisión, motivo, fecha, versión, evidencia, sustituye_id, detalle y administrador (ID/nombre), nunca correo, hashes de contraseña ni rutas físicas.
+
+POST requiere:
+
+```json
+{
+  "dimension": "documental",
+  "decision": "pendiente",
+  "motivo": "Justificación tras examinar la evidencia",
+  "evidencia_id": 123,
+  "sustituye_id": null,
+  "clave_accion": "UUID nuevo de esta acción"
+}
+```
+
+Ejemplo de contrato, **no para ejecutarlo con esos valores**. evidencia_id es REL_VERSION_DOCUMENTO.id, expuesto como `evidencia_id` por el listado de documentos; el `id` de ese listado sigue siendo el documento descargable. Extracción exige evidencia_id null. Documental y oferente exigen evidencia exacta de la versión. Oferente requiere además `tipo_oferente` y `referencia`; aprobación solo para entidad_ecuatoriana respaldada. Convenio/no_determinado permiten pendiente/rechazada, nunca aprobada. Motivo: texto no vacío, máximo 5000; referencia: texto no vacío, máximo 2000.
+
+Respuestas: 201 creada; 200 reintento idéntico o consulta; 400 campos/relaciones inválidos; 403 sesión/rol/actividad/CSRF; 404 versión inexistente o ajena; 405 método no permitido; 409 revisión anterior obsoleta o clave reutilizada con otro contenido. Rectificar usa el ID vigente en sustituye_id; conserva versión/dimensión/evidencia. Consultar el historial después de un 409 no guarda nada: se requiere otra confirmación explícita.
+
+### Recorrido manual
+
+1. Entrar con una sesión administradora y abrir Rastreo → Abrir publicación. Comprobar la versión seleccionada y la indicación de última observación exitosa o evidencia histórica.
+2. Examinar información extraída, advertencias y documentos. HTTP 200 y extracción completa no son aprobaciones. Descargar es consulta; revisar exige examinar el contenido.
+3. En Revisiones administrativas, comprobar pendientes sin filas ficticias y decisiones vigentes. Abrir Registrar revisión, elegir dimensión y, cuando corresponda, documento exacto. El destino y la revisión que se sustituiría se muestran antes de guardar.
+4. Introducir decisión y justificación. **Guardar modifica el historial real y no debe usarse como ensayo sobre SIAU sin examinar la evidencia**. Para inspeccionar solamente el formulario, usar Cancelar. Las pruebas automatizadas guardan exclusivamente en test_becanexo_db o en una API simulada.
+5. Tras una revisión legítima, comprobar confirmación, historial, autor, fecha y decisión vigente. Rectificar registra otra fila; no elimina la anterior. Si otro administrador decidió mientras tanto, conservar el texto, actualizar historial, revisar el conflicto y confirmar de nuevo.
+
+No se publican ni vinculan convocatorias, no se resuelven incidencias y una decisión histórica no aprueba otra versión. Las advertencias almacenadas del extractor son históricas y no se reescriben cuando se revisa un documento. Fechas y vigencia de la oportunidad permanecen separadas de la revisión.
+
+Pruebas y respaldo de esta etapa: [avance](avance.md). Modelo efectivo: [suplemento](Modelo/Revision_administrativa_rastreo.md).
+
+## Registro histórico: etapa de solo consulta
+
 Implementada el 28/10/2026 sobre el commit 8ee1fc7. Primera etapa de **solo consulta**: no inicia rastreos, modifica fuentes, aprueba documentos, resuelve incidencias ni crea/vincula/publica convocatorias. No modifica modelos ni añade migraciones.
 
 ## Rutas de interfaz

@@ -1,4 +1,4 @@
-"""Consulta administrativa: ninguna operación editorial o de rastreo."""
+"""Consulta y revisión administrativa; sin publicación ni ejecución de rastreo."""
 import hashlib
 from urllib.parse import urlsplit
 
@@ -11,6 +11,8 @@ from usuarios.api import AuthView
 from convocatorias.api import Administrador, parametros, entero, paginar
 from .models import Fuente, Publicacion, Version, VersionDocumento, Observacion, Ejecucion, Acceso, Incidencia, Documento
 from .storage import root_path, key_for, verify_file, StorageError
+from .models import Revision
+from .revisiones import RevisionEntrada, registrar, revision_data, vigentes
 
 
 class AdministradorActivo(Administrador):
@@ -98,7 +100,7 @@ class DocumentosVersion(ReadOnly):
         identified(Publicacion, pk)
         v = identified(Version.objects.filter(publicacion_id=pk), version_id)
         return paginar(request, VersionDocumento.objects.filter(version=v).select_related('documento').order_by('id'),
-            lambda r: {'id': r.documento_id, 'rol': r.rol, 'url_original': r.url_original,
+            lambda r: {'id': r.documento_id, 'evidencia_id': r.pk, 'rol': r.rol, 'url_original': r.url_original,
                        'mime': r.documento.mime, 'tamano_bytes': r.documento.tamano_bytes, 'sha256': r.documento.sha256})
 
 
@@ -161,3 +163,30 @@ class Descargar(ReadOnly):
         response['X-Content-Type-Options'] = 'nosniff'
         response['Content-Security-Policy'] = "sandbox; default-src 'none'"
         return response
+
+
+class Revisiones(AuthView):
+    permission_classes = [AdministradorActivo]
+    http_method_names = ['get', 'post', 'options']
+
+    def version(self, pk, version_id):
+        return identified(Version.objects.filter(publicacion_id=pk), version_id)
+
+    def get(self, request, pk, version_id):
+        parametros(request, {'page', 'page_size'})
+        version = self.version(pk, version_id)
+        current = vigentes(version.pk).select_related('actor').order_by('id')
+        response = paginar(request, Revision.objects.filter(version=version).select_related('actor').order_by('-creada_en', '-id'), revision_data)
+        latest = Observacion.objects.filter(publicacion_id=pk, version__isnull=False).order_by('-observada_en', '-id').first()
+        response.data.update(vigentes=[revision_data(r) for r in current],
+                             version_id=version.pk, numero=version.numero,
+                             ultima_observada=bool(latest and latest.version_id == version.pk))
+        return response
+
+    def post(self, request, pk, version_id):
+        parametros(request, set())
+        version = self.version(pk, version_id)
+        serializer = RevisionEntrada(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        row, created = registrar(request.user.pk, version.pk, serializer.validated_data)
+        return Response(revision_data(row), status=201 if created else 200)

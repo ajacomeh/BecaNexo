@@ -2,6 +2,7 @@ from django.urls import path
 from . import api
 
 urlpatterns = [
+    path('publicaciones/<int:pk>/versiones/<int:version_id>/revisiones/', api.Revisiones.as_view()),
     path('fuentes/', api.Fuentes.as_view()),
     path('publicaciones/', api.Publicaciones.as_view()),
     path('publicaciones/<int:pk>/', api.Publicaciones.as_view()),
