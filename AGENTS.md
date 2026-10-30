@@ -5,7 +5,7 @@ BecaNexo es un proyecto de tesis de Ingeniería de Software para recomendar beca
 ## Alcance y arquitectura
 
 - Desarrollar por etapas, con responsabilidades claras, como monolito modular.
-- Backend: Django 5.2 y Django REST Framework; PostgreSQL local. Frontend futuro: React con Vite y Tailwind CSS; preparar Node 24 LTS antes del frontend (Node 25 informado actualmente).
+- Backend: Django 5.2 y Django REST Framework; PostgreSQL local. Frontend implementado: React con Vite y Tailwind CSS. Usar Node 24 LTS, conforme a engines en frontend/package.json.
 - Prever registro e inicio de sesión por correo, sin nombre de usuario, mediante sesiones y protección CSRF.
 - El alcance funcional incluye perfil académico y preferencias; catálogo, detalle y favoritos; administración de convocatorias, opciones de estudio, beneficios y requisitos detallados; rastreo periódico de fuentes seleccionadas; recomendación por similitud semántica local y reglas explícitas de elegibilidad; explicaciones según información declarada; notificaciones y supervisión administrativa.
 - El postulante declara idioma y nivel, sin cargar certificados. Los certificados exigidos se describen en los requisitos de la beca y los verifica la entidad oferente durante la postulación externa.

@@ -12,7 +12,7 @@ export default function AuthLayout({ children }) {
       </aside>
       <main id="contenido" className="auth-main">
         <div className="auth-content">{children}</div>
-        <footer className="auth-footer">BecaNexo · Proyecto de tesis · Avance inicial</footer>
+        <footer className="auth-footer">BecaNexo · Proyecto de tesis</footer>
       </main>
     </div>
   )

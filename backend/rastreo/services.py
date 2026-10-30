@@ -11,9 +11,9 @@ from django.core.exceptions import ValidationError
 from django.db import connection, transaction, DatabaseError
 from django.utils import timezone
 
-from convocatorias.siau_red import Downloader, AccessError, ROOT, INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
+from convocatorias.siau_red import Downloader, AccessError, INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
 from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
-from .models import Fuente, Ejecucion, Documento, Acceso, Incidencia, Revision, Publicacion
+from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion
 from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
 

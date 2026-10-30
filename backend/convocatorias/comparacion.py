@@ -4,7 +4,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from perfiles.models import Perfil, MCER
 from .reglas import CONTRATOS, esquema, validar
-from .equivalencias import normalizar, coincidir, validar_equivalencias
+from .equivalencias import coincidir, validar_equivalencias
 
 ACADEMICOS = {"FORMACION", "TITULO_AREA", "PROMEDIO"}
 EXTERNOS = {"ACREDITACION", "DOCUMENTO", "OTRO"}

@@ -1,5 +1,12 @@
 # Avance de BecaNexo
 
+## Cierre de limpieza mínima — 30/10/2026
+
+- Aplicados únicamente cuatro ajustes: descripción vigente de React/Node 24 en AGENTS; retirada de «Avance inicial» del pie de AuthLayout; retirada del import sin uso `normalizar` de comparación y de `ROOT`/`Documento` de servicios de rastreo. Sin refactorizaciones ni cambios funcionales.
+- Resultados recuperados de los ejecutores ya terminados, ambos con salida 0: **74 pruebas backend aprobadas** (46,650 s), mediante `manage.py test convocatorias.test_comparacion convocatorias.test_reglas_v2 rastreo.tests rastreo.test_observaciones --keepdb --verbosity 1`, sin paralelismo de suite, exclusivamente en `test_becanexo_db`, con archivos temporales y red simulada; **41 pruebas frontend aprobadas** en App, PublicAccess y Welcome (15,11 s), con API simulada. Lint, build y Django check correctos. No se repitieron pruebas aprobadas al cerrar.
+- Conservadas las 15 imágenes `frontend/reference-*.png`, excluidas de Git: no se encontraron usos en las referencias revisadas, pero no se demostró que fueran copias prescindibles de la documentación de diseño. Sin nuevas investigaciones, traslados ni eliminaciones; no hay enlaces rotos por eliminación de imágenes.
+- Diff revisado y comprobación de espacios realizada. El commit de limpieza incluye solo esos cuatro archivos y esta actualización. La guía de arquitectura pendiente queda fuera. Sin escrituras en desarrollo, migraciones, rastreos, dependencias nuevas ni publicación.
+
 ## Cierre definitivo del hito de rastreo y revisión — 29/10/2026
 
 - El usuario confirmó validación con su sesión real: acceso, dos publicaciones, detalles/versiones/documentos y apertura/cancelación del formulario correctos; ningún error y ninguna decisión guardada. Queda completada la comprobación manual antes pendiente.
