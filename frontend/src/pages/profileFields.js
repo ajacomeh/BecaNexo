@@ -7,10 +7,15 @@ export function profileFields(c) {
   const nivel = { name: 'nivel', label: 'Nivel académico', options: choices(c.niveles), required: true }
   return {
     personal: [
+      { name: 'nacionalidad', label: 'Nacionalidad', options: catalog(c.paises), kind: 'id', required: true,
+        placeholder: 'Selecciona tu nacionalidad', hint: 'BecaNexo está disponible únicamente para ciudadanos ecuatorianos. La residencia puede ser otro país.',
+        validate: value => !c.paises.some(p => p.codigo === 'EC') ? 'Falta Ecuador en el catálogo de países. No es posible confirmar la nacionalidad.' : !value ? 'Selecciona tu nacionalidad' : c.paises.find(p => String(p.id) === value)?.codigo !== 'EC' ? 'Actualmente BecaNexo está disponible únicamente para ciudadanos ecuatorianos' : null },
       { name: 'fecha_nacimiento', label: 'Fecha de nacimiento', type: 'date', hint: 'Opcional. Se usará cuando existan requisitos de edad.' },
       { name: 'residencia', label: 'País de residencia', options: catalog(c.paises), kind: 'id' },
       { name: 'provincia_residencia', label: 'Provincia de residencia' },
       { name: 'ciudad_residencia', label: 'Ciudad de residencia' },
+      { name: 'descripcion', label: 'Sobre mi perfil', type: 'textarea', wide: true, maxLength: 1500, counter: true,
+        hint: 'Describe tus intereses académicos, experiencia relevante y objetivos de estudio. No incluyas contraseñas ni datos sensibles' },
     ],
     availability: [
       { name: 'dedicacion_disponible', label: 'Dedicación disponible', options: choices(c.dedicaciones) },
@@ -30,8 +35,8 @@ export function profileFields(c) {
     ],
     experiencias: [{ name: 'cargo', label: 'Cargo / actividad' }, area,
       { name: 'fecha_inicio', label: 'Fecha de inicio', type: 'date', required: true },
-      { name: 'fecha_fin', label: 'Fecha final', type: 'date' },
-      { name: 'actual', label: '¿Continúa actualmente?', options: bools, required: true, kind: 'boolean' },
+      { name: 'fecha_fin', label: 'Fecha final', type: 'date', disabledWhen: 'actual', disabledHint: 'No corresponde mientras continúes trabajando' },
+      { name: 'actual', label: 'Actualmente trabajo aquí', type: 'checkbox', kind: 'boolean' },
       { name: 'descripcion', label: 'Descripción de la experiencia', type: 'textarea', wide: true }],
     idiomas: [{ name: 'idioma', label: 'Idioma', options: catalog(c.idiomas), kind: 'id', required: true },
       { name: 'nivel', label: 'Nivel declarado (MCER)', options: choices(c.niveles_idioma) }],

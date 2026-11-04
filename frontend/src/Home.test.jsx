@@ -25,7 +25,7 @@ it.each([
     expect(link.querySelector('button, a, input')).toBeNull()
   }
   expect(screen.getAllByRole('button', { name: 'Cerrar sesión' })).toHaveLength(1)
-  expect(screen.getAllByRole('button', { name: 'Editar nombre' })).toHaveLength(1)
+  expect(screen.queryAllByRole('button', { name: 'Editar nombre' })).toHaveLength(rol === 'administrador' ? 1 : 0)
   expect(screen.getAllByRole('banner')).toHaveLength(1)
   expect(screen.getAllByRole('contentinfo')).toHaveLength(1)
   expect(screen.queryByText('Tu cuenta')).not.toBeInTheDocument()

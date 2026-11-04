@@ -1,5 +1,39 @@
 # Avance de BecaNexo
 
+## Edición del nombre desde datos personales — 04/11/2026
+
+- El postulante edita «Nombre visible» en `/perfil` y lo confirma con «Guardar datos personales». Se separa del payload del perfil y se guarda mediante `updateName`/PATCH `/api/auth/me/`, únicamente si cambia respecto al contexto. La barra lateral se actualiza sin recargar; el lápiz permanece solo para administradores.
+- Guardado secuencial: primero perfil, después nombre. Si falla la primera petición se informa que no se pudo confirmar y no se intenta la segunda; si falla el nombre, se informa que el perfil sí se guardó y el nombre queda pendiente. Los valores del formulario permanecen y no se anuncia éxito completo. Conservadas validación de vacío/180 caracteres y validación del servidor.
+- Verificación con API simulada: Profile, EditName y Home ejecutaron 23 casos; 22 aprobaron inicialmente y uno falló por un texto de prueba con codificación incorrecta. Corregidos ese texto y el nombre acentuado del caso de persistencia, se repitieron únicamente esos 2 casos: ambos aprobados (15 no seleccionados). Los 23 casos quedan comprobados; lint y build ejecutados una vez, salida 0. Sin suites backend ni escrituras de desarrollo.
+- Conservados nacionalidad, descripción, experiencia, migración de descripción pendiente y guía sin seguimiento. Sin nuevas migraciones, dependencias ni commits. Verificación de persistencia/contexto simulada, no una sesión real de desarrollo.
+
+## Descripción opcional del perfil — 04/11/2026
+
+- No existía un campo general equivalente: añadido `Perfil.descripcion` nullable, máximo 1500 caracteres; la descripción de experiencia sigue siendo independiente. «Sobre mi perfil» ofrece textarea, contador, ayuda solicitada y texto seguro; permite consultar, editar y vaciar (NULL), sin contenido inventado ni uso en comparación/IA.
+- Migración aditiva `perfiles.0002_perfil_descripcion`, generada con conexión dirigida a test_becanexo_db y aplicada únicamente allí por el ejecutor. Confirmada [X] en pruebas y [ ] en desarrollo; sin cambios de modelo pendientes. Desarrollo requiere aplicar después `.\.venv\Scripts\python.exe backend\manage.py migrate perfiles 0002_perfil_descripcion` antes de usar el perfil actualizado. No se ejecutó ese comando en desarrollo.
+- 2 pruebas backend afectadas aprobadas en test_becanexo_db --keepdb, secuenciales: crear sin descripción, guardar/consultar/editar/borrar, 1500 aceptados/1501 rechazados, propietario, acceso anónimo y CSRF. 15 pruebas frontend de Profile aprobadas con API simulada. Django check, lint, build y comprobación de migraciones correctos, salida 0. Contrato actualizado en api-perfil.md; cambios previos y guía sin seguimiento conservados. Sin commits.
+
+## Selector de nacionalidad — 04/11/2026
+
+- Nacionalidad usa el catálogo de países, sin Ecuador preseleccionado en perfiles nuevos. Conserva valores guardados, exige selección explícita y acepta solo código EC, sin ID fijo. Otros países muestran «Actualmente BecaNexo está disponible únicamente para ciudadanos ecuatorianos» y no sustituyen la selección. Residencia/destinos conservan sus opciones. Ausencia de EC bloquea confirmación con mensaje; no carga catálogos.
+- Retirada la asignación automática de Ecuador al crear perfil. Serializer exige nacionalidad en creación y valida nacionalidad efectiva en PATCH, conservando la guardada si se omite. No se convierten valores inválidos. Sin cambios de modelos/migraciones ni datos de desarrollo.
+- Verificación: 14 pruebas frontend de Profile aprobadas (API simulada), lint y build salida 0. Backend: 16 casos de PerfilTests ejecutados secuencialmente en test_becanexo_db --keepdb; 15 aprobaron inicialmente y uno falló porque su preparación creaba otro perfil sin nacionalidad. Actualizada esa preparación al contrato explícito, el caso se repitió y aprobó (salida 0), conservando las aserciones de separación. Incluye vacío, EC, otro país, PATCH, perfil existente y ausencia de catálogo EC. Django check del ejecutor sin incidencias. Sin suites completas.
+- Conservados los cambios de nombre visible, experiencia y la guía sin seguimiento; sin commits ni publicación.
+
+## Experiencia laboral actual — 04/11/2026
+
+- Casilla «Actualmente trabajo aquí»: limpia y deshabilita fecha final, muestra «No corresponde mientras continúes trabajando» y conserva inicio editable. Al desmarcar, fin queda vacío y editable; al abrir un registro actual se presenta vacío/deshabilitado. Se envía `null`, sin recuperar fechas anteriores. Conservadas las reglas de obligatoriedad y fechas.
+- `ExperienciaSerializer` ya combina instancia y datos recibidos para rechazar incoherencias en POST/PATCH: no se modificó. Se amplió `test_validaciones_experiencia` con PATCH parciales, transición válida y consulta persistida: 1 prueba aprobada, salida 0, exclusivamente en `test_becanexo_db`, `--keepdb`, sin paralelismo. Comprobación Django incluida sin incidencias. No se consultaron ni corrigieron registros de desarrollo.
+- Frontend: 11 pruebas de `Profile.test.jsx` aprobadas (API simulada), incluyendo marcar/desmarcar, envío de null y reapertura tras nueva consulta. El primer intento falló por el selector exacto de una etiqueta con asterisco; corregido el selector, sin retirar aserciones. Lint y build con salida 0; build advierte tiempos de plugins CSS. Sin recorrido extenso ni suite completa.
+- Conservados los cambios pendientes del nombre visible y la guía sin seguimiento. Sin modelos, migraciones, dependencias, rastreos, commits ni publicación.
+
+## Nombre visible integrado en perfil — 30/10/2026
+
+- El nombre de cuenta pasa de la nota a la cuadrícula de datos personales en `/perfil`, con etiqueta «Nombre visible» y salida de solo lectura. Se obtiene directamente del contexto; el lápiz existente lo actualiza sin recargar. No se copia ni envía al perfil. Se conservan los demás datos y la guía de arquitectura pendiente.
+- `ProfileForm` admite contenido complementario en su cuadrícula; se reutilizan estilos de campos, ajuste de texto y distribución móvil, sin cambios globales de CSS.
+- Verificación: `npm.cmd test -- --run src/Profile.test.jsx src/EditName.test.jsx`: 15 pruebas aprobadas con API simulada, incluida actualización desde el lápiz y ausencia del nombre en escrituras del perfil. Lint y build finalizaron con salida 0; build emitió avisos de tiempos de plugins CSS. Sin suites backend ni escrituras en desarrollo.
+- Comprobación acotada en Edge: fragmento aislado de datos personales con estilos reales y nombre sintético de 180 caracteres, sin desbordamiento a 360/1280 px (una/dos columnas), ejecutor salida 0. No equivale a recorrido completo ni sesión con backend real. Sin commits.
+
 ## Cierre de limpieza mínima — 30/10/2026
 
 - Aplicados únicamente cuatro ajustes: descripción vigente de React/Node 24 en AGENTS; retirada de «Avance inicial» del pie de AuthLayout; retirada del import sin uso `normalizar` de comparación y de `ROOT`/`Documento` de servicios de rastreo. Sin refactorizaciones ni cambios funcionales.

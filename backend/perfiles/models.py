@@ -46,6 +46,7 @@ class Area(models.Model):
 
 
 class Perfil(models.Model):
+    descripcion = models.TextField(max_length=1500, null=True, blank=True)
     usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="perfil")
     nacionalidad = models.ForeignKey(Pais, on_delete=models.PROTECT, related_name="nacionales")
     residencia = models.ForeignKey(Pais, on_delete=models.PROTECT, null=True, blank=True, related_name="residentes")

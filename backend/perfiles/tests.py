@@ -35,7 +35,7 @@ class PerfilTests(TestCase):
         return client
 
     def perfil(self):
-        response = self.client.patch("/api/perfil/", {}, format="json")
+        response = self.client.patch("/api/perfil/", {"nacionalidad": self.ec.pk}, format="json")
         self.assertIn(response.status_code, (200, 201))
         return m.Perfil.objects.get(usuario=self.user)
 
@@ -90,7 +90,7 @@ class PerfilTests(TestCase):
     def test_separacion_completa_entre_postulantes(self):
         perfil = self.perfil()
         other = self.client_for(self.other)
-        other.patch("/api/perfil/", {}, format="json")
+        self.assertEqual(other.patch("/api/perfil/", {"nacionalidad": self.ec.pk}, format="json").status_code, 201)
         for recurso, payload in self.payloads().items():
             created = self.client.post(f"/api/perfil/{recurso}/", payload, format="json")
             self.assertEqual(created.status_code, 201, created.data)
@@ -118,14 +118,48 @@ class PerfilTests(TestCase):
             self.assertEqual(self.client.delete(f"/api/perfil/{recurso}/{pk}/").status_code, 403)
 
     def test_nacionalidad_residencia_y_fecha(self):
+        for data in ({}, {"nacionalidad": None}, {"nacionalidad": ""}):
+            self.assertEqual(self.client.patch("/api/perfil/", data, format="json").status_code, 400)
+        self.assertFalse(m.Perfil.objects.exists())
         self.assertEqual(self.client.patch("/api/perfil/", {"nacionalidad": self.es.pk}, format="json").status_code, 400)
         self.assertFalse(m.Perfil.objects.exists())
-        response = self.client.patch("/api/perfil/", {"residencia": self.es.pk}, format="json")
+        response = self.client.patch("/api/perfil/", {"nacionalidad": self.ec.pk, "residencia": self.es.pk}, format="json")
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['perfil']['nacionalidad'], self.ec.pk)
         self.assertEqual(response.data['perfil']['residencia'], self.es.pk)
+        for data in ({"nacionalidad": self.es.pk}, {"nacionalidad": None}):
+            self.assertEqual(self.client.patch("/api/perfil/", data, format="json").status_code, 400)
+        self.assertEqual(self.client.patch("/api/perfil/", {"ciudad_residencia": "Otra"}, format="json").status_code, 200)
+        self.assertEqual(self.client.get("/api/perfil/").json()['perfil']['nacionalidad'], self.ec.pk)
         tomorrow = str(timezone.localdate() + timedelta(days=1))
         self.assertEqual(self.client.patch("/api/perfil/", {"fecha_nacimiento": tomorrow}, format="json").status_code, 400)
+
+    def test_nacionalidad_sin_ecuador(self):
+        self.ec.delete()
+        self.assertEqual(self.client.patch("/api/perfil/", {}, format="json").status_code, 503)
+        self.assertFalse(m.Perfil.objects.exists())
+
+    def test_descripcion_opcional_propia(self):
+        perfil = self.perfil()
+        self.assertIsNone(perfil.descripcion)
+        path = "/api/perfil/"
+        for text in ("Intereses <b>académicos</b>", "x" * 1500, "Objetivos editados"):
+            self.assertEqual(self.client.patch(path, {"descripcion": text}, format="json").status_code, 200)
+            self.assertEqual(self.client.get(path).json()["perfil"]["descripcion"], text)
+        self.assertEqual(self.client.patch(path, {"descripcion": "x" * 1501}, format="json").status_code, 400)
+        self.assertEqual(self.client.get(path).json()["perfil"]["descripcion"], "Objetivos editados")
+        other = self.client_for(self.other)
+        self.assertIsNone(other.get(path).json()["perfil"])
+        self.assertEqual(other.patch(path, {"usuario_id": self.user.pk, "descripcion": "Ajena"}, format="json").status_code, 400)
+        self.assertEqual(other.patch(f"/api/perfil/{perfil.pk}/", {"descripcion": "Ajena"}, format="json").status_code, 404)
+        anonymous = APIClient(enforce_csrf_checks=True)
+        self.assertEqual(anonymous.get(path).status_code, 403)
+        no_csrf = APIClient(enforce_csrf_checks=True)
+        no_csrf.force_login(self.user)
+        self.assertEqual(no_csrf.patch(path, {"descripcion": "Sin CSRF"}, format="json").status_code, 403)
+        for empty in ("", "   ", None):
+            self.assertEqual(self.client.patch(path, {"descripcion": empty}, format="json").status_code, 200)
+            self.assertIsNone(self.client.get(path).json()["perfil"]["descripcion"])
 
     def test_desconocido_no_equivale_a_false_o_cero(self):
         perfil = self.perfil()
@@ -165,6 +199,17 @@ class PerfilTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(self.client.patch(f"/api/perfil/experiencias/{response.data['id']}/",
             {"actual": False, "fecha_fin": "2020-03-01"}, format="json").status_code, 200)
+        path = f"/api/perfil/experiencias/{response.data['id']}/"
+        # PATCH combina los campos recibidos con los ya guardados.
+        self.assertEqual(self.client.patch(path, {"actual": True}, format="json").status_code, 400)
+        self.assertEqual(self.client.patch(path, {"fecha_fin": None}, format="json").status_code, 400)
+        self.assertEqual(self.client.patch(path, {"actual": True, "fecha_fin": None}, format="json").status_code, 200)
+        stored = self.client.get(path).json()
+        self.assertTrue(stored["actual"])
+        self.assertIsNone(stored["fecha_fin"])
+        self.assertEqual(self.client.patch(path, {"fecha_fin": "2020-03-01"}, format="json").status_code, 400)
+        self.assertEqual(self.client.patch(path, {"actual": False}, format="json").status_code, 400)
+        self.assertIsNone(self.client.get(path).json()["fecha_fin"])
 
     def test_idiomas_dominios_y_duplicados(self):
         self.perfil()

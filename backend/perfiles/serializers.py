@@ -17,15 +17,22 @@ class StrictModelSerializer(serializers.ModelSerializer):
 class PerfilSerializer(StrictModelSerializer):
     class Meta:
         model = m.Perfil
-        fields = ("id", "nacionalidad", "residencia", "fecha_nacimiento", "provincia_residencia", "ciudad_residencia",
+        fields = ("id", "descripcion", "nacionalidad", "residencia", "fecha_nacimiento", "provincia_residencia", "ciudad_residencia",
                   "dedicacion_disponible", "disponible_traslado", "disponible_extranjero", "version", "actualizado_en")
         read_only_fields = ("id", "version", "actualizado_en")
         extra_kwargs = {"nacionalidad": {"required": False}}
 
     def validate_nacionalidad(self, value):
         if value.codigo != "EC":
-            raise serializers.ValidationError("El alcance del sistema es para ciudadanos ecuatorianos.")
+            raise serializers.ValidationError("Actualmente BecaNexo está disponible únicamente para ciudadanos ecuatorianos")
         return value
+
+    def validate(self, attrs):
+        nationality = attrs.get("nacionalidad", getattr(self.instance, "nacionalidad", None))
+        if nationality is None:
+            raise serializers.ValidationError({"nacionalidad": "Selecciona tu nacionalidad"})
+        self.validate_nacionalidad(nationality)
+        return attrs
 
     def validate_fecha_nacimiento(self, value):
         if value and value > timezone.localdate():

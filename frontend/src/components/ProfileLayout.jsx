@@ -28,7 +28,7 @@ export default function ProfileLayout({ children }) {
         {user.rol === 'postulante' && <NavLink to="/favoritos"><Icon name="favorite" /><span>Mis favoritas</span></NavLink>}
         {user.rol === 'administrador' && <><NavLink to="/gestion/convocatorias"><Icon name="offers" /><span>Convocatorias</span></NavLink><NavLink to="/gestion/instituciones"><Icon name="institutions" /><span>Entidades oferentes</span></NavLink><NavLink to="/gestion/rastreo"><Icon name="crawling" /><span>Rastreo</span></NavLink></>}
       </nav>
-      <div className="sidebar-account"><div className="sidebar-name"><span>{user.nombre}</span><button type="button" className="edit-name-link" aria-label="Editar nombre" title="Editar nombre" disabled={busy} onClick={() => { setSaved(false); setEditing(true) }}><Icon name="edit" /></button></div><span className="capitalize">{user.rol}</span>
+      <div className="sidebar-account"><div className="sidebar-name"><span>{user.nombre}</span>{user.rol === 'administrador' && <button type="button" className="edit-name-link" aria-label="Editar nombre" title="Editar nombre" disabled={busy} onClick={() => { setSaved(false); setEditing(true) }}><Icon name="edit" /></button>}</div><span className="capitalize">{user.rol}</span>
         {saved && <span role="status">Nombre actualizado.</span>}
         <Button icon="logout" className="button-outline" busy={busy} onClick={leave}>{busy ? 'Cerrando sesión…' : 'Cerrar sesión'}</Button>
         <Message>{error}</Message>

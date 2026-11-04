@@ -38,12 +38,12 @@ class PerfilView(AuthView):
     def patch(self, request):
         with escritura(request.user):
             perfil = m.Perfil.objects.filter(usuario=request.user).first()
+            if perfil is None and not m.Pais.objects.filter(codigo="EC").exists():
+                return Response({"detail": "Falta Ecuador en el catálogo de países."}, status=503)
             serializer = s.PerfilSerializer(perfil, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             if perfil is None:
-                ec = m.Pais.objects.filter(codigo="EC").first()
-                if ec is None: return Response({"detail": "Los catálogos aún no están preparados."}, status=503)
-                perfil = serializer.save(usuario=request.user, nacionalidad=ec)
+                perfil = serializer.save(usuario=request.user)
                 status = 201
             else:
                 perfil = serializer.save()

@@ -1,7 +1,7 @@
 import Icon from '../components/Icon'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { profileApi } from '../api/client'
+import { profileApi, ApiError } from '../api/client'
 import { useAuth } from '../auth/context'
 import ProfileLayout from '../components/ProfileLayout'
 import ProfileForm from '../components/ProfileForm'
@@ -11,7 +11,7 @@ import Message from '../components/Message'
 import { profileFields } from './profileFields'
 
 export default function Profile({ preferences = false }) {
-  const { user } = useAuth()
+  const { user, updateName } = useAuth()
   const [state, setState] = useState({ loading: true, data: null, error: null })
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
@@ -32,8 +32,19 @@ export default function Profile({ preferences = false }) {
   const catalogName = (type, id) => catalogs[type].find((row) => row.id === id)?.nombre || 'Sin declarar'
   const choiceName = (type, value) => catalogs[type].find((row) => row.valor === value)?.nombre || 'Sin declarar'
   async function saveProfile(data) {
-    const result = await profileApi.write('', 'PATCH', data)
+    const { nombre, ...personal } = data
+    let result
+    try { result = await profileApi.write('', 'PATCH', personal) }
+    catch (failure) {
+      throw new ApiError('No se pudo confirmar el guardado del perfil.' + (nombre !== undefined && nombre.trim() !== user.nombre ? ' No se intentó guardar el nombre; los cambios siguen pendientes.' : '') + ' ' + failure.message, failure.status, failure.fields)
+    }
     setState((current) => ({ ...current, data: { ...current.data, profile: result.perfil } }))
+    if (nombre !== undefined && nombre.trim() !== user.nombre) {
+      try { await updateName(nombre.trim()) }
+      catch (failure) {
+        throw new ApiError('Los datos del perfil se guardaron, pero el nombre no pudo guardarse. Conservamos el nombre pendiente para que puedas reintentarlo. ' + failure.message, failure.status, failure.fields)
+      }
+    }
   }
   const sections = preferences ? [
     { resource: 'idiomas', title: 'Idiomas declarados', singular: 'idioma', describe: (row) => `${catalogName('idiomas', row.idioma)} · ${row.nivel || 'Nivel sin declarar'}` },
@@ -47,8 +58,9 @@ export default function Profile({ preferences = false }) {
   return <ProfileLayout>
     <h1>{title}</h1><p className="subtitle">{preferences ? 'Declara lo que sabes y las condiciones en las que puedes estudiar.' : 'Datos declarados. No realizamos validación documental.'}</p>
     {!preferences && <section className="profile-card"><h2>Datos personales y residencia</h2>
-      <p className="profile-note">Nombre visible: <strong>{user.nombre}</strong>. Nacionalidad: <strong>Ecuatoriana</strong> · Alcance del sistema. Puedes residir en otro país.</p>
-      <ProfileForm fields={fields.personal} initial={profile || {}} onSubmit={saveProfile} label="Guardar datos personales" />
+      <ProfileForm fields={[{ name: 'nombre', label: 'Nombre visible', maxLength: 180, required: true,
+        validate: value => !value.trim() ? 'El nombre no puede estar vacío.' : value.trim().length > 180 ? 'El nombre no puede superar 180 caracteres.' : null }, ...fields.personal]}
+        initial={{ ...profile, nombre: user.nombre }} onSubmit={saveProfile} label="Guardar datos personales" />
     </section>}
     {!profile && <Message kind="info">Guarda primero los datos personales para empezar tu perfil. Los datos opcionales pueden quedar sin declarar. {preferences && <Link to="/perfil"><Icon name="profile" /><span>Ir a datos personales</span></Link>}</Message>}
     {profile && <>

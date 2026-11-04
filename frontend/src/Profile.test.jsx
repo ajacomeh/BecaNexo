@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import App from './App'
 import AuthProvider from './auth/AuthProvider'
+import { authApi } from './api/client'
 
 const user = { id: 1, nombre: 'Persona de prueba', email: 'perfil@example.com', rol: 'postulante' }
 const catalogs = {
@@ -61,14 +62,177 @@ it('carga, edita y guarda el perfil propio con CSRF', async () => {
   const [, request] = fetchMock.mock.calls.find(([url, options]) => url === '/api/perfil/' && options.method === 'PATCH')
   expect(request.headers['X-CSRFToken']).toBeTruthy()
   expect(JSON.parse(request.body)).not.toHaveProperty('usuario_id')
+  expect(JSON.parse(request.body)).not.toHaveProperty('nombre')
+})
+
+it('guarda el nombre en la cuenta, actualiza barra lateral y lo recupera al volver', async () => {
+  let nombre = user.nombre
+  const original = fetchMock.getMockImplementation()
+  fetchMock.mockImplementation((url, options = {}) => {
+    if (url === '/api/auth/me/') {
+      if (options.method === 'PATCH') nombre = JSON.parse(options.body).nombre
+      return Promise.resolve(json(options.method === 'PATCH' ? { nombre } : { ...user, nombre }))
+    }
+    return original(url, options)
+  })
+  const view = render(<MemoryRouter initialEntries={['/perfil']}><AuthProvider><App /></AuthProvider></MemoryRouter>)
+  const field = await screen.findByLabelText(/^Nombre visible/)
+  expect(screen.queryByRole('button', { name: 'Editar nombre' })).not.toBeInTheDocument()
+  await userEvent.clear(field)
+  await userEvent.type(field, 'María <b>José</b>')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  expect(screen.getByText('María <b>José</b>', { selector: '.sidebar-name span' })).toBeVisible()
+  expect(profile).not.toHaveProperty('nombre')
+  expect(document.querySelector('b')).toBeNull()
+  view.unmount(); mount()
+  expect(await screen.findByLabelText(/^Nombre visible/)).toHaveValue(nombre)
+  const calls = () => fetchMock.mock.calls.filter(([url, options]) => url === '/api/auth/me/' && options?.method === 'PATCH')
+  expect(calls()).toHaveLength(1)
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  expect(calls()).toHaveLength(1)
+})
+
+it('informa guardado parcial y conserva nombre pendiente al fallar la cuenta', async () => {
+  const save = vi.spyOn(authApi, 'updateName').mockRejectedValueOnce(new Error('Fallo de cuenta')).mockResolvedValue({ nombre: 'Nuevo' })
+  mount()
+  const field = await screen.findByLabelText(/^Nombre visible/)
+  await userEvent.clear(field); await userEvent.type(field, 'Nuevo')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Los datos del perfil se guardaron, pero el nombre no pudo guardarse')
+  expect(field).toHaveValue('Nuevo')
+  expect(screen.getByText(user.nombre, { selector: '.sidebar-name span' })).toBeVisible()
+  expect(screen.queryByText('Cambios guardados.')).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  expect(save).toHaveBeenCalledTimes(2)
+  expect(screen.getByText('Nuevo', { selector: '.sidebar-name span' })).toBeVisible()
+})
+
+it('conserva cambios y no actualiza nombre si falla el perfil; rechaza nombre vacío', async () => {
+  const save = vi.spyOn(authApi, 'updateName')
+  mount()
+  const field = await screen.findByLabelText(/^Nombre visible/)
+  await userEvent.clear(field)
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  expect(screen.getByText('El nombre no puede estar vacío.')).toBeVisible()
+  expect(save).not.toHaveBeenCalled()
+  await userEvent.type(field, 'Pendiente')
+  failWrite = true
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByRole('alert')
+  expect(field).toHaveValue('Pendiente')
+  expect(save).not.toHaveBeenCalled()
+  expect(screen.queryByText('Cambios guardados.')).not.toBeInTheDocument()
 })
 
 it('crea progresivamente antes de habilitar registros hijos', async () => {
   profile = null; mount()
   await screen.findByLabelText('Ciudad de residencia')
+  await userEvent.selectOptions(screen.getByLabelText(/^Nacionalidad/), '1')
   expect(screen.queryByRole('button', { name: 'Añadir formación' })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
   expect(await screen.findByRole('button', { name: 'Añadir formación' })).toBeInTheDocument()
+})
+
+it('guarda, recupera, edita y vacía Sobre mi perfil como texto con contador y límite', async () => {
+  const view = render(<MemoryRouter initialEntries={['/perfil']}><AuthProvider><App /></AuthProvider></MemoryRouter>)
+  const input = await screen.findByLabelText('Sobre mi perfil')
+  expect(input).toHaveValue('')
+  expect(input).toHaveAttribute('maxlength', '1500')
+  expect(screen.getByText('0 / 1500 caracteres')).toBeVisible()
+  await userEvent.type(input, '<b>Estudios</b>')
+  expect(screen.getByText('15 / 1500 caracteres')).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  view.unmount()
+  mount()
+  const recovered = await screen.findByLabelText('Sobre mi perfil')
+  expect(recovered).toHaveValue('<b>Estudios</b>')
+  expect(recovered.querySelector('b')).toBeNull()
+  await userEvent.clear(recovered)
+  await userEvent.type(recovered, 'Objetivos')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  expect(profile.descripcion).toBe('Objetivos')
+  await userEvent.clear(recovered)
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  expect(profile.descripcion).toBeNull()
+})
+
+it('exige nacionalidad explícita y rechaza otro país sin cambiar residencia', async () => {
+  profile = null
+  mount()
+  const nationality = await screen.findByLabelText(/^Nacionalidad/)
+  expect(nationality).toHaveValue('')
+  expect(within(nationality).getByRole('option', { name: 'Selecciona tu nacionalidad' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  expect(profile).toBeNull()
+  await userEvent.selectOptions(nationality, '2')
+  expect(screen.getByText('Actualmente BecaNexo está disponible únicamente para ciudadanos ecuatorianos')).toBeVisible()
+  expect(nationality).toHaveValue('')
+  await userEvent.selectOptions(nationality, '1')
+  await userEvent.selectOptions(screen.getByLabelText('País de residencia'), '2')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  expect(profile).toMatchObject({ nacionalidad: 1, residencia: 2 })
+  await userEvent.selectOptions(nationality, '2')
+  expect(nationality).toHaveValue('1')
+})
+
+it('conserva la nacionalidad guardada y usa código EC con ID no fijo', async () => {
+  const get = fetchMock.getMockImplementation()
+  fetchMock.mockImplementation((url, options) => url === '/api/perfil/catalogos/' ? Promise.resolve(json({ ...catalogs, paises: [{ id: 99, codigo: 'EC', nombre: 'Ecuador' }, catalogs.paises[1]] })) : get(url, options))
+  profile.nacionalidad = 99
+  mount()
+  expect(await screen.findByLabelText(/^Nacionalidad/)).toHaveValue('99')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  await screen.findByText('Cambios guardados.')
+  expect(profile.nacionalidad).toBe(99)
+})
+
+it('informa falta de Ecuador sin guardar ni asignar otro país', async () => {
+  const get = fetchMock.getMockImplementation()
+  fetchMock.mockImplementation((url, options) => url === '/api/perfil/catalogos/' ? Promise.resolve(json({ ...catalogs, paises: [catalogs.paises[1]] })) : get(url, options))
+  profile = null
+  mount()
+  await screen.findByLabelText(/^Nacionalidad/)
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar datos personales' }))
+  expect(screen.getByText('Falta Ecuador en el catálogo de países. No es posible confirmar la nacionalidad.')).toBeVisible()
+  expect(profile).toBeNull()
+})
+
+it('limpia el fin al marcar trabajo actual y conserva null al guardar y consultar de nuevo', async () => {
+  const view = render(<MemoryRouter initialEntries={['/perfil']}><AuthProvider><App /></AuthProvider></MemoryRouter>)
+  await userEvent.click(await screen.findByRole('button', { name: 'Añadir experiencia' }))
+  const start = screen.getByLabelText(/^Fecha de inicio/)
+  const end = screen.getByLabelText('Fecha final')
+  const current = screen.getByRole('checkbox', { name: 'Actualmente trabajo aquí' })
+  await userEvent.type(start, '2020-01-01')
+  await userEvent.type(end, '2021-01-01')
+  await userEvent.click(current)
+  expect(end).toHaveValue('')
+  expect(end).toBeDisabled()
+  expect(end).toHaveAccessibleDescription('No corresponde mientras continúes trabajando')
+  expect(start).toBeEnabled()
+  expect(start).toHaveValue('2020-01-01')
+  await userEvent.click(current)
+  expect(end).toBeEnabled()
+  expect(end).toHaveValue('')
+  await userEvent.click(current)
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar experiencia' }))
+  await screen.findByText('Cambios guardados.')
+  const [, request] = fetchMock.mock.calls.find(([url, options]) => url === '/api/perfil/experiencias/' && options.method === 'POST')
+  expect(JSON.parse(request.body)).toMatchObject({ actual: true, fecha_fin: null, fecha_inicio: '2020-01-01' })
+  view.unmount()
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: /^Editar experiencia:/ }))
+  expect(screen.getByRole('checkbox', { name: 'Actualmente trabajo aquí' })).toBeChecked()
+  expect(screen.getByLabelText('Fecha final')).toHaveValue('')
+  expect(screen.getByLabelText('Fecha final')).toBeDisabled()
+  expect(screen.getByLabelText(/^Fecha de inicio/)).toBeEnabled()
 })
 
 it('conserva entradas y no anuncia guardado al fallar la red', async () => {

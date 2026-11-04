@@ -31,7 +31,7 @@ No hay endpoints públicos de escritura de catálogos. Los IDs de países, área
 
 ## Campos de entrada
 
-- Perfil: nacionalidad, residencia, fecha_nacimiento, provincia_residencia, ciudad_residencia, dedicacion_disponible, disponible_traslado, disponible_extranjero. Nacionalidad es Ecuador si se omite; si se envía, su código debe ser EC. La residencia puede ser cualquier entrada del catálogo o NULL. Nacionalidad no significa residencia.
+- Perfil: descripcion, nacionalidad, residencia, fecha_nacimiento, provincia_residencia, ciudad_residencia, dedicacion_disponible, disponible_traslado, disponible_extranjero. Nacionalidad debe declararse al crear y su código debe ser EC; PATCH sobre perfil existente conserva la guardada si se omite. No se asigna Ecuador automáticamente. La residencia puede ser cualquier entrada del catálogo o NULL. Nacionalidad no significa residencia.
 - Formación: nivel, carrera, institucion, titulo_obtenido, promedio, escala_min, escala_max, estado_estudios, nombre_titulo, fecha_finalizacion, area. Obligatorios al crear: nivel, carrera, titulo_obtenido y estado_estudios. No se sustituye una respuesta desconocida al título por False: la fila se crea cuando se declara ese dato obligatorio.
 - Experiencia: area, cargo, descripcion, fecha_inicio, fecha_fin, actual. Obligatorios: fecha_inicio y actual.
 - Idioma: idioma (ID obligatorio), nivel opcional. No hay certificados, archivos o fechas de certificación.
@@ -41,7 +41,7 @@ No hay endpoints públicos de escritura de catálogos. Los IDs de países, área
 
 Los campos FK usan estos nombres sin sufijo `_id` en la API, con un entero como valor. En PostgreSQL las columnas son nacionalidad_id, residencia_id, perfil_id, area_id, idioma_id y pais_id según el ER. Fechas: YYYY-MM-DD. Decimales: hasta 7 dígitos totales y 3 decimales; DRF los representa como cadenas en respuestas para evitar pérdida de precisión. Booleanos: true/false, y null únicamente donde el modelo admite desconocido.
 
-Ejemplo de guardado progresivo, después de obtener CSRF:
+Ejemplo de actualización de un perfil existente, después de obtener CSRF:
 
 ```json
 {
@@ -52,6 +52,18 @@ Ejemplo de guardado progresivo, después de obtener CSRF:
 ```
 
 PATCH solo cambia los campos enviados. Vacíos opcionales (incluso espacios) se normalizan a NULL; false y 0 se conservan. El frontend envía los campos del formulario de su sección, por lo que guardar datos personales no cambia disponibilidad ni viceversa.
+
+## Descripción opcional del perfil (04/11/2026)
+
+`descripcion` pertenece a `MAE_PERFIL`, no a la cuenta ni a una experiencia laboral. Es un campo nuevo respecto al modelo base v0.6: texto nullable, máximo 1500 caracteres validado por el serializer. GET lo incluye; PATCH acepta texto, `null`, `""` o espacios para borrarlo (normalizados a NULL). Omitirlo conserva su valor; superar el límite devuelve 400 sin guardar. Ejemplo: `{"descripcion": "Intereses académicos y objetivos de estudio"}`. No se interpreta HTML ni se usa en comparación, afinidad o IA. Conserva sesión, CSRF y propietario derivado de request.user.
+
+La interfaz lo presenta como «Sobre mi perfil», con contador y ayuda sobre datos sensibles. No precarga contenido. La migración aditiva `perfiles.0002_perfil_descripcion` añade la columna nullable sin descripciones ficticias; se probó en `test_becanexo_db` y se dejó sin aplicar en desarrollo. Antes de usar la nueva versión del perfil en desarrollo, aplicar expresamente desde la raíz:
+
+```powershell
+.\.venv\Scripts\python.exe backend\manage.py migrate perfiles 0002_perfil_descripcion
+```
+
+Este comando no se ejecutó sobre desarrollo durante la implementación. Hasta aplicarlo, el código actualizado de perfil requiere una columna que todavía no existe en esa base.
 
 ## Validaciones e integridad
 

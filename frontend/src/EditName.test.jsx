@@ -8,7 +8,7 @@ import { useAuth } from './auth/context'
 import { authApi, ApiError } from './api/client'
 
 function Consumer() { const { user } = useAuth(); return user ? <ProfileLayout><h1>Hola, {user.nombre}</h1></ProfileLayout> : null }
-const account = { id: 77, nombre: 'Nombre anterior', email: 'nombre@example.com', rol: 'postulante' }
+const account = { id: 77, nombre: 'Nombre anterior', email: 'nombre@example.com', rol: 'administrador' }
 beforeEach(() => {
   vi.spyOn(authApi, 'me').mockResolvedValue(account)
   // jsdom no implementa el diálogo nativo; el comportamiento de foco/modal
@@ -22,7 +22,7 @@ async function mount() {
   await userEvent.click(await screen.findByRole('button', { name: 'Editar nombre' }))
   return within(screen.getByRole('dialog'))
 }
-it.each(['postulante', 'administrador'])('actualiza contexto y navegación de %s sin recargar', async rol => {
+it.each(['administrador'])('actualiza contexto y navegación de %s sin recargar', async rol => {
   vi.mocked(authApi.me).mockResolvedValue({ ...account, rol })
   const save = vi.spyOn(authApi, 'updateName').mockResolvedValue({ nombre: 'María <b>José</b>' })
   const form = await mount()
