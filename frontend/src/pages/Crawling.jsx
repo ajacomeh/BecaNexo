@@ -6,6 +6,7 @@ import ProfileLayout from '../components/ProfileLayout'
 import Button from '../components/Button'
 import Message from '../components/Message'
 import CrawlingReviews from '../components/CrawlingReviews'
+import CrawlingProposal from '../components/CrawlingProposal'
 import './Crawling.css'
 
 const prefix = 'gestion/rastreo'
@@ -141,6 +142,7 @@ function Publication() {
         </Remote>}
         {version && <PageList key={`docs:${id}:${version}`} title="Documentos de esta versión" path={`publicaciones/${id}/versiones/${version}/documentos`} render={(d) => <Download document={d} />} />}
         {version && <CrawlingReviews key={`reviews:${id}:${version}`} publication={id} version={version} />}
+        <CrawlingProposal key={`proposal:${id}`} publication={id} />
         <PageList key={`obs:${id}`} title="Historial de observaciones" path={`publicaciones/${id}/observaciones`} render={(o) => <div>{date(o.observada_en)} · {label(o.resultado)} · Versión ID {o.version_id || 'No disponible'}<p><Link to={`/gestion/rastreo/ejecuciones/${o.ejecucion_id}`}>Consultar ejecución {o.ejecucion_id}</Link> · {label(o.estado_ejecucion)}</p></div>} />
       </> }}
   </Remote></>

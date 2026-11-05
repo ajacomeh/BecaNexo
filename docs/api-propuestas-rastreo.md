@@ -1,0 +1,71 @@
+# Propuestas de integración: bloque de trabajo fuera del catálogo
+
+Implementación del 05/11/2026. Las migraciones rastreo 0008 y 0009 están **aplicadas en desarrollo según confirmación del usuario**, con respaldo previo y Django check satisfactorio. El usuario confirmó también la revisión manual de crear/continuar propuesta, guardado, historial y validación. No crea convocatorias, no habilita su vínculo y no publica.
+
+Administrador activo, sesiones, CSRF en POST/PATCH y respuestas no-store. Los documentos continúan privados. No se realizan peticiones externas al guardar ni validar.
+
+Prefijo `/api/gestion/rastreo/`:
+
+| Operación | Resultado |
+| --- | --- |
+| GET `publicaciones/:id/propuesta/` | Historial paginado (`page`, `page_size`, máximo 50), más `contexto` con última observación exitosa, versión y revisiones vigentes. |
+| POST `publicaciones/:id/propuesta/` | Primera propuesta: 201; reintento idéntico: 200 con el mismo snapshot. |
+| GET `propuestas/:id/` | Snapshot inmutable, origen, autor, datos, procedencia, revisiones y validación guardada. |
+| PATCH `propuestas/:id/` | Crea sucesora y devuelve 200 con nuevo ID. El ID de URL es la revisión esperada. Envía el snapshot completo de trabajo, no un delta. |
+| POST `propuestas/:id/validar/` con `{}` | Devuelve `guardado`, `actual` y `contexto_cambio`; no modifica el snapshot. |
+
+No existen endpoints crear-borrador ni resoluciones. Errores: 400 petición inválida/referencia ajena; 403 permisos/CSRF; 404 identificador inexistente; 405 método no admitido; 409 clave reutilizada con contenido diferente o cabecera sustituida.
+
+## Entrada y semántica
+
+```json
+{
+  "clave_accion": "11111111-1111-4111-8111-111111111111",
+  "version_id": 10,
+  "observacion_base_id": 20,
+  "revisiones": [],
+  "datos": {},
+  "procedencia": []
+}
+```
+
+IDs ilustrativos. Información incompleta es válida; `{datos:{}}` no equivale a una petición inválida. No se aceptan autor, fechas de autoría, aprobación, estados del catálogo ni campos desconocidos. Esquema de contrato 1; autor y fecha proceden del servidor/BD.
+
+`datos` acepta título (250), descripción (15000), institución existente nullable, URL oficial HTTP/S sin credenciales (2048), apertura/cierre literales (500) y listas `opciones`/`beneficios`/`requisitos` (50/50/100). Los elementos son **candidatos**, no objetos del catálogo: identificador estable, texto, nivel/modalidad/destinos mencionados, concepto, cantidades literales, moneda, tope, tipo, condiciones y ámbito pendiente/común/opción/destino. No se convierten menciones en códigos de catálogo ni se interpretan cantidades como números confirmados. Una referencia a opción debe existir en la misma propuesta. Identificadores de elementos no se repiten.
+
+`procedencia`: lista de campo (o `opciones.ID`, `beneficios.ID`, `requisitos.ID`), `evidencia_id` de REL_VERSION_DOCUMENTO —no ID del archivo—, localizador, original opcional y motivo obligatorio. La evidencia debe corresponder a la versión. Los documentos y revisiones de otra versión se rechazan.
+
+Las opciones pueden incluir `paises`, lista explícita de códigos existentes en CAT_PAIS (por ejemplo `EC`), independiente de `destinos`, el texto literal que se conserva. Un requisito/beneficio con `destino` debe referenciar una opción de la misma propuesta y un código incluido en sus `paises`. No se interpreta una lista literal para generar países. Ámbito `comun` con opción/destino o ámbito `opcion` con destino son peticiones incoherentes (400). Ámbito `destino` aún sin seleccionar opción/país es trabajo incompleto admisible y genera `AMBITO_INCOMPLETO`. Ámbito desconocido conserva `pendiente`; nunca se convierte en común.
+
+Al cambiar ámbito u opción en pantalla se mantienen las referencias anteriores para que el administrador decida retirarlas o corregirlas. Cambiar versión de origen conserva texto/localizadores/motivos de procedencia, pero deja la evidencia sin seleccionar: debe asignarse explícitamente una relación de la nueva versión. Las respuestas de validación de campos se muestran como texto y no borran el formulario.
+
+Cada pendiente contiene `id` estable por código/campo, `codigo`, `campo`, `motivo`, `condicion_resolucion`. Se separan `bloqueos` de creación futura y `pendientes_publicacion`; `creacion_habilitada` siempre es false. `puede_crear` es una evaluación preliminar de bloqueos, nunca una autorización operativa ni certificación de mapeo final.
+
+Se comprueban contexto, aprobaciones vigentes, bases, integridad local, datos mínimos y procedencia. Candidatos continúan pendientes de interpretación y mapeo final; rellenar texto no los acredita. Las fechas literales y topes se conservan. Una fecha observada en fuente no deja de estar pendiente por vaciar el formulario. No se amplían ni relajan serializers del catálogo.
+
+Reintentos mantienen clave; una edición intencional obtiene otra. Un contexto desactualizado puede conservarse como snapshot de trabajo bloqueado. La acción explícita de actualizar contexto conserva datos; si cambia versión, exige volver a referenciar evidencia y no traslada aprobaciones. El historial anterior permanece consultable. El formulario avisa que validar usa el último snapshot guardado.
+
+## Comprobación manual y ejecución aislada
+
+La aplicación en desarrollo ya fue realizada por el usuario. Los comandos siguientes se conservan como referencia operativa; no constituyen una tarea pendiente ni se ejecutaron durante este cierre documental.
+
+Desde la raíz, consulta de estado, plan y SQL (solo lectura):
+
+```powershell
+.\.venv\Scripts\python.exe backend/manage.py showmigrations rastreo
+.\.venv\Scripts\python.exe backend/manage.py migrate rastreo 0009_integridad_propuestas --plan
+.\.venv\Scripts\python.exe backend/manage.py sqlmigrate rastreo 0008
+.\.venv\Scripts\python.exe backend/manage.py sqlmigrate rastreo 0009
+```
+
+Comando de aplicación conservado para otros entornos donde falten estas migraciones: `.\.venv\Scripts\python.exe backend/manage.py migrate rastreo 0009_integridad_propuestas`. No es necesario repetirlo para cerrar este bloque en desarrollo. En otros entornos, revisar plan y respaldo antes de aplicarlo; no reordenar ni duplicar migraciones.
+
+Abrir `/gestion/rastreo`, consultar una publicación y usar Crear/Continuar propuesta. Guardar un título, una fecha literal y un beneficio con tope; comprobar pendientes, historial, validación y recarga. Dos pestañas sobre la misma revisión permiten comprobar el conflicto y actualización explícita. Estas acciones sí crean snapshots: para pruebas automatizadas usar exclusivamente el entorno aislado.
+
+Para revisar ámbitos: añadir opción, seleccionar países candidatos del catálogo, dejar un beneficio en «Pendiente de interpretar» y asignar un requisito a un destino de esa opción. Guardar/recargar debe conservar ambos estados. Cambiar a «Toda la convocatoria» con referencias todavía seleccionadas explica la incoherencia sin borrarlas; retirar explícitamente lo que no corresponda. Consultar historial y comprobar que las revisiones anteriores permanecen intactas.
+
+Recorrido reproducible: Node 24, `node frontend/e2e/proposals-real.mjs --reset-test-db` desde la raíz. Reutiliza el servidor auxiliar `integration_server.py`, que rechaza cualquier BD distinta de test_becanexo_db y usa almacenamiento temporal. **Reinicia datos de la BD de pruebas**, por lo que no debe ejecutarse simultáneamente con una suite. Las credenciales sintéticas se generan en memoria; no se imprimen ni versionan. Las capturas quedan en `frontend/test-results`, ignorado por Git. El ejecutor cierra únicamente sus propios servidores.
+
+El ejecutor de propuestas también limpia la BD aislada al finalizar mediante `integration_server.py cleanup --test-db-only`, después de cerrar Django. Ese subcomando vuelve a verificar el nombre configurado y `current_database()` antes de hacer flush. Así no quedan escenarios sintéticos que contaminen otras suites; no modifica desarrollo. La ejecución final y su limpieza terminaron con código 0.
+
+Resultados actuales (05/11/2026): 67 pruebas de rastreo aprobadas, incluidas 14 de propuestas; 23 frontend de propuesta/bandeja con simulación aprobadas; lint, build, Django check y coherencia de migraciones correctos. Recorrido real aislado y capturas a 1440/390/320 px revisados. Detalle de incidencias, repetición puntual y límites en `avance.md`; los conteos no suman reejecuciones.

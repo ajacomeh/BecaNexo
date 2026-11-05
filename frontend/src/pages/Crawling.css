@@ -39,3 +39,11 @@
 .crawl-review-form textarea { min-height: 100px; resize: vertical; }
 .crawl-review-form :is(select, textarea):focus-visible { outline: 2px solid #245df0; outline-offset: 3px; }
 .crawl-reviews { overflow-wrap: anywhere; }
+.crawl-proposal .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.crawl-proposal fieldset { min-width: 0; margin-block: 1rem; }
+.crawl-proposal form > fieldset > section { margin-block: 1.5rem; }
+.crawl-proposal fieldset > .button { margin-block: .6rem; }
+.crawl-proposal .heading-actions { margin-top: 1rem; }
+.crawl-proposal input, .crawl-proposal select { max-width: 100%; min-width: 0; }
+.crawl-proposal li, .crawl-proposal p { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .crawl-proposal .form-grid { grid-template-columns: minmax(0, 1fr); } }

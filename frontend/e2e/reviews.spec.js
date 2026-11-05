@@ -4,6 +4,10 @@ for (const width of [1440, 390, 320]) test(`Revisión administrativa simulada a 
   page.on('pageerror', error => console.error(error.message))
   const reviews = []
   let fail = true
+  let phase = 'initial', releaseInitial, releaseRefresh, releaseSave
+  const initialGate = new Promise(resolve => { releaseInitial = resolve })
+  const refreshGate = new Promise(resolve => { releaseRefresh = resolve })
+  const saveGate = new Promise(resolve => { releaseSave = resolve })
   const list = results => ({ results, count: results.length, page: 1, page_size: 12 })
   await page.route('**/api/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname
@@ -12,10 +16,15 @@ for (const width of [1440, 390, 320]) test(`Revisión administrativa simulada a 
     if (path === '/api/auth/csrf/') return route.fulfill({ json: { csrfToken: 'simulado' } })
     if (path.endsWith('/revisiones/')) {
       if (request.method() === 'POST') {
-        if (fail) { fail = false; return route.fulfill({ status: 409, json: { detail: 'Conflicto sintético: consulte el historial.' } }) }
+        if (fail) { fail = false; await saveGate; phase = 'fail-read'; return route.fulfill({ status: 409, json: { detail: 'Conflicto sintético: consulte el historial.' } }) }
         reviews.push({ ...request.postDataJSON(), id: 19, administrador: { nombre: 'Administradora sintética' }, creada_en: '2026-10-28T12:00:00Z' })
         return route.fulfill({ status: 201, json: reviews.at(-1) })
       }
+      // StrictMode puede consultar dos veces al montar: el escenario depende
+      // de la acción del usuario, no del número de peticiones de montaje.
+      if (phase === 'initial') await initialGate
+      if (phase === 'fail-read') { phase = 'refresh'; return route.fulfill({ status: 500, json: { detail: 'Fallo sintético de consulta' } }) }
+      if (phase === 'refresh') { await refreshGate; phase = 'ready' }
       return route.fulfill({ json: { ...list(reviews), vigentes: reviews.slice(-1), numero: 1, ultima_observada: false } })
     }
     if (path.endsWith('/publicaciones/1/')) return route.fulfill({ json: { id: 1, titulo: 'Publicación sintética', fuente: { id: 1, nombre: 'Fuente sintética' }, version_observada_id: 7, url_original: 'https://example.org/ficha' } })
@@ -26,6 +35,8 @@ for (const width of [1440, 390, 320]) test(`Revisión administrativa simulada a 
   })
   await page.setViewportSize({ width, height: 900 })
   await page.goto('/gestion/rastreo/publicaciones/1')
+  await expect(page.getByText('Cargando revisiones…', { exact: true })).toBeVisible()
+  releaseInitial()
   await expect(page.getByText(/Evidencia histórica/)).toBeVisible()
   const open = page.getByRole('button', { name: 'Registrar revisión' })
   await open.focus(); await page.keyboard.press('Enter')
@@ -41,9 +52,22 @@ for (const width of [1440, 390, 320]) test(`Revisión administrativa simulada a 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
   await page.screenshot({ path: info.outputPath(`revision-${width}.png`), fullPage: true })
   await page.getByRole('button', { name: 'Guardar revisión' }).click()
+  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toHaveAttribute('aria-busy', 'true')
+  await expect(reason).toBeDisabled()
+  releaseSave()
   await expect(page.getByRole('alert')).toContainText('Conflicto sintético')
   await expect(reason).toHaveValue('Documento sintético examinado, página 1.')
+  await page.locator('.crawl-reviews').screenshot({ path: info.outputPath(`conflicto-${width}.png`) })
   await page.getByRole('button', { name: 'Actualizar historial antes de reintentar' }).click()
+  await expect(page.getByRole('alert')).toContainText('BecaNexo no está disponible')
+  await expect(reason).toHaveValue('Documento sintético examinado, página 1.')
+  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toBeDisabled()
+  await page.locator('.crawl-reviews').screenshot({ path: info.outputPath(`error-consulta-${width}.png`) })
+  await page.getByRole('button', { name: 'Actualizar historial antes de reintentar' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText('Cargando revisiones…', { exact: true })).toBeVisible()
+  releaseRefresh()
   await expect(page.getByRole('button', { name: 'Guardar revisión' })).toBeEnabled()
   await page.getByRole('button', { name: 'Guardar revisión' }).click()
   await expect(page.getByText(/Revisión guardada/)).toBeVisible()

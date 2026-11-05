@@ -1,7 +1,11 @@
 from django.urls import path
 from . import api
+from . import api_propuestas
 
 urlpatterns = [
+    path('publicaciones/<int:publication>/propuesta/', api_propuestas.Propuestas.as_view()),
+    path('propuestas/<int:pk>/', api_propuestas.Propuestas.as_view()),
+    path('propuestas/<int:pk>/validar/', api_propuestas.ValidarPropuesta.as_view()),
     path('publicaciones/<int:pk>/versiones/<int:version_id>/revisiones/', api.Revisiones.as_view()),
     path('fuentes/', api.Fuentes.as_view()),
     path('publicaciones/', api.Publicaciones.as_view()),

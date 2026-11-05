@@ -1,0 +1,16 @@
+# Suplemento: snapshots de propuestas (05/11/2026)
+
+Conserva el modelo histórico y las revisiones existentes. Implementa solo el primer bloque aprobado del contrato de integración. No añade vínculo efectivo, auditoría de aplicación/resolución ni campos de convocatorias.
+
+- `TRA_PROPUESTA_CAMBIO` (`rastreo.Propuesta`): FK protegidas a publicación, versión, observación exitosa, usuario autor y antecesora nullable. Una raíz por publicación mediante índice parcial y un sucesor por revisión mediante relación uno-a-uno. Fecha del servidor, UUID único de acción, contrato versión 1, JSON de datos/procedencia/resultado guardado, SHA-256 de petición y snapshot y sello transaccional PostgreSQL.
+- `REL_PROPUESTA_REVISION` (`rastreo.PropuestaRevision`): FK protegidas a propuesta y revisión editorial, par único. Inserción permitida únicamente en la transacción del snapshot y con la misma versión.
+
+La FK explícita a publicación es redundancia controlada para imponer unicidad de raíz mediante índice real. El trigger comprueba pertenencia de versión, observación y antecesora. Valida referencias documentales exactas y actor administrador activo. Autoría se obtiene de sesión en el servicio. UPDATE/DELETE de ambas tablas están prohibidos; guardar de nuevo crea sucesora. La fecha y sello se fijan en BD. Los esquemas cerrados y límites semánticos se validan en servidor; los triggers protegen identidad, pertenencia e inmutabilidad.
+
+Migraciones: `0008_propuesta_propuestarevision_and_more` crea tablas/FK/índices/CHECK; `0009_integridad_propuestas` añade triggers. Revisadas mediante sqlmigrate y aplicadas por el ejecutor exclusivamente en test_becanexo_db. Posteriormente el usuario confirmó su aplicación correcta en becanexo_db con respaldo previo y Django check sin problemas.
+
+Sin cambios en `rast_publicacion_sin_vinculo`, `rastreo_publicacion_guard` ni revisiones históricas. El mapeo final de candidatos a objetos del catálogo, creación de borradores y resolución de pendientes están fuera de este bloque.
+
+Precisión del contrato JSON de trabajo: códigos de país seleccionados explícitamente en cada opción candidata; destino de condición limitado a los códigos de esa opción. Las menciones originales se conservan por separado. La validación del servidor rechaza referencias ajenas y combinaciones de ámbito incoherentes, pero permite referencias aún vacías como pendiente. Esto no introduce nuevas tablas ni migraciones adicionales. Los identificadores de pendiente se derivan de código y campo/ID estable del elemento, por lo que se mantienen entre revisiones equivalentes.
+
+Verificación de cierre: ambas migraciones existen con dependencia 0008→0007 y usuario configurable; 0009→0008. SQL revisado y suite de rastreo aprobada (67 casos, 14 de propuestas). Tests comprueban origen incoherente incluso por inserción directa, UPDATE/DELETE prohibidos, relaciones cerradas tras la transacción, rollback, concurrencia, paginación y conservación de tablas de negocio. El plan consultado durante aquella implementación las mostraba sin aplicar; la aplicación posterior en desarrollo fue confirmada por el usuario, no comprobada mediante una nueva ejecución en este cierre documental. No se reescribió v0.6 ni se añadieron las dimensiones de aplicación/resolución de integración a la auditoría histórica.

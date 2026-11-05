@@ -1,5 +1,5 @@
 ﻿import { beforeEach, afterEach, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import AuthProvider from './auth/AuthProvider'
@@ -16,7 +16,13 @@ beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value() { this.open = true } })
   Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value() { this.open = false } })
 })
-afterEach(() => { vi.restoreAllMocks(); delete HTMLDialogElement.prototype.showModal; delete HTMLDialogElement.prototype.close })
+afterEach(() => {
+  // El desmontaje ejecuta dialog.close(): conservar el soporte hasta terminarlo.
+  cleanup()
+  vi.restoreAllMocks()
+  delete HTMLDialogElement.prototype.showModal
+  delete HTMLDialogElement.prototype.close
+})
 async function mount() {
   render(<MemoryRouter><AuthProvider><Consumer /></AuthProvider></MemoryRouter>)
   await userEvent.click(await screen.findByRole('button', { name: 'Editar nombre' }))

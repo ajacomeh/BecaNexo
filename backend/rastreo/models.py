@@ -214,3 +214,35 @@ class Observacion(models.Model):
         indexes = [models.Index(fields=['publicacion', 'observada_en'], name='rast_obs_publicacion_fecha')]
         constraints = [models.UniqueConstraint(fields=['ejecucion', 'publicacion'], name='rast_observacion_unica'),
                        check('rast_observacion_resultado', Q(resultado='fallo', version__isnull=True) | Q(resultado__in=['nueva', 'sin_cambios', 'cambio_bytes', 'cambio_relevante'], version__isnull=False))]
+
+
+class Propuesta(models.Model):
+    publicacion = models.ForeignKey(Publicacion, on_delete=models.PROTECT)
+    version = models.ForeignKey(Version, on_delete=models.PROTECT)
+    observacion_base = models.ForeignKey(Observacion, on_delete=models.PROTECT)
+    sustituye = models.OneToOneField('self', null=True, on_delete=models.PROTECT, related_name='sucesora')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    creada_en = models.DateTimeField(default=timezone.now)
+    clave_accion = models.UUIDField(unique=True)
+    contrato_version = models.PositiveIntegerField(default=1)
+    datos = models.JSONField()
+    procedencia = models.JSONField()
+    pendientes = models.JSONField()
+    hash_propuesta = models.CharField(max_length=64)
+    hash_peticion = models.CharField(max_length=64)
+    transaccion_id = models.BigIntegerField(db_default=models.Func(function='txid_current', output_field=models.BigIntegerField()), editable=False)
+
+    class Meta:
+        db_table = 'TRA_PROPUESTA_CAMBIO'
+        constraints = [models.UniqueConstraint(fields=['publicacion'], condition=Q(sustituye__isnull=True), name='rast_propuesta_raiz'),
+                       check('rast_propuesta_contrato', Q(contrato_version=1)),
+                       check('rast_propuesta_hash', Q(hash_propuesta__regex=r'^[0-9a-f]{64}$', hash_peticion__regex=r'^[0-9a-f]{64}$'))]
+
+
+class PropuestaRevision(models.Model):
+    propuesta = models.ForeignKey(Propuesta, on_delete=models.PROTECT, related_name='revisiones')
+    revision = models.ForeignKey(Revision, on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = 'REL_PROPUESTA_REVISION'
+        constraints = [models.UniqueConstraint(fields=['propuesta', 'revision'], name='rast_propuesta_revision_unica')]
