@@ -48,7 +48,7 @@ function Records({ name, title, offer, catalogs, onSaved }) {
   }
   return <section className="profile-card" aria-label={title}><h2>{title}</h2>
     {name === 'requisitos' && <p className="profile-note">Revisar la transcripción no verifica documentos de postulantes. Los certificados los comprueba la entidad oferente.</p>}
-    <ul className="record-list">{records.map((r) => <li key={r.id}><span>{name === 'opciones' ? `${r.nivel} / ${r.modalidad}${r.activa ? '' : ' · Inactiva'}` : name === 'beneficios' ? r.concepto : `${catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)?.nombre}: ${r.texto_original}${r.activo ? '' : ' · Inactivo'}`}</span>
+    <ul className="record-list offer-records">{records.map((r) => <li key={r.id}><span>{name === 'opciones' ? `${r.nivel} / ${r.modalidad}${r.activa ? '' : ' · Inactiva'}` : name === 'beneficios' ? r.concepto : `${catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)?.nombre}: ${r.texto_original}${r.activo ? '' : ' · Inactivo'}`}</span>
       <div className="record-actions"><button className="text-button" disabled={editing !== null} onClick={() => { setEditing(r); setTypeId(String(r.tipo_requisito || '')) }}><Icon name="edit" /><span>Editar</span></button>
         {name === 'beneficios' && <button className="text-button danger-text" disabled={editing !== null} onClick={() => setDeleting(r)}><Icon name="delete" /><span>Eliminar</span></button>}</div></li>)}</ul>
     {!records.length && <p className="empty-note">Todavía no hay registros. Lo no informado se conserva como desconocido.</p>}
@@ -88,8 +88,8 @@ export default function OfferEditor() {
   return <OffersLayout><Link className="back-link" to="/gestion/convocatorias"><Icon name="back" /><span>Convocatorias</span></Link><h1>{id ? 'Editar y revisar convocatoria' : 'Crear convocatoria'}</h1><p>Comprueba la información contra las bases oficiales. No verifica documentos de estudiantes.</p>
     <Message>{error}</Message>{!loaded && (error ? <Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button> : <p role="status"><Icon name="loading" />Cargando editor…</p>)}<Message kind="success">{notice}</Message>
     {loaded && <><section className="profile-card"><h2>01 · Identificación, fechas y condiciones</h2>{loaded.offer && <p className="profile-note">Revisión: {loaded.offer.revision} · Estado: {stateLabel(loaded.offer.estado)}. Editar retira la publicación hasta una nueva revisión.</p>}
-      <p><Link to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> · Guarda el borrador antes de añadir opciones.</p>
-      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions)} initial={loaded.offer ? { ...loaded.offer, institucion: loaded.offer.institucion.id } : {}} label="Guardar convocatoria" onSubmit={async (values) => {
+      {!loaded.offer && <p>Guarda el borrador antes de añadir opciones.</p>}
+      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions).map(field => field.name === 'institucion' ? { ...field, hint: <Link className="offer-institution-link" to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> } : field)} initial={loaded.offer ? { ...loaded.offer, institucion: loaded.offer.institucion.id } : {}} label="Guardar convocatoria" onSubmit={async (values) => {
         const offer = await offersApi.write(id ? `gestion/convocatorias/${id}` : 'gestion/convocatorias', id ? 'PATCH' : 'POST', values)
         if (!id) navigate(`/gestion/convocatorias/${offer.id}`)
         else { setLoaded((old) => ({ ...old, offer })); setNotice('Cambios guardados. Publica de nuevo después de revisar.') }

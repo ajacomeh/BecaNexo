@@ -198,6 +198,10 @@
 .record-list { margin: 0 0 24px; padding: 0; list-style: none; }
 .record-list li { padding: 16px 0; border-bottom: 1px solid #e4eaf3; display: flex; gap: 16px; justify-content: space-between; align-items: center; overflow-wrap: anywhere; }
 .record-actions { display: flex; gap: 16px; }
+.offer-records li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.offer-records .record-actions { flex-shrink: 0; flex-wrap: wrap; }
+.offer-records .record-actions .text-button { flex-shrink: 0; white-space: nowrap; overflow-wrap: normal; }
+.offer-institution-link { color: #1d4ed8; text-decoration: underline; text-underline-offset: 3px; }
 .text-button { font-size: .875rem; color: #1d4ed8; cursor: pointer; padding: 8px 0; }
 .text-button:disabled { opacity: .45; cursor: not-allowed; }
 .danger-text { color: #a22018; }

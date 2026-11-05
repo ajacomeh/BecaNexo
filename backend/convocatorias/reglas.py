@@ -1,5 +1,8 @@
 """Contratos versionados v0.6; conserva representaciones antiguas sin inferirlas."""
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlsplit
+from django.core.validators import URLValidator
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.exceptions import ValidationError
 from perfiles.models import Pais, Idioma, Area, NIVELES, MCER
 
@@ -26,15 +29,15 @@ CONTRATOS = {
     "TRASLADO": ("Disponibilidad de traslado", "igual", {"requerido": campo("Traslado requerido", "boolean"), "destino": campo("País de destino", "pais", False)}),
     "RESIDENCIA": ("Residencia", "pertenece", {"codigos_pais": campo("Países de residencia", "paises", False),
         "provincias": campo("Provincias admitidas (una por línea)", "textos", False), "ciudades": campo("Ciudades admitidas (una por línea)", "textos", False)}),
-    "ACREDITACION": ("Certificación externa", "externo", {"certificados_admitidos": campo("Certificados admitidos según las bases"), "vigencia": campo("Vigencia publicada", required=False)}),
-    "DOCUMENTO": ("Documento externo", "externo", {"documento": campo("Documento exigido"), "condiciones": campo("Condiciones documentales", required=False)}),
+    "ACREDITACION": ("Certificación externa", "externo", {"certificados_admitidos": campo("Certificados admitidos según las bases"), "vigencia": campo("Vigencia publicada", required=False), "url_documento": campo("Enlace oficial del documento o formulario", "url", False)}),
+    "DOCUMENTO": ("Documento externo", "externo", {"documento": campo("Nombre del documento"), "condiciones": campo("Condiciones o alternativas según las bases", required=False), "url_documento": campo("Enlace oficial del documento o formulario", "url", False)}),
     "OTRO": ("Otra condición externa", "externo", {"descripcion": campo("Descripción publicada")}),
 }
 
 
 def esquema(codigo):
     nombre, operador, campos = CONTRATOS[codigo]
-    return {"version": 2 if codigo in ("FORMACION", "EXPERIENCIA") else 1, "operadores": [operador], "campos": campos}
+    return {"version": 2 if codigo in ("FORMACION", "EXPERIENCIA", "DOCUMENTO", "ACREDITACION") else 1, "operadores": [operador], "campos": campos}
 
 
 def validar(codigo, valor, fecha, modo, operador):
@@ -70,6 +73,13 @@ def validar(codigo, valor, fecha, modo, operador):
             if ok and kind == "lista": ok = all(x in spec["options"] for x in v)
         else:
             ok = isinstance(v, str) and bool(v.strip()) and len(v) <= 5000
+            if ok and kind == "url":
+                try:
+                    URLValidator(schemes=["http", "https"])(v)
+                    parts = urlsplit(v)
+                    ok = not parts.username and not parts.password
+                except (DjangoValidationError, ValueError):
+                    ok = False
             if ok and kind == "pais": ok = Pais.objects.filter(codigo=v).exists()
             if ok and kind == "idioma": ok = Idioma.objects.filter(codigo=v).exists()
             if ok and spec.get("options"): ok = v in spec["options"]

@@ -11,6 +11,35 @@ from . import models as m
 
 
 class ConvocatoriasTests(TestCase):
+    def test_documentacion_consulta_edicion_y_verificacion_externa(self):
+        c = self.oferta()["id"]
+        option = self.opcion(c)["id"]
+        common = self.requisito(c, "DOCUMENTO", {"documento": "Título o certificado en emisión", "condiciones": "Cuando corresponda", "url_documento": "https://example.org/formulario"})
+        specific = self.requisito(c, "ACREDITACION", {"certificados_admitidos": "Certificado de idioma", "url_documento": "https://example.org/certificado"}, opcion_estudio=option)
+        self.assertEqual(common.status_code, 201, common.data)
+        self.assertEqual(specific.status_code, 201, specific.data)
+        common, specific = common.data, specific.data
+        path = f"/api/gestion/convocatorias/{c}/requisitos/{common['id']}/"
+        values = {"documento": "Título o certificado en emisión", "condiciones": "Registro cuando corresponda", "url_documento": "https://example.org/nuevo"}
+        self.write(path, {"valor_estructurado": values}, method="patch", expected=200)
+        self.assertEqual(self.client.get(path).data["valor_estructurado"], values)
+        for url in ("javascript:alert(1)", "data:text/html,test", "https://user:pass@example.org/file"):
+            self.write(path, {"valor_estructurado": {**values, "url_documento": url}}, method="patch", expected=400)
+        self.assertEqual(self.client.patch(path, {"obligatorio": False}, format="json").status_code, 403)
+        self.assertEqual(self.public.patch(path, {}, format="json").status_code, 403)
+        m.Convocatoria.objects.filter(pk=c).update(revision="validada", activa=True)  # Solo fixture de pruebas.
+        detail = self.public.get(f"/api/becas/{c}/").data
+        self.assertEqual(len(detail["requisitos"]), 2)
+        self.assertEqual(next(r for r in detail["requisitos"] if r["id"] == common["id"])["opcion_estudio"], None)
+        self.assertEqual(next(r for r in detail["requisitos"] if r["id"] == specific["id"])["opcion_estudio"], option)
+        self.client.force_login(self.student)
+        token = self.client.get('/api/auth/csrf/').data['csrfToken']
+        self.assertEqual(self.client.patch(path, {}, format="json", HTTP_X_CSRFTOKEN=token).status_code, 403)
+        comparison = self.client.get(f"/api/becas/{c}/comparacion/").data
+        for rule in comparison["opciones"][0]["requisitos"]:
+            self.assertEqual(rule["resultado"], "desconocido")
+            self.assertEqual(rule["estado_documental"], "pendiente_entidad_oferente")
+
     @classmethod
     def setUpTestData(cls):
         cls.admin = get_user_model().objects.create_user(email="admin-ofertas@example.com", password="Testing-Only-74!", nombre="Administrador sintético", rol="administrador")

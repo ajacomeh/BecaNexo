@@ -40,12 +40,19 @@ export default function OfferForm({ icon = "save", fields, initial = {}, onSubmi
     catch (failure) { setError(failure.message); setErrors(failure.fields || {}) }
     finally { lock.current = false; setBusy(false) }
   }
-  return <form noValidate onSubmit={submit} aria-busy={busy}>
-    <div className="field-grid">{fields.map((f) => f.kind === 'equivalencias' ? <EquivalenceFields key={f.name} field={f} values={values[f.name]} onChange={v => change(f.name, v)} disabled={busy} error={errors[f.name]} /> : f.multiple ? <fieldset className="field field-wide multi-field" key={f.name} disabled={busy}>
+  const renderField = (f) => f.kind === 'equivalencias' ? <EquivalenceFields key={f.name} field={f} values={values[f.name]} onChange={v => change(f.name, v)} disabled={busy} error={errors[f.name]} /> : f.multiple ? <fieldset className="field field-wide multi-field" key={f.name} disabled={busy}>
       <legend>{f.label}</legend><div className="multi-options">{f.options.map((o) => <label key={o.value}>
         <input type="checkbox" checked={(values[f.name] || []).map(String).includes(String(o.value))} onChange={(e) => change(f.name, e.target.checked ? [...values[f.name], String(o.value)] : values[f.name].filter((x) => String(x) !== String(o.value)))} />{o.label}</label>)}</div>
       {errors[f.name] && <p className="field-error">{String(errors[f.name])}</p>}
-    </fieldset> : <ProfileField key={f.name} field={f} value={values[f.name]} disabled={busy} onChange={(v) => change(f.name, v)} error={errors[f.name]} />)}</div>
+    </fieldset> : <ProfileField key={f.name} field={f} value={values[f.name]} disabled={busy} onChange={(v) => change(f.name, v)} error={errors[f.name]} />
+  const supplementary = fields.filter(f => f.supplementary)
+  return <form noValidate onSubmit={submit} aria-busy={busy}>
+    <div className="field-grid">{fields.filter(f => !f.supplementary).map(renderField)}</div>
+    {supplementary.length > 0 && <details open={supplementary.some(f => initial[f.name] || errors[f.name]) || undefined}>
+      <summary>Información documental complementaria (opcional)</summary>
+      <p className="field-hint">Conserva información adicional registrada en los campos generales del requisito. No repitas el nombre ni las condiciones principales; estos datos también se muestran al consultar la convocatoria.</p>
+      <div className="field-grid">{supplementary.map(renderField)}</div>
+    </details>}
     <Message>{error}</Message>{saved && <Message kind="success">Cambios guardados.</Message>}
     <div className="form-actions"><Button icon={icon} type="submit" busy={busy}>{busy ? 'Guardando…' : label}</Button>{onCancel && <Button icon="cancel" type="button" className="button-light" disabled={busy} onClick={onCancel}>Cancelar</Button>}</div>
   </form>

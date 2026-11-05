@@ -1,5 +1,25 @@
 # Avance de BecaNexo
 
+## Presentación del editor de convocatorias — 04/11/2026
+
+«Gestionar entidades oferentes» queda bajo el selector de entidad, subrayado, conservando `/gestion/instituciones` y acceso por teclado. El aviso de guardar borrador aparece solo sin convocatoria cargada. Se corrigió la contracción de las acciones en las listas del editor (opciones, beneficios y requisitos): texto completo adaptable, acciones sin partir palabras y debajo en móvil. CSS acotado con `offer-records`; no se modificaron listas de perfiles/rastreo ni lógica de permisos, bloqueo o carga.
+
+Verificación propia: 18 pruebas afectadas aprobadas (Offers, Documentation, RuleForms), lint y build correctos. Navegador Edge con aplicación y estilos reales, API enteramente simulada y registros sintéticos: 1280, 390 y 320 px sin desbordamiento; Enter abre el requisito correcto, Tab alcanza el enlace bajo el selector, navegación a entidades y aviso de creación correctos. Edición/cancelación de opciones y beneficios comprobadas. Restaurando temporalmente en el navegador las reglas CSS anteriores, «Editar» se dividió en cinco líneas; con la corrección permanece en una. Ejecutores terminaron con código 0; el primer intento no pudo conectar porque Vite estaba apagado, después se inició en 5173. No hubo escrituras en desarrollo ni pruebas backend. Capturas locales ignoradas en frontend/test-results.
+
+Revisión manual comunicada por el usuario, distinta de estas pruebas: confirmó previamente que los requisitos se guardan, consultan y editan correctamente. Se conservan todos los cambios documentales y la guía de arquitectura sin seguimiento. Sin migraciones, dependencias, commits ni publicación.
+
+## Simplificación del formulario documental — 04/11/2026
+
+DOCUMENTO muestra nombre y condiciones principales de `valor_estructurado`; los campos generales `documento_exigido` y `detalle_acreditacion` permanecen en un apartado opcional, abierto inicialmente cuando contienen datos antiguos. En ACREDITACION, `detalle_acreditacion` sigue visible como condiciones principales porque su contrato no define `condiciones`. No se fusionan ni borran propiedades. Ámbito vacío se presenta como «Toda la convocatoria» conservando null. Ayudas distinguen revisión administrativa, fecha de referencia y enlace documental frente a bases. No se marca revisión automáticamente.
+
+17 pruebas frontend aprobadas (Documentation, Offers, RuleForms), incluidas creación común, edición con complementos antiguos incluso al cerrar el apartado, separación por opción y presentación pública. Lint y build correctos, código 0. Pruebas de componentes con callbacks simulados; no se guardaron datos en desarrollo ni se repitieron suites backend, pues este ajuste no cambia servidor, contratos ni comparación. Sin migraciones ni commits; se conserva la guía sin seguimiento y todo el trabajo pendiente anterior.
+
+## Documentación exigida por convocatoria — 04/11/2026
+
+Se reutilizan DOCUMENTO/ACREDITACION, ámbito común/opción, instrucciones, obligatoriedad y condiciones textuales. Se añade `url_documento` opcional al contrato estructurado existente (HTTP/HTTPS sin credenciales), con controles administrativos sin JSON manual. El detalle público separa «Documentación requerida» de elegibilidad, conserva alternativas y muestra aviso cuando faltan datos. Bases mantiene `url_bases`; no se publica almacenamiento de rastreo ni se acredita documentación. Sin modelos nuevos, migraciones o cambios en desarrollo.
+
+Verificación terminada: 23 pruebas de `convocatorias.test_comparacion` aprobadas y una nueva prueba documental aprobada tras corregir el uso de Response en la propia prueba. Backend secuencial en `test_becanexo_db --keepdb`; creación/edición/consulta, permisos, CSRF, enlaces y verificación externa pendiente. Frontend: 22 pruebas aprobadas en Documentation, Offers, RuleForms y Comparison; lint, build y Django check correctos. Revisión del componente real con estilos a 1280/390 px, datos sintéticos y API bloqueada: sin desbordamientos, enlace accesible por Tab y foco visible; ejecutor final código 0. Los intentos previos del ejecutor fallaron por interceptación de imports, exportación de React y codificación del texto en PowerShell; no fueron resultados funcionales aprobados. No se realizó un recorrido de guardado en desarrollo. Guía de arquitectura sin seguimiento conservada.
+
 ## Edición del nombre desde datos personales — 04/11/2026
 
 - El postulante edita «Nombre visible» en `/perfil` y lo confirma con «Guardar datos personales». Se separa del payload del perfil y se guarda mediante `updateName`/PATCH `/api/auth/me/`, únicamente si cambia respecto al contexto. La barra lateral se actualiza sin recargar; el lápiz permanece solo para administradores.

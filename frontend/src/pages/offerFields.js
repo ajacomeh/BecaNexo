@@ -25,6 +25,7 @@ export const benefitFields = (options) => [scope(options), text('concepto', 'Con
   text('porcentaje', 'Porcentaje de este concepto', { type: 'number', kind: 'number' }), text('monto', 'Monto', { type: 'number', kind: 'number' }),
   text('moneda', 'Moneda (código de tres letras)', { maxLength: 3 }), select('periodicidad', 'Periodicidad', enumOptions(['unico', 'mensual', 'anual', 'otra'])), text('detalle', 'Detalle de cobertura', { type: 'textarea' })]
 export const requirementFields = (type, c, options) => {
+  const documental = ['DOCUMENTO', 'ACREDITACION'].includes(type.codigo)
   const fields = [scope(options), text('texto_original', 'Texto original del requisito', { type: 'textarea', required: true }),
     select('destino', 'Destino específico (requiere opción; vacío = todos)', choices(c.paises), { kind: 'id' }),
     select('obligatorio', 'Condición obligatoria', bool, { kind: 'boolean', required: true }), select('validado', 'Transcripción revisada por administrador', bool, { kind: 'boolean', required: true }),
@@ -46,5 +47,20 @@ export const requirementFields = (type, c, options) => {
     if (spec.kind === 'textos' || (spec.kind === 'text' && !spec.options)) f.type = 'textarea'
     fields.push(f)
   }
+  if (documental) {
+    Object.assign(fields.find(f => f.name === 'opcion_estudio'), { label: 'Ámbito', placeholder: 'Toda la convocatoria' })
+    fields.find(f => f.name === 'texto_original').label = 'Descripción e instrucciones según las bases'
+    Object.assign(fields.find(f => f.name === 'detalle_acreditacion'), {
+      label: type.codigo === 'DOCUMENTO' ? 'Detalle complementario de acreditación' : 'Condiciones o alternativas según las bases',
+      supplementary: type.codigo === 'DOCUMENTO',
+    })
+    Object.assign(fields.find(f => f.name === 'documento_exigido'), { label: 'Documento complementario', supplementary: true })
+    fields.find(f => f.name === 'obligatorio').label = 'Documento obligatorio según las bases'
+    fields.find(f => f.name === 'validado').hint = 'Confirma que cotejaste la transcripción con las bases. No acredita documentos del postulante.'
+    fields.find(f => f.name === 'fecha_referencia').hint = 'Fecha publicada para evaluar la condición; no es la fecha de registro. Déjala vacía si las bases no la indican.'
+    const link = fields.find(f => f.name === 'regla_url_documento')
+    if (link) link.hint = 'Enlace al documento o formulario exigido. Las bases oficiales se registran en los datos generales de la convocatoria.'
+  }
+  fields.filter(f => f.kind === 'url').forEach(f => { f.type = 'url' })
   return fields
 }

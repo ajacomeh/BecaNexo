@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import OfferForm from './components/OfferForm'
 import { ApiError, offersApi } from './api/client'
 import Offers from './pages/Offers'
@@ -66,6 +66,8 @@ describe('convocatorias', () => {
     vi.spyOn(offersApi, 'write').mockRejectedValue(new ApiError('Conflicto de datos.', 400))
     render(<MemoryRouter><OfferEditor /></MemoryRouter>)
     const title = await screen.findByLabelText(/Título/)
+    expect(screen.getByText('Guarda el borrador antes de añadir opciones.')).toBeVisible()
+    expect(within(screen.getByLabelText(/Entidad oferente ecuatoriana/).parentElement).getByRole('link', { name: 'Gestionar entidades oferentes' })).toHaveAttribute('href', '/gestion/instituciones')
     const user = userEvent.setup()
     await user.type(title, 'DEMO título conservado')
     await user.click(screen.getByRole('button', { name: 'Guardar convocatoria' }))
@@ -79,6 +81,27 @@ describe('convocatorias', () => {
     expect(screen.getByText('<script>alert(1)</script>')).toBeVisible()
     expect(screen.getByText(/BecaNexo no acredita/)).toBeVisible()
     expect(document.querySelector('script')).toBeNull()
+  })
+
+  it('edita el requisito elegido con texto extenso y conserva bloqueos y enlace en convocatoria guardada', async () => {
+    const long = 'Descripción extensa con instrucciones completas. '.repeat(25) + 'https://example.org/' + 'a'.repeat(160)
+    const offer = { id: 41, institucion: { id: 1 }, revision: 'pendiente', estado: 'borrador', opciones: [], beneficios: [], requisitos: [
+      { id: 8, tipo_requisito: 1, texto_original: 'Primer requisito', activo: true, valor_estructurado: { documento: 'Primero' } },
+      { id: 9, tipo_requisito: 1, texto_original: long, activo: true, valor_estructurado: { documento: 'Segundo' } },
+    ] }
+    const reference = { ...catalogs, tipos_requisito: [{ id: 1, codigo: 'DOCUMENTO', nombre: 'Documento externo', esquema_valor: { campos: { documento: { label: 'Nombre del documento', kind: 'text' } } } }] }
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? reference : path === 'gestion/convocatorias/41' ? offer : { count: 1, results: [{ id: 1, nombre: 'DEMO' }] })
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
+    await screen.findByText(`Documento externo: ${long}`)
+    expect(screen.queryByText('Guarda el borrador antes de añadir opciones.')).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText(/Entidad oferente ecuatoriana/).parentElement).getByRole('link')).toHaveAttribute('href', '/gestion/instituciones')
+    const region = within(screen.getByRole('region', { name: 'Requisitos' }))
+    await userEvent.click(region.getAllByRole('button', { name: 'Editar' })[1])
+    expect(region.getByLabelText(/Descripción e instrucciones/)).toHaveValue(long)
+    expect(region.getByLabelText('Nombre del documento')).toHaveValue('Segundo')
+    region.getAllByRole('button', { name: 'Editar' }).forEach(button => expect(button).toBeDisabled())
+    await userEvent.click(region.getByRole('button', { name: 'Cancelar' }))
+    region.getAllByRole('button', { name: 'Editar' }).forEach(button => expect(button).toBeEnabled())
   })
 
   it('genera controles de regla de edad sin editor JSON', () => {
