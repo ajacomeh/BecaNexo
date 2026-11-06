@@ -167,3 +167,30 @@ class AuthAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
         response = self.post("login", data, HTTP_ORIGIN="http://127.0.0.1:5173")
         self.assertEqual(response.status_code, 200)
+
+    @override_settings(CSRF_TRUSTED_ORIGINS=[])
+    def test_proxy_conserva_host_y_permite_logout_y_otra_cuenta(self):
+        self.user()
+        host = "127.0.0.1:5173"
+        origin = "http://127.0.0.1:5173"
+        token = self.client.get("/api/auth/csrf/", HTTP_HOST=host).json()["csrfToken"]
+        credentials = {"email": "ana@example.com", "password": PASSWORD}
+        headers = {"HTTP_HOST": host, "HTTP_ORIGIN": origin, "HTTP_X_CSRFTOKEN": token}
+        self.assertEqual(self.client.post("/api/auth/login/", credentials, format="json",
+                                          HTTP_HOST="127.0.0.1:8000", HTTP_ORIGIN=origin,
+                                          HTTP_X_CSRFTOKEN=token).status_code, 403)
+        self.assertEqual(self.client.post("/api/auth/login/", credentials, format="json",
+                                          HTTP_HOST=host, HTTP_ORIGIN=origin).status_code, 403)
+        login_response = self.client.post("/api/auth/login/", credentials, format="json", **headers)
+        self.assertEqual(login_response.status_code, 200)
+        self.assertTrue(login_response.cookies[settings.SESSION_COOKIE_NAME]["httponly"])
+        headers["HTTP_X_CSRFTOKEN"] = login_response.json()["csrfToken"]
+        self.assertEqual(self.client.post("/api/auth/logout/", {}, format="json", **headers).status_code, 204)
+        self.assertEqual(self.client.get("/api/auth/me/", HTTP_HOST=host).status_code, 403)
+
+        Usuario.objects.create_superuser("admin@example.com", "Admin de prueba", PASSWORD)
+        headers["HTTP_X_CSRFTOKEN"] = self.client.get("/api/auth/csrf/", HTTP_HOST=host).json()["csrfToken"]
+        second = self.client.post("/api/auth/login/", {"email": "admin@example.com", "password": PASSWORD},
+                                  format="json", **headers)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["usuario"]["rol"], "administrador")

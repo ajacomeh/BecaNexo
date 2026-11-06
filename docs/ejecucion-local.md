@@ -14,13 +14,12 @@ Desde la raíz del proyecto:
 
 ```powershell
 Set-Location D:\Proyectos\BecaNexo
-$env:DJANGO_CSRF_TRUSTED_ORIGINS = 'http://127.0.0.1:5173'
 .\.venv\Scripts\python.exe backend\manage.py runserver 127.0.0.1:8000
 ```
 
 El backend lee las credenciales y demás configuración local desde `backend/.env`, que no se versiona. Se mantienen los valores existentes; no es necesario cambiar la contraseña de PostgreSQL ni el superusuario. Las migraciones de autenticación fueron aplicadas por el responsable y perfiles.0001_initial se aplicó en la etapa de perfil, tras verificar las pruebas. Estos comandos no ejecutan migraciones ni crean usuarios administradores.
 
-La variable de origen puede añadirse al `.env` local en lugar de declararla en el proceso; su valor no es secreto y está documentado en `backend/.env.example`. Sin ella, una petición POST desde Vite será rechazada por CSRF aunque contenga token. Por defecto la lista de orígenes confiables está vacía. No usar comodines.
+El proxy de Vite conserva Host y Origin de `127.0.0.1:5173`, por lo que no hace falta añadir ese origen a `DJANGO_CSRF_TRUSTED_ORIGINS`. Django sigue exigiendo la cookie y `X-CSRFToken`. Solo si se usan orígenes distintos de forma deliberada se configura su lista explícita en `backend/.env`; no usar comodines. Abrir siempre el mismo host en el navegador: `localhost` y `127.0.0.1` no comparten cookies.
 
 Para HTTP local, `SESSION_COOKIE_SECURE=False` y `CSRF_COOKIE_SECURE=False`; estos son los valores predeterminados. Mantener `DJANGO_ALLOWED_HOSTS` limitado a los hosts necesarios (incluido 127.0.0.1). No se requiere activar DEBUG para utilizar este frontend.
 

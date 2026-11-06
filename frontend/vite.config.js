@@ -11,8 +11,8 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-        // Cambia Host para Django; conserva el Origin real del navegador.
+        // Conserva Host y Origin del navegador para que Django compruebe el mismo origen.
+        changeOrigin: false,
       },
     },
   },

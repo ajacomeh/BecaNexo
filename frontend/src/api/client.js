@@ -70,7 +70,22 @@ export const authApi = {
     return result.usuario
   },
   async logout() {
-    await post('logout', {})
+    try {
+      // La cookie o el token pueden haber cambiado desde el inicio de sesión.
+      await post('logout', {}, true)
+    } catch (error) {
+      if (error.status !== 403) throw error
+      try {
+        await authApi.me()
+      } catch (sessionError) {
+        if (sessionError.status !== 403) throw sessionError
+        // El servidor ya no reconoce la sesión; salir también del estado local.
+        csrfToken = null
+        return
+      }
+      // Una sesión aún válida no debe ocultar un fallo real de CSRF o permisos.
+      throw error
+    }
     csrfToken = null
   },
 }

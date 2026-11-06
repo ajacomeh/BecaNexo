@@ -121,10 +121,11 @@ describe('Login y errores de API', () => {
     await user.type(screen.getByLabelText('Contraseña'), 'Clave-Solo-Pruebas!726')
     return user
   }
-  it('usa el token renovado del login para cerrar sesión', async () => {
+  it('obtiene un token CSRF reciente antes de cerrar sesión', async () => {
     const user = await fillLogin()
+    let csrfRequests = 0
     fetchMock.mockImplementation(async (url) => {
-      if (url.endsWith('/csrf/')) return json({ csrfToken: 'token-inicial' })
+      if (url.endsWith('/csrf/')) return json({ csrfToken: ++csrfRequests === 1 ? 'token-inicial' : 'token-final' })
       if (url.endsWith('/login/')) return json({ usuario: account, csrfToken: 'token-renovado' })
       return new Response(null, { status: 204 })
     })
@@ -132,7 +133,42 @@ describe('Login y errores de API', () => {
     await user.click(await screen.findByRole('button', { name: 'Cerrar sesión' }))
     await screen.findByRole('heading', { name: 'Inicia sesión' })
     const [, options] = fetchMock.mock.calls.find(([url]) => url.endsWith('/logout/'))
-    expect(options.headers['X-CSRFToken']).toBe('token-renovado')
+    expect(options.headers['X-CSRFToken']).toBe('token-final')
+    expect(csrfRequests).toBe(2)
+  })
+  it('sale de la interfaz autenticada si la sesión del servidor caducó y permite otra cuenta', async () => {
+    fetchMock.mockResolvedValueOnce(json(account))
+    mount('/inicio')
+    await screen.findByRole('heading', { name: `Hola, ${account.nombre}` })
+    const admin = { ...account, id: 2, email: 'admin@example.com', nombre: 'Admin de prueba', rol: 'administrador' }
+    fetchMock.mockImplementation(async (url) => {
+      if (url.endsWith('/csrf/')) return json({ csrfToken: 'token-reciente' })
+      if (url.endsWith('/logout/') || url.endsWith('/me/')) return json({ detail: 'Sin sesión' }, 403)
+      if (url.endsWith('/login/')) return json({ usuario: admin, csrfToken: 'token-admin' })
+      throw new Error('Solicitud no simulada')
+    })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+    expect(await screen.findByRole('heading', { name: 'Inicia sesión' })).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/logout/'))).toBe(true)
+    await user.type(screen.getByLabelText('Correo electrónico'), admin.email)
+    await user.type(screen.getByLabelText('Contraseña'), 'Clave-Solo-Pruebas!726')
+    await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+    expect(await screen.findByRole('heading', { name: `Hola, ${admin.nombre}` })).toBeInTheDocument()
+  })
+  it('conserva la sesión local si logout falla por CSRF pero me sigue autenticado', async () => {
+    fetchMock.mockResolvedValueOnce(json(account))
+    mount('/inicio')
+    await screen.findByRole('heading', { name: `Hola, ${account.nombre}` })
+    fetchMock.mockImplementation(async (url) => {
+      if (url.endsWith('/csrf/')) return json({ csrfToken: 'token-reciente' })
+      if (url.endsWith('/logout/')) return json({ detail: 'CSRF incorrecto' }, 403)
+      if (url.endsWith('/me/')) return json(account)
+      throw new Error('Solicitud no simulada')
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo verificar la sesión')
+    expect(screen.getByRole('heading', { name: `Hola, ${account.nombre}` })).toBeInTheDocument()
   })
   it.each([403, 429, 500])('presenta un error controlado para %s', async (status) => {
     const user = await fillLogin()
