@@ -19,7 +19,6 @@ from .revisiones import ConflictoRevision, vigentes
 MATERIALES = {'PRECISION_TEMPORAL', 'TOPE_FUENTE', 'TOPE_NO_REPRESENTADO',
               'AMBITO_DESCONOCIDO', 'AMBITO_INCOMPLETO', 'CANDIDATO_PENDIENTE',
               'SIN_OPCIONES', 'DESCRIPCION_PENDIENTE'}
-NO_REPRESENTABLES = {'PRECISION_TEMPORAL', 'TOPE_FUENTE', 'TOPE_NO_REPRESENTADO'}
 
 
 class Elegido(Cerrado):
@@ -93,8 +92,22 @@ def _mapeo(kind, candidate, values, option_rows, offer):
     elif kind == 'beneficios':
         if not candidate.get('concepto') or values.get('concepto') != candidate['concepto']:
             raise serializers.ValidationError({kind: 'El concepto debe proceder de la propuesta.'})
-        if candidate.get('tope'):
-            raise serializers.ValidationError({kind: 'Un tope no puede convertirse en importe fijo. Deja este candidato pendiente.'})
+        cap = (candidate.get('tope') or '').strip()
+        if cap:
+            if values.get('tope_original') != cap:
+                raise serializers.ValidationError({kind: 'Conserva exactamente el literal del tope.'})
+            cap_number = re.fullmatch(r'(?:hasta\s*)?(?:\$\s*|[A-Z]{3}\s*)?([0-9]+(?:[.,][0-9]{1,2})?)', cap, re.IGNORECASE)
+            if values.get('tope_monto') is not None:
+                try:
+                    equal = bool(cap_number) and Decimal(str(values['tope_monto'])) == Decimal(cap_number.group(1).replace(',', '.'))
+                except (InvalidOperation, TypeError, ValueError):
+                    equal = False
+                if not equal:
+                    raise serializers.ValidationError({kind: 'El valor del tope no corresponde al literal; consérvalo pendiente.'})
+            if values.get('tope_moneda') and values.get('tope_moneda') != (candidate.get('moneda') or None):
+                raise serializers.ValidationError({kind: 'La moneda del tope solo puede copiarse si consta explícitamente en la propuesta.'})
+        elif any(values.get(field) is not None for field in ('tope_monto', 'tope_moneda', 'tope_original')):
+            raise serializers.ValidationError({kind: 'El candidato no menciona un tope.'})
         for literal, field in (('porcentaje', 'porcentaje'), ('monto', 'monto')):
             source = (candidate.get(literal) or '').strip()
             if source:
@@ -108,7 +121,7 @@ def _mapeo(kind, candidate, values, option_rows, offer):
                     raise serializers.ValidationError({kind: f'{literal} debe ser un número válido.'})
             elif values.get(field) is not None:
                 raise serializers.ValidationError({kind: f'{literal} no figura en el candidato.'})
-        if values.get('moneda') != (candidate.get('moneda') or None):
+        if values.get('moneda') != ((candidate.get('moneda') or None) if candidate.get('monto') else None):
             raise serializers.ValidationError({kind: 'La moneda debe constar explícitamente en la propuesta.'})
         if values.get('periodicidad'):
             raise serializers.ValidationError({kind: 'La periodicidad no consta en el candidato; déjala pendiente.'})
@@ -220,7 +233,9 @@ def crear_borrador(actor_id, proposal_id, payload):
     if not proposal.version.documentos.filter(rol='bases_pdf').exists() and not data.get('motivo_bases_ausentes', '').strip():
         raise serializers.ValidationError({'motivo_bases_ausentes': 'Documenta la ausencia real de bases identificadas.'})
     # El serializer canónico vuelve a calcular identidad y validaciones; nunca se confía en una clave del cliente.
-    base = catalogo_serializers.ConvocatoriaSerializer(data={k: proposal.datos[k] for k in ('institucion', 'titulo', 'descripcion', 'url_oficial', 'cierre_original') if k in proposal.datos})
+    if proposal.datos.get('cierre_dia') and not any(ref['campo'] == 'cierre_dia' for ref in proposal.procedencia):
+        raise serializers.ValidationError({'cierre_dia': 'Indica evidencia exacta del día de cierre en la propuesta.'})
+    base = catalogo_serializers.ConvocatoriaSerializer(data={k: proposal.datos[k] for k in ('institucion', 'titulo', 'descripcion', 'url_oficial', 'cierre_original', 'cierre_dia') if k in proposal.datos})
     base.is_valid(raise_exception=True)
     title = proposal.datos['titulo']
     if catalogo.Convocatoria.objects.filter(institucion=institution, titulo__iexact=title).exists():
@@ -298,8 +313,32 @@ def estado_publicacion_integrada(offer):
 
 def _comprobacion_pendiente(item, offer, proposal):
     code, field = item['codigo'], item['campo']
-    if code in NO_REPRESENTABLES:
-        raise serializers.ValidationError({'pendiente_id': 'El modelo aún no representa fielmente este dato; permanece bloqueado.'})
+    if code == 'PRECISION_TEMPORAL':
+        if field != 'cierre_original' or not offer.cierre_dia or offer.cierre or not (offer.cierre_original or '').strip():
+            return False
+        declared = proposal.datos.get('cierre_dia')
+        if declared and offer.cierre_dia.isoformat() != declared:
+            return False
+        literal = proposal.datos.get('cierre_original')
+        if literal and offer.cierre_original != literal:
+            return False
+        observed = proposal.version.datos_extraidos.get('cierre') or {}
+        return not isinstance(observed, dict) or not observed.get('fecha') or offer.cierre_dia.isoformat() == observed['fecha']
+    if code in ('TOPE_FUENTE', 'TOPE_NO_REPRESENTADO'):
+        if code == 'TOPE_FUENTE':
+            source = proposal.version.datos_extraidos.get('beneficio') or {}
+            caps = {row.get('original') for row in source.get('cantidades', []) if isinstance(row, dict) and row.get('tipo') == 'tope'} if isinstance(source, dict) else set()
+            return bool(caps) and None not in caps and all(offer.beneficios.filter(
+                tope_original=cap, tope_monto__isnull=False, tope_moneda__isnull=False).exists()
+                for cap in caps)
+        candidate = _candidatos(proposal)['beneficios'].get(field.split('.', 1)[-1])
+        if not candidate or not candidate.get('tope') or candidate.get('ambito') in ('pendiente', 'destino'):
+            return False
+        rows = offer.beneficios.filter(concepto=candidate.get('concepto'), tope_original=candidate['tope'], tope_monto__isnull=False, tope_moneda__isnull=False)
+        if candidate.get('ambito') == 'comun':
+            return rows.filter(opcion_estudio__isnull=True).exists()
+        option = _candidatos(proposal)['opciones'].get(candidate.get('opcion'))
+        return bool(option) and rows.filter(opcion_estudio__programa=option.get('texto'), opcion_estudio__nivel=option.get('nivel'), opcion_estudio__modalidad=option.get('modalidad')).exists()
     if code == 'DESCRIPCION_PENDIENTE':
         return bool(offer.descripcion.strip())
     if code == 'SIN_OPCIONES':
@@ -371,6 +410,22 @@ def resolver_pendiente(actor_id, offer_id, payload):
         for ref in applied.propuesta.procedencia
     ):
         raise serializers.ValidationError({'evidencia_id': 'La evidencia debe corresponder al candidato pendiente exacto.'})
+    if issue['codigo'] == 'PRECISION_TEMPORAL' and not any(
+        ref['campo'] in ('cierre_dia', 'cierre_original') and ref['evidencia_id'] == evidence.pk
+        for ref in applied.propuesta.procedencia
+    ):
+        raise serializers.ValidationError({'evidencia_id': 'La evidencia debe respaldar el día de cierre revisado.'})
+    if issue['codigo'] == 'TOPE_FUENTE':
+        source = applied.propuesta.version.datos_extraidos.get('beneficio') or {}
+        caps = {row.get('original') for row in source.get('cantidades', [])
+                if isinstance(row, dict) and row.get('tipo') == 'tope'} if isinstance(source, dict) else set()
+        if not caps or None in caps or not all(any(
+            candidate.get('tope') == cap and ref['campo'] == f'beneficios.{candidate["id"]}'
+            and ref['evidencia_id'] == evidence.pk
+            for candidate in applied.propuesta.datos.get('beneficios', [])
+            for ref in applied.propuesta.procedencia
+        ) for cap in caps):
+            raise serializers.ValidationError({'evidencia_id': 'Cada tope de la fuente requiere candidato y evidencia exacta.'})
     previous = Revision.objects.filter(aplicacion=applied, dimension='integracion', decision='resuelta', detalle__pendiente_id=issue['id']).order_by('-id').first()
     if previous and previous.detalle.get('hash_convocatoria') == data['hash_convocatoria'] and previous.detalle.get('version_convocatoria') == offer.version:
         raise ConflictoRevision('Este pendiente ya tiene una resolución vigente para los datos actuales.')

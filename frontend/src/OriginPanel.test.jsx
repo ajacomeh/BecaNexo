@@ -37,3 +37,17 @@ it('no presenta procedencia en una convocatoria manual', async () => {
   await waitFor(() => expect(screen.queryByText('Consultando origen…')).not.toBeInTheDocument())
   expect(screen.queryByText('Registrar resolución comprobada')).not.toBeInTheDocument()
 })
+
+it('permite revisar cierre por día y tope, pero mantiene pendiente la apertura sin hora', async () => {
+  vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('/documentos')
+    ? { count: 0, results: [] } : { ...origin, estado: { bloqueos: [], pendientes: [
+      { id: 'fecha', codigo: 'PRECISION_TEMPORAL', campo: 'cierre_original', motivo: 'Hora desconocida' },
+      { id: 'tope', codigo: 'TOPE_NO_REPRESENTADO', campo: 'beneficios.b1', motivo: 'Tope por revisar' },
+      { id: 'apertura', codigo: 'PRECISION_TEMPORAL', campo: 'apertura_original', motivo: 'Apertura sin hora' },
+    ] } })
+  render(<MemoryRouter><OriginPanel offer={{ id: 7, version: 1 }} /></MemoryRouter>)
+  const selector = await screen.findByLabelText('Pendiente')
+  expect(selector.querySelector('option[value="fecha"]')).not.toBeDisabled()
+  expect(selector.querySelector('option[value="tope"]')).not.toBeDisabled()
+  expect(selector.querySelector('option[value="apertura"]')).toBeDisabled()
+})

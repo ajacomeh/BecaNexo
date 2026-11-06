@@ -21,10 +21,12 @@ function catalogData(kind, item, countries, types, extra) {
   }
   if (!['comun', 'opcion', 'destino'].includes(scope) || (scope !== 'comun' && !option)) throw Error('Define el ámbito y su opción antes de seleccionar el elemento.')
   if (kind === 'beneficios') {
-    if (!item.concepto || item.tope) throw Error('Este beneficio no admite mapeo directo: conserva el tope o completa el concepto antes de integrarlo.')
+    if (!item.concepto) throw Error('Completa el concepto financiado antes de seleccionar este beneficio.')
     const number = (literal) => literal ? /^\d+(?:[.,]\d{1,2})?\s*%?$/.test(literal) ? Number(literal.replace('%', '').trim().replace(',', '.')) : (() => { throw Error('Cantidad literal ambigua; conserva el candidato pendiente.') })() : null
     if (scope === 'destino') throw Error('El beneficio por destino no tiene un ámbito equivalente en el modelo actual; conserva este candidato pendiente.')
-    return { ...baseScope, concepto: item.concepto, porcentaje: number(item.porcentaje), monto: number(item.monto), moneda: item.moneda || null, detalle: [item.texto, item.condiciones].filter(Boolean).join('\n') || null }
+    return { ...baseScope, concepto: item.concepto, porcentaje: number(item.porcentaje), monto: number(item.monto), moneda: item.monto ? item.moneda || null : null,
+      tope_monto: null, tope_moneda: null, tope_original: item.tope || null,
+      detalle: [item.texto, item.condiciones].filter(Boolean).join('\n') || null }
   }
   const type = types.find((t) => t.codigo === item.tipo)
   if (!type || !['DOCUMENTO', 'ACREDITACION', 'OTRO'].includes(type.codigo) || !item.texto) throw Error('Este requisito necesita mapeo estructurado adicional; consérvalo pendiente y revísalo en el editor.')
@@ -77,7 +79,7 @@ export default function CrawlingDraft({ proposal, result, countries, types = [],
     {error && <Message>{error}</Message>}
     <div className="field"><label htmlFor="draft-institution-reason">Correspondencia con la entidad oferente revisada</label><textarea id="draft-institution-reason" value={institutionReason} onChange={(e) => { key.current = null; setInstitutionReason(e.target.value) }} maxLength={2000} /></div>
     {!documents.some((d) => d.rol === 'bases_pdf') && <div className="field"><label htmlFor="draft-bases-reason">Ausencia real de bases identificadas</label><textarea id="draft-bases-reason" value={basesReason} onChange={(e) => { key.current = null; setBasesReason(e.target.value) }} maxLength={2000} /></div>}
-    <h4>Contenido que se creará</h4><p>Institución, título, descripción y enlace oficial guardados en esta propuesta. Las fechas literales y los topes permanecen como pendientes; no se inventan equivalencias.</p>
+    <h4>Contenido que se creará</h4><p>Institución, título, descripción y enlace oficial guardados en esta propuesta. Un día de cierre con evidencia y los topes literales se conservan sin inventar hora, moneda ni importe fijo. Permanecen pendientes hasta la revisión y resolución explícitas.</p>
     {all.map(({ kind, item }) => <fieldset key={item.id}><legend>{label[kind]}: {item.texto || item.concepto || item.id}</legend>
       <label className="crawl-check"><input type="checkbox" checked={Boolean(selected[item.id])} onChange={(e) => { key.current = null; setSelected({ ...selected, [item.id]: e.target.checked }) }} /> Incluir en el borrador</label>
       {!selected[item.id] ? <p>Permanecerá en la propuesta como pendiente de revisión o mapeo.</p> : <><div className="field"><label htmlFor={`motive-${item.id}`}>Motivo y respaldo del mapeo</label><textarea id={`motive-${item.id}`} value={motives[item.id] || ''} onChange={(e) => { key.current = null; setMotives({ ...motives, [item.id]: e.target.value }) }} maxLength={2000} /></div>

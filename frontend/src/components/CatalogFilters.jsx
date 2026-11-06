@@ -17,7 +17,7 @@ export default function CatalogFilters({ params, catalogs, onApply, onClear }) {
     </div>
     <details><summary>Más filtros{secondary > 0 && ` · ${secondary} aplicados`}</summary><div className="catalog-filter-grid">
       {select('tipo_beca', 'Tipo de beca', 'Todos los tipos', catalogs.tipos_beca.map(r => [r.id, r.nombre]))}
-      {select('estado', 'Estado', 'Todos los estados', ['abierta', 'cerrada', 'proxima', 'sin_fecha'].map(v => [v, v === 'proxima' ? 'Próxima apertura' : v === 'sin_fecha' ? 'Fecha de cierre no informada' : readable(v)]))}
+      {select('estado', 'Estado', 'Todos los estados', ['abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'].map(v => [v, v === 'proxima' ? 'Próxima apertura' : v === 'cierre_hoy' ? 'Cierra hoy; hora no informada' : v === 'sin_fecha' ? 'Fecha de cierre no informada' : readable(v)]))}
     </div></details>
     <div className="form-actions"><Button icon="search" type="submit">Aplicar filtros</Button><Button icon="clear" className="button-light" type="button" onClick={() => { setValues({}); onClear() }}>Limpiar filtros</Button></div>
   </form></section>

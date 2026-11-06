@@ -46,6 +46,7 @@ class Convocatoria(models.Model):
     descripcion = models.TextField(blank=True, default="")
     apertura = models.DateTimeField(null=True, blank=True)
     cierre = models.DateTimeField(null=True, blank=True)
+    cierre_dia = models.DateField(null=True, blank=True)
     cierre_original = models.TextField(null=True, blank=True)
     url_oficial = models.TextField(blank=True, default="")
     clave_deduplicacion = models.CharField(max_length=64, unique=True)
@@ -68,6 +69,8 @@ class Convocatoria(models.Model):
             dominio("cobertura_tipo", COBERTURAS, "conv_cobertura", True),
             models.CheckConstraint(condition=Q(version__gte=1), name="conv_version"),
             models.CheckConstraint(condition=Q(apertura__isnull=True) | Q(cierre__isnull=True) | Q(cierre__gte=F("apertura")), name="conv_fechas"),
+            models.CheckConstraint(condition=Q(cierre__isnull=True) | Q(cierre_dia__isnull=True), name="conv_cierre_precision_unica"),
+            models.CheckConstraint(condition=Q(cierre_dia__isnull=True) | Q(cierre_original__isnull=False, cierre_original__regex=r"\S"), name="conv_cierre_dia_original"),
         ]
 
     @property
@@ -76,8 +79,10 @@ class Convocatoria(models.Model):
         if self.revision != "validada": return "borrador"
         now = timezone.now()
         if self.cierre and self.cierre <= now: return "cerrada"
+        if self.cierre_dia and self.cierre_dia < timezone.localdate(now): return "cerrada"
         if self.apertura and self.apertura > now: return "proxima"
-        if self.cierre is None: return "sin_fecha"
+        if self.cierre_dia == timezone.localdate(now): return "cierre_hoy"
+        if self.cierre is None and self.cierre_dia is None: return "sin_fecha"
         return "abierta"
 
 
@@ -126,6 +131,9 @@ class Beneficio(models.Model):
     concepto = models.CharField(max_length=100)
     porcentaje = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     monto = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    tope_monto = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    tope_moneda = models.CharField(max_length=3, null=True, blank=True)
+    tope_original = models.TextField(null=True, blank=True)
     moneda = models.CharField(max_length=3, null=True, blank=True)
     periodicidad = models.CharField(max_length=30, choices=PERIODOS, null=True, blank=True)
     detalle = models.TextField(null=True, blank=True)
@@ -136,6 +144,9 @@ class Beneficio(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(porcentaje__isnull=True) | Q(porcentaje__gte=0, porcentaje__lte=100), name="beneficio_porcentaje"),
             models.CheckConstraint(condition=Q(monto__isnull=True) | Q(monto__gte=0, moneda__isnull=False), name="beneficio_monto"),
+            models.CheckConstraint(condition=Q(tope_monto__isnull=True) | Q(tope_monto__gte=0), name="beneficio_tope_positivo"),
+            models.CheckConstraint(condition=Q(tope_monto__isnull=True, tope_moneda__isnull=True) | Q(tope_original__isnull=False, tope_original__regex=r'\S'), name="beneficio_tope_literal"),
+            models.CheckConstraint(condition=Q(tope_moneda__isnull=True) | Q(tope_monto__isnull=False, tope_moneda__regex=r'^[A-Z]{3}$'), name="beneficio_tope_moneda"),
             dominio("periodicidad", PERIODOS, "beneficio_periodicidad", True),
         ]
 

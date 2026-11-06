@@ -6,7 +6,7 @@ from django.db import connections
 from unittest.mock import patch
 from django.db import DatabaseError, transaction, connection
 from django.test import TransactionTestCase
-from convocatorias.models import Convocatoria, Institucion
+from convocatorias.models import Convocatoria, Institucion, Beneficio
 from convocatorias.serializers import ConvocatoriaSerializer
 from perfiles.models import Pais
 from . import tests as base
@@ -15,7 +15,7 @@ from .propuestas import guardar
 from .revisiones import vigentes, ConflictoRevision
 from .revisiones import registrar
 from convocatorias.services import publicar, publicas, detalle
-from .integracion import crear_borrador, resolver_pendiente, estado_publicacion_integrada, digest
+from .integracion import crear_borrador, resolver_pendiente, estado_publicacion_integrada, digest, _comprobacion_pendiente
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient
 from convocatorias.models import OpcionEstudio
@@ -168,6 +168,66 @@ class IntegridadIntegracionTests(TransactionTestCase):
         self.assertEqual(list(applied.convocatoria.opciones.first().paises.values_list('codigo', flat=True)), ['EC'])
         self.assertFalse(any(x['codigo'] == 'CANDIDATO_PENDIENTE' for x in applied.detalle['pendientes']))
         self.assertFalse(publicas().filter(pk=applied.convocatoria_id).exists())
+
+    def test_reviewed_day_and_cap_literal_keep_publication_blocked_until_resolution(self):
+        proposal, ids = self.reviewed_proposal()
+        relation = self.version.documentos.first()
+        observed = self.version.datos_extraidos.get('cierre') or {}
+        day = observed.get('fecha') if isinstance(observed, dict) else None
+        day = day or '2026-11-06'
+        benefit = {'id': 'b1', 'texto': 'Cobertura sintética', 'concepto': 'Matrícula',
+                   'tope': '$3000', 'ambito': 'comun'}
+        source = dict(proposal.datos, cierre_dia=day, cierre_original='Cierre por día según bases sintéticas', beneficios=[benefit])
+        references = list(proposal.procedencia) + [
+            {'campo': field, 'evidencia_id': relation.pk, 'localizador': 'Sección sintética',
+             'motivo': 'Transcripción revisada'} for field in ('cierre_dia', 'beneficios.b1')]
+        newer, _ = guardar(self.actor.pk, self.pub.pk, dict(clave_accion=str(uuid.uuid4()),
+            version_id=self.version.pk, observacion_base_id=proposal.observacion_base_id,
+            revisiones=ids, datos=source, procedencia=references), proposal.pk)
+        confirmation = self.confirmation(newer, ids)
+        confirmation['beneficios'] = [{'id': 'b1', 'motivo': 'Literal exacto; moneda todavía no confirmada',
+            'datos': {'opcion_estudio': None, 'concepto': 'Matrícula', 'porcentaje': None,
+                      'monto': None, 'moneda': None, 'tope_monto': None, 'tope_moneda': None,
+                      'tope_original': '$3000', 'detalle': 'Cobertura sintética'}}]
+        applied, _ = crear_borrador(self.actor.pk, newer.pk, confirmation)
+        offer = applied.convocatoria
+        self.assertEqual(offer.cierre_dia.isoformat(), day)
+        self.assertIsNone(offer.cierre)
+        row = offer.beneficios.get()
+        self.assertEqual(row.tope_original, '$3000')
+        self.assertIsNone(row.monto)
+        self.assertIsNone(row.tope_moneda)
+        codes = {x['codigo'] for x in estado_publicacion_integrada(offer)['pendientes']}
+        self.assertIn('PRECISION_TEMPORAL', codes)
+        self.assertIn('TOPE_NO_REPRESENTADO', codes)
+        with self.assertRaises(ValidationError):
+            publicar(offer)
+        row.tope_monto = 3000
+        row.tope_moneda = 'USD'
+        row.save(update_fields=['tope_monto', 'tope_moneda'])
+        for code in ('PRECISION_TEMPORAL', 'TOPE_NO_REPRESENTADO'):
+            issue = next(x for x in applied.detalle['pendientes'] if x['codigo'] == code)
+            request = {'clave_accion': str(uuid.uuid4()), 'pendiente_id': issue['id'],
+                'evidencia_id': relation.pk, 'motivo': 'Comprobación sintética de la evidencia exacta',
+                'version_convocatoria': offer.version, 'hash_convocatoria': digest(detalle(offer))}
+            resolution, created = resolver_pendiente(self.actor.pk, offer.pk, request)
+            self.assertTrue(created)
+            self.assertEqual(resolution.aplicacion_id, applied.pk)
+        remaining = {x['codigo'] for x in estado_publicacion_integrada(offer)['pendientes']}
+        self.assertNotIn('PRECISION_TEMPORAL', remaining)
+        self.assertNotIn('TOPE_NO_REPRESENTADO', remaining)
+        self.assertIn('SIN_OPCIONES', remaining)
+
+    def test_source_cap_pending_requires_each_literal_to_be_represented(self):
+        self.proposal.version.datos_extraidos = {'beneficio': {'cantidades': [
+            {'tipo': 'tope', 'original': '$100'}, {'tipo': 'tope', 'original': '$200'}]}}
+        issue = {'codigo': 'TOPE_FUENTE', 'campo': 'beneficio'}
+        Beneficio.objects.create(convocatoria=self.offer, concepto='Matrícula',
+            tope_original='$100', tope_monto=100, tope_moneda='USD')
+        self.assertFalse(_comprobacion_pendiente(issue, self.offer, self.proposal))
+        Beneficio.objects.create(convocatoria=self.offer, concepto='Arancel',
+            tope_original='$200', tope_monto=200, tope_moneda='USD')
+        self.assertTrue(_comprobacion_pendiente(issue, self.offer, self.proposal))
 
     def test_bad_selected_option_rolls_back_all(self):
         candidate = {'id': 'o1', 'texto': 'Programa sintético', 'nivel': 'maestria', 'modalidad': 'virtual', 'paises': ['EC']}

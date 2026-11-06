@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
@@ -184,6 +184,60 @@ class ConvocatoriasTests(TestCase):
         with patch("django.utils.timezone.now", return_value=instant):
             self.assertEqual(self.public.get(f"/api/becas/{c}/").data["estado"], "cerrada")
             self.assertEqual(self.public.get("/api/becas/?estado=abierta").data["count"], 0)
+
+    def test_cierre_por_dia_sin_hora_y_filtros(self):
+        c = self.oferta()["id"]
+        self.opcion(c)
+        path = f"/api/gestion/convocatorias/{c}/"
+        self.write(path, {"cierre_dia": "2026-11-06"}, "patch", 400)
+        self.write(path, {"cierre_dia": "2026-11-06", "cierre_original": "6 de noviembre de 2026"}, "patch", 200)
+        self.write(path, {"cierre": "2026-11-06T23:59:00-05:00"}, "patch", 400)
+        self.write(path + "publicar/", expected=200)
+        self.assertIsNone(m.Convocatoria.objects.get(pk=c).cierre)
+        cases = (("2026-11-05T12:00:00-05:00", "abierta"),
+                 ("2026-11-06T08:00:00-05:00", "cierre_hoy"),
+                 ("2026-11-06T22:00:00-05:00", "cierre_hoy"),
+                 ("2026-11-07T00:01:00-05:00", "cerrada"))
+        for moment, expected in cases:
+            with self.subTest(moment=moment), patch("django.utils.timezone.now", return_value=datetime.fromisoformat(moment)):
+                self.assertEqual(self.public.get(f"/api/becas/{c}/").data["estado"], expected)
+                self.assertEqual(self.public.get(f"/api/becas/?estado={expected}").data["count"], 1)
+                self.assertEqual(self.public.get("/api/becas/?estado=sin_fecha").data["count"], 0)
+        m.Convocatoria.objects.filter(pk=c).update(apertura=datetime.fromisoformat("2026-11-06T12:00:00-05:00"))
+        with patch("django.utils.timezone.now", return_value=datetime.fromisoformat("2026-11-06T08:00:00-05:00")):
+            self.assertEqual(self.public.get(f"/api/becas/{c}/").data["estado"], "proxima")
+            self.assertEqual(self.public.get("/api/becas/?estado=proxima").data["count"], 1)
+            self.assertEqual(self.public.get("/api/becas/?estado=cierre_hoy").data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/?orden=cierre").status_code, 200)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            m.Convocatoria.objects.filter(pk=c).update(cierre=timezone.now())
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            m.Convocatoria.objects.filter(pk=c).update(cierre_original=None)
+
+    def test_tope_separado_y_moneda_no_confirmada(self):
+        c = self.oferta()["id"]
+        path = f"/api/gestion/convocatorias/{c}/beneficios/"
+        for invalid in ({"tope_monto": -1, "tope_original": "$3000"},
+                        {"tope_monto": 3000},
+                        {"tope_monto": 3000, "tope_original": "$3000", "tope_moneda": "usd"},
+                        {"tope_original": "$3000", "tope_moneda": "USD"}):
+            self.write(path, {"concepto": "Matrícula", **invalid}, expected=400)
+        row = self.write(path, {"concepto": "Matrícula", "porcentaje": 100,
+            "tope_original": "$3000", "tope_monto": 3000}, expected=201).data
+        self.assertIsNone(row["monto"])
+        self.assertIsNone(row["tope_moneda"])
+        self.assertEqual(row["tope_original"], "$3000")
+        self.opcion(c)
+        self.write(f"/api/gestion/convocatorias/{c}/publicar/", expected=200)
+        public = self.public.get(f"/api/becas/{c}/").data["beneficios"][0]
+        self.assertEqual(public["tope_monto"], "3000.00")
+        self.assertIsNone(public["tope_moneda"])
+        self.assertEqual(public["tope_original"], "$3000")
+        self.assertEqual(self.client.patch(path + str(row["id"]) + "/", {"tope_moneda": "USD"}, format="json").status_code, 403)
+        self.write(path + str(row["id"]) + "/", {"tope_moneda": "USD"}, "patch", 200)
+        self.assertEqual(m.Beneficio.objects.get(pk=row["id"]).tope_original, "$3000")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            m.Beneficio.objects.filter(pk=row["id"]).update(tope_original=None)
 
     def test_filtros_misma_opcion_y_paginacion(self):
         c = self.oferta()["id"]

@@ -1,6 +1,8 @@
 from contextlib import contextmanager
 from django.db import transaction, IntegrityError
 from django.db.models import Q, F
+from django.db.models.functions import Coalesce, TruncDate
+from zoneinfo import ZoneInfo
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import permissions, serializers
@@ -119,11 +121,14 @@ def filtrar(request, qs, admin=False):
         if not m.TipoBeca.objects.filter(pk=tipo).exists(): raise serializers.ValidationError({"tipo_beca": "Tipo desconocido."})
         qs = qs.filter(tipo_beca_id=tipo)
     now = timezone.now()
+    today = timezone.localdate(now)
     current = Q(activa=True, revision="validada")
     started = Q(apertura__isnull=True) | Q(apertura__lte=now)
-    states = {"abierta": current & started & Q(cierre__gt=now), "cerrada": current & Q(cierre__lte=now),
-              "proxima": current & Q(apertura__gt=now) & (Q(cierre__isnull=True) | Q(cierre__gt=now)),
-              "sin_fecha": current & started & Q(cierre__isnull=True)}
+    states = {"abierta": current & started & (Q(cierre__gt=now) | Q(cierre_dia__gt=today)),
+              "cerrada": current & (Q(cierre__lte=now) | Q(cierre_dia__lt=today)),
+              "cierre_hoy": current & started & Q(cierre_dia=today),
+              "proxima": current & Q(apertura__gt=now) & (Q(cierre__isnull=True) | Q(cierre__gt=now)) & (Q(cierre_dia__isnull=True) | Q(cierre_dia__gte=today)),
+              "sin_fecha": current & started & Q(cierre__isnull=True, cierre_dia__isnull=True)}
     if admin: states.update(borrador=Q(activa=True, revision="pendiente"), pausada=Q(activa=False))
     if "estado" in p:
         if p["estado"] not in states: raise serializers.ValidationError({"estado": "Estado no permitido."})
@@ -132,8 +137,10 @@ def filtrar(request, qs, admin=False):
         if p["revision"] not in dict(m.REVISIONES): raise serializers.ValidationError({"revision": "Revisión no permitida."})
         qs = qs.filter(revision=p["revision"])
     order = p.get("orden", "recientes")
-    orders = {"recientes": ["-actualizado_en", "-id"], "titulo": ["titulo", "id"], "cierre": [F("cierre").asc(nulls_last=True), "id"]}
+    orders = {"recientes": ["-actualizado_en", "-id"], "titulo": ["titulo", "id"], "cierre": [F("fecha_cierre_orden").asc(nulls_last=True), "id"]}
     if order not in orders: raise serializers.ValidationError({"orden": "Orden no permitido."})
+    if order == "cierre":
+        qs = qs.annotate(fecha_cierre_orden=Coalesce("cierre_dia", TruncDate("cierre", tzinfo=ZoneInfo("America/Guayaquil"))))
     return qs.order_by(*orders[order]).distinct()
 
 

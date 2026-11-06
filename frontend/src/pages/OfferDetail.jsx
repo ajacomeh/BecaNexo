@@ -7,11 +7,12 @@ import Message from '../components/Message'
 import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
 import Comparison from '../components/Comparison'
-import { display, date, stateLabel } from './offerDisplay'
+import { display, date, dayDate, stateLabel } from './offerDisplay'
 
 export function BenefitList({ records }) {
   return records.length ? <ul className="detail-list">{records.map((b) => <li key={b.id}><h3>{b.concepto}</h3>
-    <p>{b.porcentaje != null ? `${b.porcentaje} % de ${b.concepto}` : 'Porcentaje no especificado'} · {b.monto != null ? `${b.monto} ${b.moneda}` : 'Monto no especificado'}</p>
+    <p>{b.porcentaje != null ? `${b.porcentaje} % de ${b.concepto}` : 'Porcentaje no especificado'} · {b.monto != null ? `${b.monto} ${b.moneda}` : 'Importe fijo no especificado'}</p>
+    {b.tope_original && <p>Tope según las bases: {b.tope_original}{b.tope_monto != null && b.tope_moneda ? ` · Límite revisado: ${b.tope_monto} ${b.tope_moneda}` : ' · Moneda no confirmada o valor pendiente de revisión'}</p>}
     <p>Periodicidad: {display(b.periodicidad)}</p><p>{display(b.detalle)}</p></li>)}</ul> : <p>No especificado</p>
 }
 
@@ -88,12 +89,13 @@ export default function OfferDetail() {
     {!data && !error && <p role="status"><Icon name="loading" />Cargando convocatoria…</p>}
     {offer && <><div className="page-heading"><div><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p>{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div></div>
       {offer.estado === 'cerrada' && <Message kind="info">La fecha de cierre ya pasó. Esta oferta se conserva para consulta.</Message>}
+      {offer.estado === 'cierre_hoy' && <Message kind="info">El cierre está indicado solo por día. No se conoce la hora; consulta el sitio oficial antes de postular.</Message>}
       <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} />
       <Comparison key={offer.id} offerId={offer.id} catalogs={data.catalogs} />
       <section className="profile-card"><h2>Descripción y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
         <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Cobertura publicada</dt><dd>{display(offer.cobertura_tipo)}</dd></div>
-          <div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div><div><dt>Cierre</dt><dd>{date(offer.cierre)}</dd></div><div><dt>Cierre según fuente</dt><dd>{display(offer.cierre_original)}</dd></div>
-          <div><dt>Publicación en la fuente</dt><dd>{display(offer.fecha_publicacion)}</dd></div><div><dt>Gastos no cubiertos</dt><dd>{display(offer.gastos_no_cubiertos)}</dd></div><div><dt>Obligaciones</dt><dd>{display(offer.obligaciones_beneficiario)}</dd></div></dl><p className="small-note">Fechas y horas en America/Guayaquil.</p></section>
+          <div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div><div><dt>Cierre</dt><dd>{offer.cierre_dia ? `${dayDate(offer.cierre_dia)} (hora no informada)` : date(offer.cierre)}</dd></div><div><dt>Cierre según fuente</dt><dd>{display(offer.cierre_original)}</dd></div>
+          <div><dt>Publicación en la fuente</dt><dd>{display(offer.fecha_publicacion)}</dd></div><div><dt>Gastos no cubiertos</dt><dd>{display(offer.gastos_no_cubiertos)}</dd></div><div><dt>Obligaciones</dt><dd>{display(offer.obligaciones_beneficiario)}</dd></div></dl><p className="small-note">Los instantes se muestran en America/Guayaquil. Un cierre expresado solo como día no tiene hora confirmada.</p></section>
       <section className="profile-card"><h2>Beneficios comunes</h2><BenefitList records={offer.beneficios.filter((b) => !b.opcion_estudio)} /><p className="profile-note">Cada porcentaje corresponde exclusivamente al concepto financiado. No representa el costo total de estudiar.</p></section>
       <section className="profile-card"><h2>Requisitos comunes</h2><RequirementList records={offer.requisitos.filter((r) => !r.opcion_estudio && !isDocument(r, data.catalogs))} catalogs={data.catalogs} /></section>
       <Documentation offer={offer} catalogs={data.catalogs} />

@@ -4,6 +4,7 @@ import re
 from urllib.parse import urlsplit
 from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from rest_framework import serializers
 from perfiles.serializers import StrictModelSerializer
 from perfiles.models import Pais, Area
@@ -52,6 +53,12 @@ class ConvocatoriaSerializer(StrictModelSerializer):
         if v("institucion").pais.codigo != "EC": raise serializers.ValidationError({"institucion": "Oferente fuera del alcance ecuatoriano."})
         if v("apertura") and v("cierre") and v("apertura") > v("cierre"):
             raise serializers.ValidationError({"cierre": "No puede ser anterior a la apertura."})
+        if v("cierre") and v("cierre_dia"):
+            raise serializers.ValidationError({"cierre_dia": "Indica un instante o solo un día, no ambos."})
+        if v("cierre_dia") and not (v("cierre_original") or "").strip():
+            raise serializers.ValidationError({"cierre_original": "Conserva el texto original del cierre por día."})
+        if v("apertura") and v("cierre_dia") and timezone.localtime(v("apertura")).date() > v("cierre_dia"):
+            raise serializers.ValidationError({"cierre_dia": "El día de cierre no puede preceder al de apertura."})
         if "areas" in attrs and len(set(attrs["areas"])) != len(attrs["areas"]): raise serializers.ValidationError({"areas": "No repitas áreas."})
         identity = [v("institucion").pk, " ".join(v("titulo").casefold().split()), v("url_oficial") or ""]
         attrs["clave_deduplicacion"] = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
@@ -107,7 +114,7 @@ class BeneficioSerializer(AmbitoSerializer):
         model = m.Beneficio
         exclude = ("convocatoria",)
         read_only_fields = ("id",)
-        extra_kwargs = {"porcentaje": {"min_value": 0, "max_value": 100}, "monto": {"min_value": 0}}
+        extra_kwargs = {"porcentaje": {"min_value": 0, "max_value": 100}, "monto": {"min_value": 0}, "tope_monto": {"min_value": 0}}
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -115,6 +122,13 @@ class BeneficioSerializer(AmbitoSerializer):
         currency = v("moneda")
         if currency is not None and not re.fullmatch(r"[A-Z]{3}", currency): raise serializers.ValidationError({"moneda": "Usa el código monetario de tres letras mayúsculas (por ejemplo USD)."})
         if v("monto") is not None and not currency: raise serializers.ValidationError({"moneda": "Obligatoria cuando existe un monto."})
+        cap_currency = v("tope_moneda")
+        if cap_currency is not None and not re.fullmatch(r"[A-Z]{3}", cap_currency):
+            raise serializers.ValidationError({"tope_moneda": "Usa un código monetario confirmado de tres letras mayúsculas; si es desconocido, déjalo vacío."})
+        if cap_currency and v("tope_monto") is None:
+            raise serializers.ValidationError({"tope_moneda": "Primero indica el valor del tope."})
+        if (v("tope_monto") is not None or cap_currency) and not (v("tope_original") or "").strip():
+            raise serializers.ValidationError({"tope_original": "Conserva el literal original del tope."})
         return attrs
 
 

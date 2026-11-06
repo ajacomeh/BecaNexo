@@ -48,3 +48,19 @@ it('bloquea la creación cuando la validación informa impedimentos', () => {
   expect(screen.getByRole('button', { name: 'Crear borrador vinculado' })).toBeDisabled()
   expect(screen.getByText(/Revisión pendiente/)).toBeVisible()
 })
+
+it('conserva un tope literal separado del importe fijo al crear el borrador', async () => {
+  const write = vi.spyOn(offersApi, 'write').mockResolvedValue({ convocatoria_id: 25 })
+  show({ proposal: { ...proposal, datos: { ...proposal.datos,
+    beneficios: [{ id: 'b1', texto: 'Cobertura según bases', concepto: 'Matrícula', tope: '$3000', ambito: 'comun' }] } } })
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText('Correspondencia con la entidad oferente revisada'), 'Entidad cotejada')
+  await user.click(screen.getAllByLabelText('Incluir en el borrador')[1])
+  await user.type(screen.getByLabelText('Motivo y respaldo del mapeo'), 'Tope literal cotejado')
+  await user.click(screen.getByLabelText(/Confirmo el contenido seleccionado/))
+  await user.click(screen.getByRole('button', { name: 'Crear borrador vinculado' }))
+  expect(await screen.findByText('Editor abierto')).toBeVisible()
+  expect(write.mock.calls[0][2].beneficios[0].datos).toEqual(expect.objectContaining({
+    monto: null, moneda: null, tope_monto: null, tope_moneda: null, tope_original: '$3000'
+  }))
+})

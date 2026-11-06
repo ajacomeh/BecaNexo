@@ -1,12 +1,18 @@
 # Convocatorias y catálogo
 
+## Precisión de cierre y topes (bloque actual)
+
+`cierre` conserva un instante con hora confirmada. `cierre_dia` guarda solo la fecha cuando la fuente no informa hora; ambos son excluyentes. Un día exige `cierre_original` literal. En la fecha de cierre el estado es `cierre_hoy` (vigencia no confirmada); después de ese día es `cerrada`. `estado=cierre_hoy`, `estado=cerrada` y `orden=cierre` usan la fecha local de Ecuador. La revisión y la publicación editorial son independientes de ese estado temporal. No se crea automáticamente una hora final.
+
+`Beneficio.monto` sigue siendo un importe fijo. `tope_monto` es el límite numérico revisado, `tope_moneda` es un código confirmado y `tope_original` conserva el literal de la fuente. El literal puede existir sin número ni moneda confirmados; los valores numéricos exigen el literal. Ningún tope se convierte en monto fijo ni se presume USD. El detalle público muestra la precisión y la moneda no confirmada explícitamente. Los nuevos campos se añadieron mediante `convocatorias.0003` y `0004`, aplicadas en desarrollo el 06/11/2026; los registros previos permanecen sin reinterpretación.
+
 ## Decisiones del modelo
 
 Se implementan las nueve entidades solicitadas y AUD_EVENTO. Se reutilizan CAT_PAIS, CAT_AREA y CAT_IDIOMA y los dominios de nivel/modalidad de perfiles. No se crean ejecuciones de rastreo para entradas manuales.
 
 `revision` admite `pendiente` y `validada`, términos de las pantallas 17–18. Es revisión administrativa, no vigencia temporal. Una convocatoria se consulta públicamente solo con revisión validada, activa=True y oferente EC. Crear y editar (también detalles u oferente) deja revisión pendiente; publicar valida y marca validada/activa; pausar pone activa=False sin borrar. Volver a publicar realiza todas las validaciones. No se introduce un estado de archivo ajeno al diseño: la pausa conserva datos e historial.
 
-El estado calculado distingue borrador, pausada, próxima, abierta, cerrada y sin_fecha. Al alcanzar exactamente el instante de cierre se considera cerrada. Se usa America/Guayaquil y datetimes con zona; cierre NULL no afirma que esté abierta. Las cerradas publicadas permanecen consultables, claramente identificadas.
+El estado calculado distingue borrador, pausada, próxima, abierta, cierre_hoy, cerrada y sin_fecha. Al alcanzar exactamente el instante de cierre se considera cerrada. Se usa America/Guayaquil y datetimes con zona; cierre NULL no afirma que esté abierta. Las cerradas publicadas permanecen consultables, claramente identificadas.
 
 AUD_EVENTO mantiene actor obligatorio, acción, cambios y fecha. Adaptación explícita del ER: se implementa la referencia opcional a convocatoria, se añade institución opcional y una restricción XOR exige exactamente una de las dos. Fuente y configuración de motor se posponen junto a sus módulos (no se crean columnas sin FK ni registros ficticios). Cuando se incorporen, será necesaria una migración que amplíe el XOR. La institución adicional permite auditar su creación antes de existir una convocatoria. Se registran instantáneas antes/después, origen manual, identificador del actor y momento; no credenciales ni datos del perfil. El enlace oficial y las referencias de las bases conservan procedencia manual; TRA_PUBLICACION_FUENTE requiere ejecución real y se reserva al rastreo.
 

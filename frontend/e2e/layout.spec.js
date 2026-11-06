@@ -3,14 +3,14 @@ import { test, expect } from '@playwright/test'
 test('editar nombre en diálogo, cancelar, guardar y recargar con API simulada', async ({ page }) => {
   let nombre = 'Persona de prueba'
   let writes = 0
-  await fixtures(page, 'postulante')
+  await fixtures(page, 'administrador')
   await page.route('**/api/auth/me/', async route => {
     if (route.request().method() === 'PATCH') {
       expect(route.request().headers()['x-csrftoken']).toBeTruthy()
       nombre = route.request().postDataJSON().nombre.trim(); writes++
       return route.fulfill({ json: { nombre } })
     }
-    return route.fulfill({ json: { id: 99999, nombre, email: 'visual@example.com', rol: 'postulante' } })
+    return route.fulfill({ json: { id: 99999, nombre, email: 'visual@example.com', rol: 'administrador' } })
   })
   await page.setViewportSize({ width: 320, height: 700 })
   await page.goto('/becas')
@@ -35,7 +35,7 @@ test('editar nombre en diálogo, cancelar, guardar y recargar con API simulada',
 
 // Fixtures locales interceptadas: ninguna solicitud llega a la base de datos.
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }], areas: [], idiomas: [], tipos_beca: [], tipos_requisito: [], niveles: [], modalidades: [] }
-const offers = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, titulo: `Prueba visual ${i + 1}`, estado: i === 0 ? 'sin_fecha' : 'abierta', cierre: i === 0 ? null : '2027-12-01T04:59:00Z', institucion: { nombre: 'Entidad ficticia' }, beneficios: i === 1 ? [{ concepto: 'Matrícula', porcentaje: '80.00', opcion_estudio: null }] : [], opciones: [{ nivel: 'grado', modalidad: 'virtual', paises: [1, 2] }, { nivel: 'maestria', modalidad: 'presencial', paises: [1] }] }))
+const offers = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, titulo: `Prueba visual ${i + 1}`, estado: i === 0 ? 'sin_fecha' : i === 2 ? 'cierre_hoy' : 'abierta', cierre: i === 0 || i === 2 ? null : '2027-12-01T04:59:00Z', cierre_dia: i === 2 ? '2026-11-06' : null, institucion: { nombre: 'Entidad ficticia' }, beneficios: i === 1 ? [{ concepto: 'Matrícula', porcentaje: '80.00', opcion_estudio: null }] : i === 2 ? [{ concepto: 'Matrícula', porcentaje: '100.00', opcion_estudio: null, tope_original: '$3000', tope_moneda: null }] : [], opciones: [{ nivel: 'grado', modalidad: 'virtual', paises: [1, 2] }, { nivel: 'maestria', modalidad: 'presencial', paises: [1] }] }))
 
 async function fixtures(page, role) {
   await page.route('**/api/**', async route => {
@@ -158,15 +158,51 @@ test('catálogo compacto: secundarios, ordenación, limpieza y tarjeta', async (
   await page.getByRole('button', { name: 'Limpiar filtros' }).click()
   await expect(page).toHaveURL(/\/becas$/)
   await expect(page.getByText('80 % de matrícula')).toBeVisible()
+  await expect(page.getByText(/Tope según bases: \$3000 \(moneda no confirmada\)/)).toBeVisible()
+  await expect(page.getByText(/Día de cierre:.*hora no informada/)).toBeVisible()
   await expect(page.locator('.catalog-card').getByText('Fecha de cierre no informada', { exact: true })).toHaveCount(1)
   await page.locator('.catalog-card').first().scrollIntoViewIfNeeded()
   await page.screenshot({ path: info.outputPath('catalogo-tarjetas-desktop.png') })
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 })
     await noOverflow(page)
-    await page.locator('.catalog-card').first().scrollIntoViewIfNeeded()
+    await page.locator('.catalog-card').nth(2).scrollIntoViewIfNeeded()
     await page.screenshot({ path: info.outputPath(`catalogo-tarjeta-${width}.png`) })
   }
   await page.locator('.catalog-card').first().getByRole('link', { name: 'Guardar en favoritos' }).click()
   await expect(page).toHaveURL(/\/login\?next=%2Fbecas%2F1$/)
+})
+
+test('editor y detalle de precisión temporal y tope: móvil sin desbordamiento', async ({ page }, info) => {
+  const synthetic = { id: 7, version: 1, institucion: { id: 1, nombre: 'Entidad ficticia' }, titulo: 'Oferta sintética con cierre por día',
+    descripcion: 'Descripción sintética para comprobar el diseño.', url_oficial: 'https://example.org/oferta',
+    cierre: null, cierre_dia: '2026-11-06', cierre_original: '6 de noviembre de 2026',
+    estado: 'cierre_hoy', revision: 'pendiente', activa: true, opciones: [], requisitos: [],
+    beneficios: [{ id: 3, concepto: 'Matrícula', porcentaje: '100.00', monto: null, moneda: null,
+      tope_original: '$3000', tope_monto: null, tope_moneda: null, opcion_estudio: null }] }
+  await fixtures(page, 'administrador')
+  await page.route('**/api/gestion/convocatorias/7/**', route => route.fulfill({ json: synthetic }))
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('/gestion/convocatorias/7')
+    await expect(page.getByLabel('Día de cierre sin hora informada')).toHaveValue('2026-11-06')
+    await expect(page.getByLabel('Texto original del cierre')).toHaveValue('6 de noviembre de 2026')
+    await noOverflow(page)
+    await page.getByRole('button', { name: 'Editar', exact: true }).click()
+    await expect(page.getByLabel('Tope literal según las bases')).toHaveValue('$3000')
+    await noOverflow(page)
+    await page.getByLabel('Tope literal según las bases').scrollIntoViewIfNeeded()
+    await page.screenshot({ path: info.outputPath(`editor-precision-${width}.png`) })
+  }
+  await fixtures(page, null)
+  await page.route('**/api/becas/7/**', route => route.fulfill({ json: { ...synthetic, revision: 'validada', favorito_id: null } }))
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('/becas/7')
+    await expect(page.getByText(/El cierre está indicado solo por día/)).toBeVisible()
+    await expect(page.getByText(/Tope según las bases: \$3000/)).toBeVisible()
+    await noOverflow(page)
+    await page.getByText(/Tope según las bases: \$3000/).scrollIntoViewIfNeeded()
+    await page.screenshot({ path: info.outputPath(`detalle-precision-${width}.png`) })
+  }
 })

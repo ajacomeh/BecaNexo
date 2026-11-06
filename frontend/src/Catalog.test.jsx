@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { offersApi } from './api/client'
 import PublicCatalog from './pages/PublicCatalog'
 import CatalogCard from './components/CatalogCard'
+import { BenefitList } from './pages/OfferDetail'
 import { benefitSummary } from './pages/catalogPresentation'
 
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: null }) }))
@@ -97,5 +98,20 @@ it('conserva error y reintento sin mostrar resultados obsoletos', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
   expect(await screen.findByText('No hay convocatorias con estos filtros')).toBeVisible()
   const stateOptions = within(screen.getByLabelText('Estado')).getAllByRole('option', { hidden: true }).map(o => o.value)
-  expect(stateOptions).toEqual(['', 'abierta', 'cerrada', 'proxima', 'sin_fecha'])
+  expect(stateOptions).toEqual(['', 'abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'])
+})
+
+it('muestra día de cierre sin inventar hora ni estado de apertura', () => {
+  render(<MemoryRouter><CatalogCard catalogs={catalogs} offer={{ ...offer, estado: 'cierre_hoy', cierre_dia: '2026-11-06', cierre_original: '6 de noviembre de 2026' }} /></MemoryRouter>)
+  expect(screen.getByText('Cierra hoy · hora no informada')).toBeVisible()
+  expect(screen.getByText(/Día de cierre: 6 nov/)).toHaveTextContent('hora no informada')
+  expect(screen.queryByText(/23:59/)).not.toBeInTheDocument()
+})
+
+it('presenta el tope y advierte cuando la moneda no está confirmada', () => {
+  expect(benefitSummary([{ concepto: 'Matrícula', porcentaje: '100.00', tope_original: '$3000', tope_moneda: null }])[0]).toContain('moneda no confirmada')
+  render(<BenefitList records={[{ id: 1, concepto: 'Matrícula', porcentaje: '100.00', monto: null,
+    tope_original: '$3000', tope_monto: '3000.00', tope_moneda: null }]} />)
+  expect(screen.getByText(/Tope según las bases: \$3000/)).toHaveTextContent('Moneda no confirmada')
+  expect(screen.queryByText(/3000.00 USD/)).not.toBeInTheDocument()
 })

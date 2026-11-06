@@ -1,8 +1,14 @@
 # Propuestas de integración: bloque de trabajo fuera del catálogo
 
+## Estado operativo y precisión de datos
+
+`rastreo.0010`–`0012` ya están aplicadas en desarrollo y cerradas en los commits `280ca453` y `0b74132`. Las instrucciones inferiores que las llaman pendientes son registro histórico. El esquema `convocatorias.0003`–`0004` se probó en `test_becanexo_db`, se ensayó en una copia restaurada y se aplicó en desarrollo el 06/11/2026.
+
+Una propuesta puede conservar `cierre_original` y añadir `cierre_dia` (ISO `YYYY-MM-DD`) si la evidencia revisada respalda ese día. Al crear el borrador se guarda el día sin inventar hora; un beneficio candidato con `tope` conserva el literal en `tope_original`, sin escribirlo como `monto` ni atribuir moneda. Número y moneda se registran después como valores canónicos revisados, mediante los campos propios del beneficio. La mera presencia del literal no resuelve `PRECISION_TEMPORAL`, `TOPE_FUENTE` ni `TOPE_NO_REPRESENTADO`: la resolución sigue siendo una acción administrativa explícita con evidencia documental aprobada de la versión exacta, procedencia y hash/version canónicos. Los demás pendientes y la salvaguarda de publicación se mantienen. La precisión de apertura por día sigue sin representación canónica.
+
 ## Segundo bloque: creación de borrador y procedencia (05/11/2026)
 
-Las rutas nuevas requieren administrador activo y sesión Django; POST exige CSRF y las respuestas de cuenta usan `no-store`. **Migraciones rastreo 0010–0012 pendientes en desarrollo**; las rutas nuevas necesitan su aplicación posterior, con respaldo y revisión del plan. La sección inferior conserva el contrato y resultados históricos del primer bloque.
+Las rutas nuevas requieren administrador activo y sesión Django; POST exige CSRF y las respuestas de cuenta usan `no-store`. Las migraciones rastreo 0010–0012 están aplicadas en desarrollo; la sección inferior conserva el contrato y resultados históricos del primer bloque.
 
 | Ruta | Uso |
 | --- | --- |
@@ -16,9 +22,9 @@ El servicio vuelve a evaluar revisiones, observación, integridad documental, in
 
 La resolución envía `{clave_accion, pendiente_id, evidencia_id, motivo, version_convocatoria, hash_convocatoria}`. Solo se registra si el pendiente pertenece a la aplicación, la evidencia es de la versión exacta y tiene revisión documental vigente, y los datos actuales acreditan la corrección. Para un candidato se exige además la referencia de procedencia de ese candidato y correspondencia de ámbito, opción y destino. Cambiar la convocatoria invalida una resolución anterior: se permite rectificar con otra fila. Un dato que el modelo todavía no representa no puede resolverse mediante este endpoint. El editor muestra historial y enlaces administrativos de procedencia; la API pública no muestra estos campos.
 
-Preparación operativa posterior, **no ejecutada en desarrollo en esta tarea**: hacer respaldo conjunto de PostgreSQL y archivo documental; desde la raíz consultar `.\.venv\Scripts\python.exe backend\manage.py showmigrations rastreo` y `.\.venv\Scripts\python.exe backend\manage.py migrate rastreo --plan`; revisar el SQL de 0010–0012 y aplicar, solo tras aprobación operativa, `.\.venv\Scripts\python.exe backend\manage.py migrate rastreo 0012_permitir_rectificaciones_integracion`.
+Procedimiento histórico de rastreo.0010–0012: respaldo conjunto y restauración aislada, revisión del plan/SQL y aplicación autorizada en desarrollo. Ya se completó; no repetirlo por esta ampliación de campos de convocatorias.
 
-Revisión manual **posterior a la migración**, todavía no realizada con desarrollo: entrar como administrador en `/gestion/rastreo`, abrir una publicación sintética revisada, confirmar contenido y omisiones, crear borrador y comprobar `/gestion/convocatorias/:id`; consultar procedencia; verificar que `/becas/:id` no la expone, y que publicación exige resolver pendientes. Guardar una resolución cambia auditoría. No usar SIAU real como dato de prueba.
+Revisión manual del segundo bloque realizada por el usuario con sesión administradora. Para revisar los campos de precisión de este bloque: abrir `/gestion/convocatorias/:id`, comprobar día sin hora y literal de tope en datos sintéticos, y consultar `/becas/:id` únicamente para una oferta de prueba publicada en entorno aislado. Guardar o resolver modifica datos y auditoría; no usar SIAU real como dato de prueba.
 
 Implementación del 05/11/2026. Las migraciones rastreo 0008 y 0009 están **aplicadas en desarrollo según confirmación del usuario**, con respaldo previo y Django check satisfactorio. El usuario confirmó también la revisión manual de crear/continuar propuesta, guardado, historial y validación. No crea convocatorias, no habilita su vínculo y no publica.
 

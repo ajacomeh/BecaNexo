@@ -7,13 +7,34 @@ import { ApiError, offersApi } from './api/client'
 import Offers from './pages/Offers'
 import OfferEditor from './pages/OfferEditor'
 import { RequirementList } from './pages/OfferDetail'
-import { requirementFields } from './pages/offerFields'
+import { requirementFields, generalFields, benefitFields } from './pages/offerFields'
 
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: { nombre: 'Admin sintético', rol: 'administrador' }, logout: vi.fn() }) }))
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }], areas: [], idiomas: [], tipos_beca: [], tipos_requisito: [], niveles: [], modalidades: [] }
 
 describe('convocatorias', () => {
+  it('envía día de cierre sin hora y conserva el literal de origen', async () => {
+    const save = vi.fn().mockResolvedValue({})
+    render(<OfferForm fields={generalFields(catalogs, [{ id: 1, nombre: 'Entidad ficticia' }])} onSubmit={save} />)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText(/Título/), 'Oferta sintética')
+    await user.selectOptions(screen.getByLabelText(/Entidad oferente ecuatoriana/), '1')
+    await user.type(screen.getByLabelText('Día de cierre sin hora informada'), '2026-11-06')
+    await user.type(screen.getByLabelText('Texto original del cierre'), '6 de noviembre de 2026')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ cierre: null, cierre_dia: '2026-11-06', cierre_original: '6 de noviembre de 2026' }))
+  })
+
+  it('envía un tope literal sin convertirlo en importe fijo ni asignar moneda', async () => {
+    const save = vi.fn().mockResolvedValue({})
+    render(<OfferForm fields={benefitFields([])} onSubmit={save} />)
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText(/Concepto financiado/), 'Matrícula')
+    await user.type(screen.getByLabelText('Tope literal según las bases'), '$3000')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ monto: null, moneda: null, tope_original: '$3000', tope_monto: null, tope_moneda: null }))
+  })
   it('conserva entradas y presenta errores reales sin éxito ante rechazo', async () => {
     const save = vi.fn().mockRejectedValue(new ApiError('Revisa los datos.', 400, { titulo: ['Título inválido.'] }))
     render(<OfferForm fields={[{ name: 'titulo', label: 'Título' }]} onSubmit={save} />)

@@ -1,6 +1,7 @@
 """Snapshots de trabajo administrativos. Nunca escribe en el catálogo ni accede a red."""
 import hashlib
 import json
+from datetime import date
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from rest_framework import serializers
@@ -70,13 +71,26 @@ class Datos(Cerrado):
     url_oficial = text(2048)
     apertura_original = text(500)
     cierre_original = text(500)
+    cierre_dia = text(10)
     opciones = Candidato(many=True, required=False, max_length=50)
     beneficios = Candidato(many=True, required=False, max_length=50)
     requisitos = Candidato(many=True, required=False, max_length=100)
 
     validate_url_oficial = staticmethod(safe_url)
 
+    def validate_cierre_dia(self, value):
+        if not value:
+            return value
+        try:
+            if date.fromisoformat(value).isoformat() != value:
+                raise ValueError
+        except ValueError:
+            raise serializers.ValidationError('Indica un día válido en formato AAAA-MM-DD, sin hora.')
+        return value
+
     def validate(self, data):
+        if data.get('cierre_dia') and not (data.get('cierre_original') or '').strip():
+            raise serializers.ValidationError({'cierre_original': 'Conserva el texto literal de la fecha revisada.'})
         ids = [item['id'] for kind in ('opciones', 'beneficios', 'requisitos') for item in data.get(kind, [])]
         if len(set(ids)) != len(ids):
             raise serializers.ValidationError('Los identificadores de elementos no pueden repetirse.')
