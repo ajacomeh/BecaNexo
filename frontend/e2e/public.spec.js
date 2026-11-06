@@ -76,6 +76,17 @@ test('consulta pública y acceso al login sin escribir datos', async ({ page }, 
   await expect(page.getByRole('link', { name: 'Iniciar sesión' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Crear cuenta' })).toBeVisible()
   await expect(page.getByText('Crear convocatoria', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('article').first()).toBeVisible()
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth,
+      elements: [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1 || el.scrollWidth > el.clientWidth + 5).slice(0, 8).map(el => `${el.tagName}.${el.className?.baseVal || el.className}[${el.clientWidth}/${el.scrollWidth}]`) }))
+    expect(overflow.width, `Catálogo ${width}px: ${JSON.stringify(overflow.elements)}`).toBeLessThanOrEqual(width)
+    await page.screenshot({ path: testInfo.outputPath(`catalog-viewport-${width}.png`) })
+    await page.getByRole('article').first().scrollIntoViewIfNeeded()
+    await page.screenshot({ path: testInfo.outputPath(`catalog-card-${width}.png`) })
+    await page.screenshot({ path: testInfo.outputPath(`catalog-${width}.png`), fullPage: true })
+  }
   const response = await page.request.get('/api/becas/', { params: { page_size: 1 } })
   expect(response.ok()).toBeTruthy()
   const offer = (await response.json()).results[0]
@@ -84,9 +95,16 @@ test('consulta pública y acceso al login sin escribir datos', async ({ page }, 
   await page.getByRole('button', { name: 'Aplicar filtros' }).click()
   await page.getByRole('article').filter({ has: page.getByRole('heading', { name: offer.titulo, exact: true }) }).getByRole('link', { name: 'Ver detalle' }).click()
   await expect(page.getByRole('heading', { name: offer.titulo })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Ir al sitio oficial' })).toHaveAttribute('href', offer.url_oficial)
+  await expect(page.getByRole('link', { name: 'Ver convocatoria oficial' })).toHaveAttribute('href', offer.url_oficial)
   await expect(page.getByText('La postulación se realiza en la plataforma de la entidad oferente.')).toBeVisible()
-  await page.screenshot({ path: testInfo.outputPath('public-detail.png'), fullPage: true })
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: innerWidth,
+      elements: [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1 || el.scrollWidth > el.clientWidth + 5).slice(0, 8).map(el => `${el.tagName}.${el.className?.baseVal || el.className}[${el.clientWidth}/${el.scrollWidth}]`) }))
+    expect(overflow.width, `Detalle ${width}px: ${JSON.stringify(overflow.elements)}`).toBeLessThanOrEqual(width)
+    await page.screenshot({ path: testInfo.outputPath(`detail-viewport-${width}.png`) })
+    await page.screenshot({ path: testInfo.outputPath(`public-detail-${width}.png`), fullPage: true })
+  }
   await page.getByRole('link', { name: 'Guardar en favoritos' }).click()
   await expect(page).toHaveURL(new RegExp(`/login\\?next=%2Fbecas%2F${offer.id}$`))
   await expect(page.getByRole('heading', { name: 'Inicia sesión' })).toBeVisible()
@@ -95,4 +113,39 @@ test('consulta pública y acceso al login sin escribir datos', async ({ page }, 
   await page.goto('/favoritos')
   await expect(page).toHaveURL(/\/login$/)
   expect(mutations).toEqual([])
+})
+
+test('opciones múltiples y apartados consultables en escritorio y móvil sin escrituras', async ({ page, request }, testInfo) => {
+  const writes = []
+  page.on('request', req => { if (req.url().includes('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(req.method())) writes.push(req.url()) })
+  const catalog = await request.get('/api/becas/', { params: { page_size: 50 } })
+  expect(catalog.ok()).toBeTruthy()
+  const offer = (await catalog.json()).results.find(item => item.opciones?.length > 1)
+  expect(offer, 'Se necesita una convocatoria pública con varias opciones para esta revisión de lectura.').toBeTruthy()
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`/becas/${offer.id}`)
+    const options = page.locator('article.offer-option')
+    await expect(options).toHaveCount(offer.opciones.length)
+    const first = options.first()
+    await first.scrollIntoViewIfNeeded()
+    await first.evaluate(element => element.scrollIntoView({ block: 'start' }))
+    await page.screenshot({ path: testInfo.outputPath(`option-summary-${width}.png`) })
+    const benefits = first.locator('details.offer-disclosure').first()
+    const requirements = first.locator('details.offer-disclosure').nth(1)
+    const documents = first.locator('details.offer-disclosure').nth(2)
+    await expect(benefits).not.toHaveAttribute('open', '')
+    await expect(requirements).toHaveAttribute('open', '')
+    await benefits.locator('summary').focus()
+    await page.keyboard.press('Enter')
+    await expect(benefits).toHaveAttribute('open', '')
+    await documents.locator('summary').focus()
+    await page.keyboard.press('Space')
+    await expect(documents).toHaveAttribute('open', '')
+    await first.scrollIntoViewIfNeeded()
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth)
+    expect(overflow, `Detalle con varias opciones a ${width}px`).toBeLessThanOrEqual(width)
+    await page.screenshot({ path: testInfo.outputPath(`options-${width}.png`) })
+  }
+  expect(writes).toEqual([])
 })

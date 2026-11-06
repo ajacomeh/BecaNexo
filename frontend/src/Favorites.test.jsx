@@ -58,6 +58,15 @@ describe('favoritos', () => {
     expect(await screen.findByText('Aún no tienes favoritos')).toBeVisible()
   })
 
+  it('no inventa el cierre de una oferta guardada cuando el resumen no incluye la fecha', async () => {
+    const row = { id: 10, disponible: true, convocatoria: { id: 3, titulo: 'Oferta de prueba', institucion: 'Entidad', estado: 'cierre_hoy', cierre: null } }
+    vi.spyOn(offersApi, 'get').mockResolvedValue({ count: 1, page_size: 12, results: [row] })
+    render(<MemoryRouter><Favorites /></MemoryRouter>)
+    expect(await screen.findByText('Oferta de prueba')).toBeVisible()
+    expect(screen.getByText('Cierre').nextElementSibling).toHaveTextContent('Consulta el detalle para confirmar el cierre')
+    expect(screen.getByRole('link', { name: 'Ver convocatoria' })).toHaveAttribute('href', '/becas/3')
+  })
+
   it('presenta carga, error y reintento del listado', async () => {
     vi.spyOn(offersApi, 'get').mockRejectedValueOnce(new ApiError('No hay conexión.')).mockResolvedValue({ count: 0, results: [] })
     render(<MemoryRouter><Favorites /></MemoryRouter>)
