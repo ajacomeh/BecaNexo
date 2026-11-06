@@ -6,7 +6,7 @@ import Message from './Message'
 import ProfileForm from './ProfileForm'
 import ConfirmDelete from './ConfirmDelete'
 
-export default function ProfileRecords({ resource, title, singular, fields, initial, describe }) {
+export default function ProfileRecords({ resource, anchorId, title, singular, fields, initial, describe }) {
   const [records, setRecords] = useState(initial)
   const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
@@ -17,7 +17,7 @@ export default function ProfileRecords({ resource, title, singular, fields, init
     setEditing(null); setNotice('Cambios guardados.')
   }
   return <section className="profile-card" aria-label={title}>
-    <h2>{title}</h2>
+    <h2 id={anchorId} className={anchorId ? 'profile-anchor' : undefined} tabIndex={anchorId ? -1 : undefined}>{title}</h2>
     {records.length === 0 && <p className="empty-note">Aún no has registrado {title.toLowerCase()}. La ausencia de datos no significa que no cumplas un requisito.</p>}
     <ul className="record-list">{records.map((row) => <li key={row.id}>
       <span>{describe(row)}</span><div className="record-actions">

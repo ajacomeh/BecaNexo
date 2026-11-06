@@ -49,6 +49,19 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
 })
 
+it.each([
+  ['/perfil#datos-personales', 'Datos personales y residencia'],
+  ['/perfil#formacion-academica', 'Formación académica'],
+  ['/perfil#experiencia', 'Experiencia relevante'],
+  ['/preferencias#idiomas', 'Idiomas declarados'],
+  ['/preferencias#preferencias', 'Preferencias de estudio'],
+  ['/preferencias#disponibilidad', 'Disponibilidad declarada'],
+])('enfoca el apartado solicitado al abrir %s', async (path, title) => {
+  mount(path)
+  const heading = await screen.findByRole('heading', { name: title })
+  await waitFor(() => expect(heading).toHaveFocus())
+})
+
 it('carga, edita y guarda el perfil propio con CSRF', async () => {
   mount()
   const city = await screen.findByLabelText('Ciudad de residencia')

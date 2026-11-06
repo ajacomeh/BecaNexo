@@ -1,17 +1,21 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import Comparison from './components/Comparison'
 import { AuthContext } from './auth/context'
 import { offersApi, ApiError } from './api/client'
 
-const catalogs = { paises: [], idiomas: [], areas: [], tipos_requisito: [] }
+const catalogs = { paises: [], idiomas: [], areas: [], tipos_requisito: [
+  { codigo: 'NACIONALIDAD', nombre: 'Nacionalidad' }, { codigo: 'IDIOMA', nombre: 'Idioma' },
+  { codigo: 'DEDICACION', nombre: 'Dedicación' }, { codigo: 'ACREDITACION', nombre: 'Acreditación' },
+] }
 const item = { id: 1, tipo: 'IDIOMA', descripcion: 'Inglés B2', obligatorio: true, ambito: 'comun', resultado: 'cumple', explicacion: 'Coincide según tus datos declarados.', dato_declarado: { idioma: 'en', nivel: 'B2' }, condicion_exigida: { valores: { nivel_minimo: 'B2' } }, comprobacion_externa: false }
 const option = { id: 1, programa: 'Programa de prueba', nivel: 'maestria', modalidad: 'virtual', destinos: ['Ecuador'], resultado: 'cumple', resumen: 'Coincide según tus datos declarados', requisitos: [item], verificaciones_externas_pendientes: 0 }
 const response = { aviso: 'La entidad oferente verifica los documentos.', criterio_destacada: 'Primera coincidencia declarada, sin ranking.', opcion_destacada_id: 1, opciones: [option] }
+function LocationProbe() { const location = useLocation(); return <span data-testid="current-route">{location.pathname}{location.hash}</span> }
 function mount(user = { id: 1, rol: 'postulante' }) {
-  render(<MemoryRouter><AuthContext.Provider value={{ user }}><Comparison offerId={12} catalogs={catalogs} /></AuthContext.Provider></MemoryRouter>)
+  render(<MemoryRouter><AuthContext.Provider value={{ user }}><Comparison offerId={12} catalogs={catalogs} /><LocationProbe /></AuthContext.Provider></MemoryRouter>)
 }
 beforeEach(() => { vi.spyOn(offersApi, 'get').mockResolvedValue(response) })
 
@@ -95,9 +99,112 @@ it('muestra destinos con resultados diferentes sin ocultar el incompatible', asy
   mount()
   await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
   const summary = await screen.findByText('España · No coincide con un requisito obligatorio')
+  expect(screen.queryByRole('region', { name: 'Resumen para Ecuador' })).not.toBeInTheDocument()
   expect(summary).toBeVisible()
   await userEvent.click(summary)
+  expect(screen.getByRole('region', { name: 'Resumen para España' })).toBeVisible()
   expect(screen.getByText('Traslado presencial obligatorio')).toBeVisible()
   expect(screen.getAllByRole('article')).toHaveLength(1)
   expect(screen.queryByText(/identificador/)).not.toBeInTheDocument()
+})
+
+it('resume los tres estados antes del detalle y distingue el estado general', async () => {
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'no_cumple', requisitos: [
+    item,
+    { ...item, id: 2, resultado: 'no_cumple', tipo: 'DEDICACION', descripcion: 'Dedicación completa' },
+    { ...item, id: 3, resultado: 'desconocido', tipo: 'ACREDITACION', descripcion: 'Certificado externo', comprobacion_externa: true },
+  ] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  const summary = await screen.findByRole('region', { name: 'Resumen superior: Programa de prueba' })
+  expect(within(summary).getByText('Cumplidos').previousSibling).toHaveTextContent('1')
+  expect(within(summary).getByText('Incumplidos').previousSibling).toHaveTextContent('1')
+  expect(within(summary).getByText('Sin información suficiente').previousSibling).toHaveTextContent('1')
+  expect(within(summary).getByRole('list', { name: 'Coincidencias declaradas' })).toHaveTextContent('Idioma')
+  expect(within(summary).getByRole('list', { name: 'Incumplimientos declarados' })).toHaveTextContent('Dedicación')
+  expect(within(summary).getByRole('list', { name: 'Información pendiente' })).toHaveTextContent('Acreditación')
+  expect(summary).toHaveTextContent('requisito obligatorio que no coincide')
+  expect(screen.getByRole('heading', { name: 'Incumplimientos declarados' })).toBeVisible()
+  expect(summary.compareDocumentPosition(screen.getByText('Dedicación completa')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.queryByText(/probabilidad de adjudicación/i)).not.toBeInTheDocument()
+})
+
+it('ofrece rutas contextuales solo para datos actualizables y renueva al volver', async () => {
+  const pending = { ...item, resultado: 'desconocido', explicacion: 'Falta nivel declarado.', seccion_perfil: 'idiomas' }
+  offersApi.get.mockResolvedValueOnce({ ...response, opciones: [{ ...option, resultado: 'desconocido', requisitos: [pending] }] })
+    .mockResolvedValueOnce(response)
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  const link = await screen.findByRole('link', { name: 'Actualizar idiomas y niveles' })
+  expect(link).toHaveAttribute('href', '/preferencias#idiomas')
+  expect(screen.getByRole('button', { name: 'Actualizar perfil' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Actualizar preferencias' })).toBeVisible()
+  fireEvent.focus(window)
+  await screen.findByRole('region', { name: 'Resumen superior: Programa de prueba' })
+  expect(await screen.findByText('Coincidencias declaradas')).toBeVisible()
+  expect(screen.queryByRole('link', { name: 'Actualizar idiomas y niveles' })).not.toBeInTheDocument()
+  expect(offersApi.get).toHaveBeenCalledTimes(2)
+})
+
+it('dirige los botones superiores a pantallas distintas y conserva el enlace específico de disponibilidad', async () => {
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'no_cumple', requisitos: [
+    { ...item, tipo: 'DEDICACION', resultado: 'no_cumple', seccion_perfil: 'disponibilidad' },
+  ] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  await screen.findByRole('region', { name: 'Resumen superior: Programa de prueba' })
+  await userEvent.click(screen.getByRole('button', { name: 'Actualizar perfil' }))
+  expect(screen.getByTestId('current-route')).toHaveTextContent('/perfil')
+  expect(screen.getByRole('link', { name: 'Actualizar disponibilidad' })).toHaveAttribute('href', '/preferencias#disponibilidad')
+  await userEvent.click(screen.getByRole('button', { name: 'Actualizar preferencias' }))
+  expect(screen.getByTestId('current-route')).toHaveTextContent('/preferencias#preferencias')
+})
+
+it('el botón de perfil enfoca formación cuando es la corrección pertinente', async () => {
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'desconocido', requisitos: [
+    { ...item, tipo: 'FORMACION', resultado: 'desconocido', seccion_perfil: 'formacion-academica' },
+  ] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  await screen.findByRole('region', { name: 'Resumen superior: Programa de prueba' })
+  await userEvent.click(screen.getByRole('button', { name: 'Actualizar perfil' }))
+  expect(screen.getByTestId('current-route')).toHaveTextContent('/perfil#formacion-academica')
+})
+
+it('presenta disponibilidad completa como coincidencia con requisito parcial', async () => {
+  const dedication = { ...item, tipo: 'DEDICACION', descripcion: 'Se exige tiempo parcial', resultado: 'cumple',
+    dato_declarado: { dedicacion: 'completa' }, condicion_exigida: { valores: { valores_admitidos: ['parcial'] } } }
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, requisitos: [dedication] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  const summary = await screen.findByRole('region', { name: 'Resumen superior: Programa de prueba' })
+  expect(within(summary).getByRole('list', { name: 'Coincidencias declaradas' })).toHaveTextContent('Dedicación')
+  expect(within(summary).getByText('Incumplidos').previousSibling).toHaveTextContent('0')
+  expect(screen.getByText('Se exige tiempo parcial')).toBeVisible()
+  expect(screen.queryByRole('heading', { name: 'Opciones con incumplimientos obligatorios' })).not.toBeInTheDocument()
+})
+
+it('no sugiere editar el perfil para una acreditación externa o una regla sin revisión', async () => {
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'desconocido', requisitos: [
+    { ...item, id: 2, tipo: 'ACREDITACION', resultado: 'desconocido', seccion_perfil: null, comprobacion_externa: true },
+    { ...item, id: 3, tipo: 'EDAD', resultado: 'desconocido', seccion_perfil: null },
+  ] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  await screen.findByRole('heading', { name: 'Programa de prueba' })
+  expect(screen.queryByRole('link', { name: /Actualizar (datos|idiomas|disponibilidad)/ })).not.toBeInTheDocument()
+})
+
+it.each([
+  ['NACIONALIDAD', 'datos-personales', 'Actualizar datos personales', '/perfil#datos-personales'],
+  ['FORMACION', 'formacion-academica', 'Actualizar formación académica', '/perfil#formacion-academica'],
+  ['EXPERIENCIA', 'experiencia', 'Actualizar experiencia', '/perfil#experiencia'],
+  ['DEDICACION', 'disponibilidad', 'Actualizar disponibilidad', '/preferencias#disponibilidad'],
+])('enlaza %s con su apartado editable', async (type, section, label, href) => {
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'no_cumple', requisitos: [
+    { ...item, tipo: type, resultado: 'no_cumple', seccion_perfil: section },
+  ] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  expect(await screen.findByRole('link', { name: label })).toHaveAttribute('href', href)
 })

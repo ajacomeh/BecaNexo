@@ -71,9 +71,59 @@ class ComparacionTests(TestCase):
 
     def test_dato_ausente_y_perfil_ausente_no_son_incumplimiento(self):
         self.regla("IDIOMA", {"codigo_idioma": "en", "nivel_minimo": "B2"})
-        self.assertEqual(self.resultado()["resultado"], "desconocido")
+        result = self.resultado()
+        self.assertEqual(result["resultado"], "desconocido")
+        self.assertEqual(result["requisitos"][0]["seccion_perfil"], "idiomas")
         self.client.force_login(self.other)
-        self.assertEqual(self.resultado()["resultado"], "desconocido")
+        result = self.resultado()
+        self.assertEqual(result["resultado"], "desconocido")
+        self.assertEqual(result["requisitos"][0]["seccion_perfil"], "idiomas")
+
+    def test_dedicacion_disponible_cubre_tiempo_parcial_sin_confundir_traslado(self):
+        # Sin requisito de dedicación no se crea un incumplimiento artificial.
+        self.perfil.dedicacion_disponible = "parcial"
+        self.perfil.disponible_traslado = False
+        self.perfil.save()
+        self.assertEqual(self.resultado()["requisitos"], [])
+        rule = self.regla("DEDICACION", {"valores_admitidos": ["completa"]})
+        expected = {
+            "completa": {"completa": "cumple", "parcial": "cumple", "ambas": "no_cumple"},
+            "parcial": {"completa": "no_cumple", "parcial": "cumple", "ambas": "no_cumple"},
+            "ambas": {"completa": "cumple", "parcial": "cumple", "ambas": "cumple"},
+        }
+        for available, requirements in expected.items():
+            self.perfil.dedicacion_disponible = available
+            self.perfil.save(update_fields=["dedicacion_disponible"])
+            for required, state in requirements.items():
+                with self.subTest(disponible=available, exigido=required):
+                    rule.valor_estructurado = {"valores_admitidos": [required]}
+                    rule.save(update_fields=["valor_estructurado"])
+                    alternative = self.resultado()
+                    result = alternative["requisitos"][0]
+                    self.assertEqual(result["resultado"], state)
+                    self.assertEqual(alternative["resultado"], state)
+                    self.assertEqual(result["seccion_perfil"], "disponibilidad" if state == "no_cumple" else None)
+        self.perfil.dedicacion_disponible = None
+        self.perfil.save(update_fields=["dedicacion_disponible"])
+        alternative = self.resultado()
+        self.assertEqual(alternative["resultado"], "desconocido")
+        self.assertEqual(alternative["requisitos"][0]["resultado"], "desconocido")
+        self.assertEqual(alternative["requisitos"][0]["seccion_perfil"], "disponibilidad")
+
+    def test_enlaces_solo_para_datos_del_perfil_y_perfil_sin_declarar(self):
+        nationality = self.regla("NACIONALIDAD", {"codigos_pais": ["EC"]})
+        self.client.force_login(self.other)
+        first = self.resultado()["requisitos"][0]
+        self.assertEqual(first["resultado"], "desconocido")
+        self.assertEqual(first["seccion_perfil"], "datos-personales")
+        self.client.force_login(self.user)
+        nationality.activo = False
+        nationality.save(update_fields=["activo"])
+        self.regla("EDAD", {"maximo": 30})  # Falta fecha publicada: no se resuelve desde el perfil.
+        self.regla("ACREDITACION", {"certificados_admitidos": "Documento oficial"})
+        for item in self.resultado()["requisitos"]:
+            self.assertEqual(item["resultado"], "desconocido")
+            self.assertIsNone(item["seccion_perfil"])
 
     def test_mcer_nivel_inferior_igual_y_superior(self):
         self.regla("IDIOMA", {"codigo_idioma": "en", "nivel_minimo": "B2"})

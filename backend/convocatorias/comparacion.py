@@ -13,22 +13,28 @@ ETIQUETAS = {
     "no_cumple": "No coincide con un requisito obligatorio",
     "desconocido": "Pendiente de comprobar",
 }
+SECCIONES_PERFIL = {
+    "NACIONALIDAD": "datos-personales", "EDAD": "datos-personales", "RESIDENCIA": "datos-personales",
+    "FORMACION": "formacion-academica", "TITULO_AREA": "formacion-academica", "PROMEDIO": "formacion-academica",
+    "IDIOMA": "idiomas", "EXPERIENCIA": "experiencia", "DEDICACION": "disponibilidad", "TRASLADO": "disponibilidad",
+}
 
 
 def conclusion(coincide, dato):
     return ("cumple" if coincide else "no_cumple",
             "Coincide según tus datos declarados; no acredita la condición." if coincide else
-            "El dato declarado no coincide con la condición publicada; no es una decisión de adjudicación.", dato)
+            "El dato declarado no coincide con la condición publicada; no es una decisión de adjudicación.", dato,
+            not coincide)
 
 
-def pendiente(motivo, dato=None):
-    return "desconocido", motivo, dato
+def pendiente(motivo, dato=None, actualizable=False):
+    return "desconocido", motivo, dato, actualizable
 
 
 def academico(codigo, valor, formaciones, equivalencias):
     """Nunca toma título de una fila y área/promedio de otra."""
     if not formaciones:
-        return pendiente("No has declarado formaciones; no se interpreta como ausencia de estudios.")
+        return pendiente("No has declarado formaciones; no se interpreta como ausencia de estudios.", actualizable=True)
     intentos = []
     for f in formaciones:
         if codigo == "FORMACION":
@@ -55,13 +61,14 @@ def academico(codigo, valor, formaciones, equivalencias):
             elif estados and all(e is True for e in estados):
                 intentos.append(conclusion(True, dato))
             else:
-                intentos.append(pendiente("Falta título/área o una equivalencia de títulos revisada. No se infiere equivalencia legal.", dato))
+                falta_dato = (bool(valor.get("areas_admitidas")) and f.area_id is None) or (bool(valor.get("titulos_admitidos")) and not f.nombre_titulo)
+                intentos.append(pendiente("Falta título/área o una equivalencia de títulos revisada. No se infiere equivalencia legal.", dato, falta_dato))
         else:
             dato = {"promedio": str(f.promedio) if f.promedio is not None else None,
                     "escala_min": str(f.escala_min) if f.escala_min is not None else None,
                     "escala_max": str(f.escala_max) if f.escala_max is not None else None}
             if f.promedio is None:
-                intentos.append(pendiente("Falta promedio con su escala original.", dato))
+                intentos.append(pendiente("Falta promedio con su escala original.", dato, True))
             elif f.escala_min != Decimal(str(valor["escala_min"])) or f.escala_max != Decimal(str(valor["escala_max"])):
                 intentos.append(pendiente("Las escalas difieren; no hay una conversión ejecutable aprobada. El texto de equivalencia no se interpreta automáticamente.", dato))
             else:
@@ -78,17 +85,19 @@ def comparar_dato(r, perfil, formaciones, idiomas, destino=None):
     if codigo in EXTERNOS:
         return pendiente("La entidad oferente debe comprobar esta condición. BecaNexo no recibe ni acredita documentos.")
     if codigo == "TRASLADO" and not v["requerido"]:
-        return "cumple", "La condición publicada indica expresamente que no se requiere traslado.", None
+        return "cumple", "La condición publicada indica expresamente que no se requiere traslado.", None, False
     if perfil is None:
-        return pendiente("Aún no has declarado tu perfil. Completa los datos necesarios para comparar.")
+        return pendiente("Aún no has declarado tu perfil. Completa los datos necesarios para comparar.", actualizable=codigo in SECCIONES_PERFIL)
     if codigo in ACADEMICOS:
         return academico(codigo, v, formaciones, r.equivalencias)
     if codigo == "NACIONALIDAD":
+        if perfil.nacionalidad_id is None:
+            return pendiente("Falta declarar la nacionalidad.", actualizable=True)
         return conclusion(perfil.nacionalidad.codigo in v["codigos_pais"], {"nacionalidad": perfil.nacionalidad.codigo})
     if codigo == "EDAD":
         nacimiento, fecha = perfil.fecha_nacimiento, r.fecha_referencia
         if nacimiento is None or fecha is None:
-            return pendiente("Falta fecha de nacimiento o fecha de referencia publicada; no se utiliza la fecha de hoy.")
+            return pendiente("Falta fecha de nacimiento o fecha de referencia publicada; no se utiliza la fecha de hoy.", actualizable=nacimiento is None and fecha is not None)
         if nacimiento > fecha:
             return pendiente("La fecha de referencia es anterior al nacimiento declarado.")
         edad = fecha.year - nacimiento.year - ((fecha.month, fecha.day) < (nacimiento.month, nacimiento.day))
@@ -97,7 +106,7 @@ def comparar_dato(r, perfil, formaciones, idiomas, destino=None):
     if codigo == "IDIOMA":
         nivel = idiomas.get(v["codigo_idioma"])
         if nivel is None:
-            return pendiente("Falta idioma o nivel declarado; no se interpreta como desconocimiento del idioma.")
+            return pendiente("Falta idioma o nivel declarado; no se interpreta como desconocimiento del idioma.", actualizable=True)
         orden = [n for n, _ in MCER]
         if nivel not in orden:
             return pendiente("El nivel declarado no pertenece al marco MCER soportado.")
@@ -106,8 +115,13 @@ def comparar_dato(r, perfil, formaciones, idiomas, destino=None):
         return experiencia(r, perfil)
     if codigo == "DEDICACION":
         if perfil.dedicacion_disponible is None:
-            return pendiente("Falta declarar disponibilidad de dedicación.")
-        return conclusion(perfil.dedicacion_disponible == "ambas" or perfil.dedicacion_disponible in v["valores_admitidos"], {"dedicacion": perfil.dedicacion_disponible})
+            return pendiente("Falta declarar disponibilidad de dedicación.", actualizable=True)
+        # Tiempo completo permite participar también a tiempo parcial. "Ambas" del
+        # requisito conserva su significado propio y no se satisface solo con completo.
+        capacidades = {"completa": {"completa", "parcial"}, "parcial": {"parcial"},
+                       "ambas": {"completa", "parcial", "ambas"}}
+        return conclusion(bool(capacidades[perfil.dedicacion_disponible].intersection(v["valores_admitidos"])),
+                          {"dedicacion": perfil.dedicacion_disponible})
     if codigo == "TRASLADO":
         if destino is None:
             return pendiente("Falta el país de esta alternativa para comparar el traslado exigido.")
@@ -121,7 +135,7 @@ def comparar_dato(r, perfil, formaciones, idiomas, destino=None):
         if False in valores:
             return conclusion(False, dato)
         if None in valores:
-            return pendiente("Falta declarar la disponibilidad de traslado requerida.", dato)
+            return pendiente("Falta declarar la disponibilidad de traslado requerida.", dato, True)
         return conclusion(True, dato)
     if codigo == "RESIDENCIA":
         dato, resultados = {}, []
@@ -144,14 +158,15 @@ def comparar_dato(r, perfil, formaciones, idiomas, destino=None):
         if False in resultados:
             return conclusion(False, dato)
         if not resultados or None in resultados:
-            return pendiente("Falta ubicación o una equivalencia territorial revisada para el texto declarado.", dato)
+            faltan = (bool(v.get("codigos_pais")) and pais is None) or (bool(v.get("provincias")) and not perfil.provincia_residencia) or (bool(v.get("ciudades")) and not perfil.ciudad_residencia)
+            return pendiente("Falta ubicación o una equivalencia territorial revisada para el texto declarado.", dato, faltan)
         return conclusion(True, dato)
     return pendiente("No existe una interpretación aprobada para este tipo.")
 
 
 def experiencia(r, perfil):
     registros = list(perfil.experiencias.all())
-    if not registros: return pendiente("Experiencia no declarada; no se presume experiencia cero.")
+    if not registros: return pendiente("Experiencia no declarada; no se presume experiencia cero.", actualizable=True)
     if not r.fecha_referencia: return pendiente("Falta fecha de referencia publicada para limitar los periodos de experiencia.")
     if r.fecha_referencia > timezone.localdate() and any(e.actual for e in registros):
         return pendiente("La referencia publicada es futura y hay experiencia en curso. No se proyecta como realizada experiencia futura ni se inventa una fecha de finalización.")
@@ -183,10 +198,11 @@ def evaluar_requisito(r, perfil, formaciones, idiomas, relacion_academica_pendie
             resultado = comparar_dato(r, perfil, formaciones, idiomas, destino)
             if relacion_academica_pendiente and r.relacion_formacion == "pendiente" and r.obligatorio and codigo in ACADEMICOS and resultado[0] == "cumple":
                 resultado = pendiente("Hay varias condiciones académicas obligatorias sin vínculo de misma formación. Falta definir esa relación; no se mezclan datos de títulos distintos.")
-    estado, explicacion, dato = resultado
+    estado, explicacion, dato, actualizable = resultado
     return {"id": r.pk, "tipo": codigo, "descripcion": r.texto_original, "obligatorio": r.obligatorio,
             "ambito": "destino" if r.destino_id else "opcion" if r.opcion_estudio_id else "comun", "resultado": estado, "grupo_formacion": r.grupo_formacion,
             "explicacion": explicacion, "dato_declarado": dato,
+            "seccion_perfil": SECCIONES_PERFIL.get(codigo) if actualizable and estado != "cumple" else None,
             "condicion_exigida": {"valores": r.valor_estructurado, "fecha_referencia": r.fecha_referencia,
                                   "documento": r.documento_exigido, "acreditacion": r.detalle_acreditacion,
                                   "referencia_bases": r.referencia_bases},

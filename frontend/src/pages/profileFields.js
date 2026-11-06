@@ -18,7 +18,7 @@ export function profileFields(c) {
         hint: 'Describe tus intereses académicos, experiencia relevante y objetivos de estudio. No incluyas contraseñas ni datos sensibles' },
     ],
     availability: [
-      { name: 'dedicacion_disponible', label: 'Dedicación disponible', options: choices(c.dedicaciones) },
+      { name: 'dedicacion_disponible', label: 'Dedicación disponible', options: choices(c.dedicaciones), hint: 'Tiempo real que puedes dedicar a participar. No es tu modalidad de estudio preferida.' },
       { name: 'disponible_traslado', label: '¿Puedes trasladarte?', options: bools, kind: 'boolean' },
       { name: 'disponible_extranjero', label: '¿Puedes estudiar en el extranjero?', options: bools, kind: 'boolean' },
     ],

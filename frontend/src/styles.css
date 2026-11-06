@@ -52,7 +52,23 @@
 .comparison-external { background: #fff7df; color: #644b12; border-radius: 8px; padding: 14px; margin: 16px 0; }
 .comparison-incompatible { margin-top: 36px; border-top: 1px solid #d7dfed; padding-top: 24px; }
 .comparison .profile-note { margin-top: 24px; }
-@media (max-width: 600px) { .comparison-option { padding: 16px; } }
+.comparison-overview { margin-top: 24px; padding: 20px; background: #f5f8fc; border: 1px solid #d7dfed; border-radius: 10px; overflow-wrap: anywhere; }
+.comparison-overview h4 { margin: 0 0 16px; }
+.comparison-overview p { margin: 12px 0 0; }
+.comparison-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.comparison-count { padding: 12px; background: white; border: 1px solid #d7dfed; border-radius: 8px; min-width: 0; }
+.comparison-counts p { margin: 0; }
+.comparison-counts strong, .comparison-counts span { display: block; }
+.comparison-counts strong { font-size: 1.35rem; color: #17345c; }
+.comparison-counts span { font-size: .875rem; }
+.comparison-counts ul { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 10px 0 0; padding: 0; }
+.comparison-counts li { padding: 3px 8px; border-radius: 999px; background: #edf3ff; color: #17345c; font-size: .8rem; overflow-wrap: anywhere; }
+.comparison-summary-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.comparison-summary-actions .button { width: auto; min-width: 0; margin: 0; }
+.comparison-profile-link { display: inline-flex; width: auto; min-width: 0; margin: 8px 0 12px; }
+.profile-anchor { scroll-margin-top: 24px; }
+.profile-anchor:focus { outline: 3px solid #087f8c; outline-offset: 4px; border-radius: 4px; }
+@media (max-width: 600px) { .comparison-option { padding: 16px; } .comparison-counts { grid-template-columns: 1fr; } }
 
 .welcome { background: #f5f7fb; }
 .welcome-header, .welcome-footer { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 24px max(24px, calc((100% - 1200px) / 2)); background: white; }
