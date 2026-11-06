@@ -126,7 +126,7 @@ def latest(publication):
     return Observacion.objects.filter(publicacion_id=publication, version__isnull=False).order_by('-observada_en', '-id').first()
 
 
-def evaluar(version, observation, data, references, review_ids):
+def evaluar(version, observation, data, references, review_ids, ignore_convocatoria_id=None):
     blocks, pending = [], []
     def issue(target, code, field, reason, resolution):
         target.append(dict(id=f'{code}:{field}', codigo=code, campo=field, motivo=reason, condicion_resolucion=resolution))
@@ -166,7 +166,7 @@ def evaluar(version, observation, data, references, review_ids):
         issue(blocks, 'OFERENTE_NO_ADMISIBLE', 'institucion', 'El oferente no es ecuatoriano.', 'Identificar un oferente admisible sin inventar convenios.')
     if institution and institution.pais.codigo == 'EC' and data.get('titulo'):
         candidate = ConvocatoriaSerializer(data={k: data[k] for k in ('institucion', 'titulo', 'descripcion', 'url_oficial') if k in data})
-        if candidate.is_valid() and Convocatoria.objects.filter(clave_deduplicacion=candidate.validated_data['clave_deduplicacion']).exists():
+        if candidate.is_valid() and Convocatoria.objects.filter(clave_deduplicacion=candidate.validated_data['clave_deduplicacion']).exclude(pk=ignore_convocatoria_id).exists():
             issue(blocks, 'DUPLICADO_CATALOGO', 'titulo', 'Coincide con la identidad de una convocatoria existente.', 'Revisar la coincidencia; no se vincula ni sobrescribe automáticamente.')
     if not data.get('descripcion'):
         issue(pending, 'DESCRIPCION_PENDIENTE', 'descripcion', 'Falta descripción para publicación.', 'Transcribir información respaldada y revisar su procedencia.')
@@ -216,6 +216,8 @@ def guardar(actor_id, publication_id, payload, previous=None):
     if data['datos'].get('institucion') and not Institucion.objects.filter(pk=data['datos']['institucion']).exists():
         raise serializers.ValidationError({'institucion': 'Entidad inexistente.'})
     publication = Publicacion.objects.select_for_update().get(pk=publication_id)
+    if publication.convocatoria_id is not None:
+        raise ConflictoRevision('La publicación ya está integrada. Su propuesta aplicada permanece inmutable.')
     version = Version.objects.select_for_update().filter(pk=data['version_id'], publicacion=publication).first()
     if not version or not Observacion.objects.filter(pk=data['observacion_base_id'], version=version, publicacion=publication).exists():
         raise serializers.ValidationError('Versión u observación ajena a la publicación.')

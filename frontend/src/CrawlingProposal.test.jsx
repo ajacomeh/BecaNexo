@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CrawlingProposal from './components/CrawlingProposal'
 import { offersApi } from './api/client'
+import { MemoryRouter } from 'react-router-dom'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 function setup() {
@@ -15,7 +16,7 @@ function setup() {
     const row = { ...body, id: rows.length + 1, autor: { nombre: 'Administración sintética' }, pendientes: pending }
     rows.unshift(row); return row
   })
-  render(<CrawlingProposal publication={1} />)
+  render(<MemoryRouter><CrawlingProposal publication={1} /></MemoryRouter>)
   return write
 }
 

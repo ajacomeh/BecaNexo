@@ -47,3 +47,12 @@
 .crawl-proposal input, .crawl-proposal select { max-width: 100%; min-width: 0; }
 .crawl-proposal li, .crawl-proposal p { overflow-wrap: anywhere; }
 @media (max-width: 640px) { .crawl-proposal .form-grid { grid-template-columns: minmax(0, 1fr); } }
+.crawl-draft { border-top: 1px solid #d6e3ed; margin-top: 1.5rem; padding-top: 1.25rem; }
+.crawl-draft fieldset { border: 1px solid #d6e3ed; border-radius: 8px; padding: 1rem; }
+.crawl-draft textarea, .crawl-origin textarea { width: 100%; min-height: 5rem; box-sizing: border-box; resize: vertical; }
+.crawl-draft .field, .crawl-origin .field { margin-block: .85rem; }
+.crawl-draft .field label, .crawl-origin .field label { display: block; margin-bottom: .35rem; }
+.crawl-draft .crawl-check { display: flex; align-items: start; gap: .65rem; margin-block: .8rem; }
+.crawl-draft .crawl-check input { width: 1.1rem; height: 1.1rem; flex: none; }
+.crawl-draft :is(input, textarea, button):focus-visible, .crawl-origin :is(select, textarea, button):focus-visible { outline: 3px solid #167b88; outline-offset: 3px; }
+.crawl-origin { overflow-wrap: anywhere; }

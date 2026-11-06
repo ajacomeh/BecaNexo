@@ -1,5 +1,25 @@
 # Propuestas de integración: bloque de trabajo fuera del catálogo
 
+## Segundo bloque: creación de borrador y procedencia (05/11/2026)
+
+Las rutas nuevas requieren administrador activo y sesión Django; POST exige CSRF y las respuestas de cuenta usan `no-store`. **Migraciones rastreo 0010–0012 pendientes en desarrollo**; las rutas nuevas necesitan su aplicación posterior, con respaldo y revisión del plan. La sección inferior conserva el contrato y resultados históricos del primer bloque.
+
+| Ruta | Uso |
+| --- | --- |
+| POST `propuestas/:id/crear-borrador/` | Crea borrador vinculado: 201; reintento idéntico 200. Propuesta sustituida, clave reutilizada o contexto obsoleto: 409. Bloqueos/datos inválidos: 400. |
+| GET `convocatorias/:id/origen/` | Devuelve aplicación, publicación, versión/observación exacta, pendientes y resoluciones vigentes para el editor. Convocatoria manual: `aplicacion: null`. |
+| POST `convocatorias/:id/origen/` | Registra resolución motivada de pendiente con evidencia exacta aprobada y snapshot canónico esperado: 201; reintento 200; obsolescencia 409. Nunca edita la propuesta aplicada. |
+
+`crear-borrador` recibe `clave_accion` UUID, `hash_propuesta`, `observacion_base_id`, lista completa `revisiones`, `motivo_institucion`, `motivo_bases_ausentes` si no hay bases, `confirmados` con **todos** los IDs candidatos, y listas `opciones`, `beneficios`, `requisitos` de elementos elegidos `{id, datos, motivo}`. Cada elemento elegido exige procedencia exacta en la propuesta. `datos` pasa por el serializer vigente del catálogo; no se admiten mapeos que cambien el texto/tipo/ámbito sin guardarlos primero en una sucesora. Un candidato no elegido queda en la propuesta y se enumera como `omitido` en la aplicación. Los requisitos se guardan `validado=false` aunque el cliente envíe otro estado. Los documentos siguen privados.
+
+El servicio vuelve a evaluar revisiones, observación, integridad documental, institución EC, URL oficial pública y duplicados **dentro de la transacción**; un resultado previo de `validar` no reserva permiso. La respuesta incluye `convocatoria_id`, `propuesta_id`, `revision_integracion_id`, revisión y pendientes. La convocatoria nace `activa=false`, `revision=pendiente` y no aparece en `/api/becas/` ni por su ID. La acción `publicar` mantiene controles manuales existentes y, únicamente si hay auditoría de integración, bloquea pendientes materiales o revisiones de origen cambiadas. Día sin hora, tope económico y ámbito no representado permanecen sin conversión automática.
+
+La resolución envía `{clave_accion, pendiente_id, evidencia_id, motivo, version_convocatoria, hash_convocatoria}`. Solo se registra si el pendiente pertenece a la aplicación, la evidencia es de la versión exacta y tiene revisión documental vigente, y los datos actuales acreditan la corrección. Para un candidato se exige además la referencia de procedencia de ese candidato y correspondencia de ámbito, opción y destino. Cambiar la convocatoria invalida una resolución anterior: se permite rectificar con otra fila. Un dato que el modelo todavía no representa no puede resolverse mediante este endpoint. El editor muestra historial y enlaces administrativos de procedencia; la API pública no muestra estos campos.
+
+Preparación operativa posterior, **no ejecutada en desarrollo en esta tarea**: hacer respaldo conjunto de PostgreSQL y archivo documental; desde la raíz consultar `.\.venv\Scripts\python.exe backend\manage.py showmigrations rastreo` y `.\.venv\Scripts\python.exe backend\manage.py migrate rastreo --plan`; revisar el SQL de 0010–0012 y aplicar, solo tras aprobación operativa, `.\.venv\Scripts\python.exe backend\manage.py migrate rastreo 0012_permitir_rectificaciones_integracion`.
+
+Revisión manual **posterior a la migración**, todavía no realizada con desarrollo: entrar como administrador en `/gestion/rastreo`, abrir una publicación sintética revisada, confirmar contenido y omisiones, crear borrador y comprobar `/gestion/convocatorias/:id`; consultar procedencia; verificar que `/becas/:id` no la expone, y que publicación exige resolver pendientes. Guardar una resolución cambia auditoría. No usar SIAU real como dato de prueba.
+
 Implementación del 05/11/2026. Las migraciones rastreo 0008 y 0009 están **aplicadas en desarrollo según confirmación del usuario**, con respaldo previo y Django check satisfactorio. El usuario confirmó también la revisión manual de crear/continuar propuesta, guardado, historial y validación. No crea convocatorias, no habilita su vínculo y no publica.
 
 Administrador activo, sesiones, CSRF en POST/PATCH y respuestas no-store. Los documentos continúan privados. No se realizan peticiones externas al guardar ni validar.

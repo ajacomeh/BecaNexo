@@ -3,6 +3,7 @@ import { offersApi } from '../api/client'
 import Button from './Button'
 import Message from './Message'
 import Field from './Field'
+import CrawlingDraft from './CrawlingDraft'
 
 const prefix = 'gestion/rastreo'
 const groups = { opciones: 'Opciones de estudio', beneficios: 'Beneficios', requisitos: 'Requisitos' }
@@ -24,7 +25,7 @@ function Scope({ item, options, countries, onChange }) {
 }
 
 function Results({ data }) {
-  return <>{[['bloqueos', 'Bloqueos para el futuro borrador'], ['pendientes_publicacion', 'Pendientes de publicación']].map(([key, title]) => <section key={key}><h3>{title}</h3>{data[key]?.length ? <ul>{data[key].map((item) => <li key={item.id}><strong>{item.campo}: </strong>{item.motivo} <p>{item.condicion_resolucion}</p></li>)}</ul> : <p>No se identificaron pendientes en este grupo.</p>}</section>)}<p>La creación de convocatorias no está habilitada en este bloque.</p></>
+  return <>{[['bloqueos', 'Bloqueos para crear el borrador'], ['pendientes_publicacion', 'Pendientes de publicación']].map(([key, title]) => <section key={key}><h3>{title}</h3>{data[key]?.length ? <ul>{data[key].map((item) => <li key={item.id}><strong>{item.campo}: </strong>{item.motivo} <p>{item.condicion_resolucion}</p></li>)}</ul> : <p>No se identificaron pendientes en este grupo.</p>}</section>)}</>
 }
 
 export default function CrawlingProposal({ publication }) {
@@ -36,6 +37,8 @@ export default function CrawlingProposal({ publication }) {
   const [documents, setDocuments] = useState([])
   const [institutions, setInstitutions] = useState([])
   const [countries, setCountries] = useState([])
+  const [types, setTypes] = useState([])
+  const [applied, setApplied] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -47,7 +50,7 @@ export default function CrawlingProposal({ publication }) {
   const path = `${prefix}/publicaciones/${publication}/propuesta`
   useEffect(() => {
     let live = true
-    offersApi.get(path, { page }).then((data) => { if (live) { setList(data); setError('') } }).catch((e) => { if (live) setError(e.message) })
+    offersApi.get(path, { page }).then((data) => { if (live) { setList(data); setApplied(data.aplicacion || null); setError('') } }).catch((e) => { if (live) setError(e.message) })
     return () => { live = false }
   }, [path, page, retry])
 
@@ -73,10 +76,11 @@ export default function CrawlingProposal({ publication }) {
       setInstitutions(entities)
       const catalogs = await offersApi.get('becas/catalogos')
       setCountries(catalogs.paises || [])
+      setTypes(catalogs.tipos_requisito || [])
       setList(latest)
       if (!latest.contexto) throw new Error('No hay observación exitosa para preparar una propuesta.')
       const old = latest.results[0]
-      const next = old ? { id: old.id, version_id: old.version_id, observacion_base_id: old.observacion_base_id, revisiones: old.revisiones, datos: old.datos, procedencia: old.procedencia } : { ...latest.contexto, datos: {}, procedencia: [] }
+      const next = old ? { id: old.id, hash_propuesta: old.hash_propuesta, version_id: old.version_id, observacion_base_id: old.observacion_base_id, revisiones: old.revisiones, datos: old.datos, procedencia: old.procedencia } : { ...latest.contexto, datos: {}, procedencia: [] }
       await evidence(next)
       key.current = null; setDraft(next); setResult(old?.pendientes || null); setHistorical(null)
       setTimeout(() => heading.current?.focus(), 0)
@@ -92,7 +96,7 @@ export default function CrawlingProposal({ publication }) {
       await evidence(current.contexto)
       setList(current)
       // No remapear referencias documentales entre versiones ni perder los valores pendientes.
-      edit({ ...draft, ...current.contexto, id: current.results[0]?.id, procedencia: draft.version_id === current.contexto.version_id ? draft.procedencia : draft.procedencia.map((ref) => ({ ...ref, evidencia_id: '' })) })
+      edit({ ...draft, ...current.contexto, id: current.results[0]?.id, hash_propuesta: current.results[0]?.hash_propuesta, procedencia: draft.version_id === current.contexto.version_id ? draft.procedencia : draft.procedencia.map((ref) => ({ ...ref, evidencia_id: '' })) })
       setSuccess('Contexto actualizado. Se conservaron los valores; revisa y vuelve a indicar la procedencia si cambió la versión.')
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -103,9 +107,10 @@ export default function CrawlingProposal({ publication }) {
     sending.current = true; setBusy(true); setError(''); setSuccess('')
     key.current ||= crypto.randomUUID()
     try {
-      const { id, ...body } = draft
-      const saved = await offersApi.write(id ? `${prefix}/propuestas/${id}` : path, id ? 'PATCH' : 'POST', { ...body, clave_accion: key.current })
-      setDraft({ id: saved.id, version_id: saved.version_id, observacion_base_id: saved.observacion_base_id, revisiones: saved.revisiones, datos: saved.datos, procedencia: saved.procedencia })
+      const body = { ...draft }
+      delete body.id; delete body.hash_propuesta
+      const saved = await offersApi.write(draft.id ? `${prefix}/propuestas/${draft.id}` : path, draft.id ? 'PATCH' : 'POST', { ...body, clave_accion: key.current })
+      setDraft({ id: saved.id, hash_propuesta: saved.hash_propuesta, version_id: saved.version_id, observacion_base_id: saved.observacion_base_id, revisiones: saved.revisiones, datos: saved.datos, procedencia: saved.procedencia })
       key.current = null; setResult(saved.pendientes); setSuccess('Propuesta guardada fuera del catálogo. No se creó una convocatoria.'); setRetry((n) => n + 1)
     } catch (e) { setError(`${[...new Set([e.message, ...validationMessages(e.fields)])].join(' ')} Tus valores se conservan. ${e.status === 409 ? 'Consulta el historial y actualiza el contexto antes de volver a guardar.' : 'Corrige los datos o reintenta.'}`) } finally { sending.current = false; setBusy(false) }
   }
@@ -122,7 +127,8 @@ export default function CrawlingProposal({ publication }) {
     {error && <Message>{error}</Message>}{success && <p role="status">{success}</p>}
     {!list && !error && <p role="status">Cargando propuestas…</p>}
     {error && !list && <Button onClick={() => setRetry((n) => n + 1)}>Reintentar</Button>}
-    {list && !draft && <Button busy={busy} disabled={!list.contexto} onClick={open}>{list.count ? 'Continuar propuesta' : 'Crear propuesta'}</Button>}
+    {applied && <p role="status">La publicación ya tiene un borrador vinculado. <a href={`/gestion/convocatorias/${applied.convocatoria_id}`}>Abrir convocatoria</a></p>}
+    {list && !draft && !applied && <Button busy={busy} disabled={!list.contexto} onClick={open}>{list.count ? 'Continuar propuesta' : 'Crear propuesta'}</Button>}
     {draft && <form onSubmit={save}><fieldset disabled={busy}><legend>Datos de trabajo</legend><p>Publicación {publication} · Versión ID {draft.version_id} · Observación {draft.observacion_base_id}</p>
       <Button type="button" onClick={refreshContext}>Actualizar contexto conservando valores</Button>
       {source && <details><summary>Evidencia original de esta versión</summary><p>{source.datos_extraidos?.titulo?.texto_original}</p><p>{source.datos_extraidos?.descripcion?.texto_original}</p><p>Los documentos y la evidencia completa siguen disponibles arriba. No constituyen opciones ni requisitos confirmados.</p></details>}
@@ -130,6 +136,7 @@ export default function CrawlingProposal({ publication }) {
       {Object.entries(groups).map(([kind, label]) => <section key={kind}><h3>{label}</h3><p>Candidatos pendientes de interpretación; no se crean registros del catálogo.</p>{(draft.datos[kind] || []).map((item, index) => <fieldset key={item.id}><legend>{label} {index + 1}</legend><div className="form-grid">{Object.entries(fields[kind]).map(([name, title]) => <Field key={name} name={`${item.id}-${name}`} label={title} value={item[name] || ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, [kind]: draft.datos[kind].map((v) => v.id === item.id ? { ...v, [name]: e.target.value } : v) } })} />)}</div>{kind === 'opciones' && <div className="field"><label htmlFor={`${item.id}-countries`}>Países candidatos de esta opción</label><select multiple id={`${item.id}-countries`} value={item.paises || []} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, opciones: draft.datos.opciones.map((v) => v.id === item.id ? { ...v, paises: Array.from(e.target.selectedOptions, (o) => o.value) } : v) } })}>{countries.map((country) => <option key={country.codigo} value={country.codigo}>{country.nombre}</option>)}</select><p>Selección explícita; no convierte las menciones originales en destinos confirmados.</p></div>}{kind !== 'opciones' && <Scope item={item} countries={countries} options={draft.datos.opciones || []} onChange={(next) => edit({ ...draft, datos: { ...draft.datos, [kind]: draft.datos[kind].map((v) => v.id === item.id ? next : v) } })} />}<Button type="button" onClick={() => edit({ ...draft, datos: { ...draft.datos, [kind]: draft.datos[kind].filter((v) => v.id !== item.id) } })}>Retirar candidato</Button></fieldset>)}<Button type="button" onClick={() => edit({ ...draft, datos: { ...draft.datos, [kind]: [...(draft.datos[kind] || []), { id: crypto.randomUUID(), texto: '', ambito: 'pendiente' }] } })}>Añadir {label.toLowerCase()}</Button></section>)}
       <h3>Procedencia y motivos</h3>{draft.procedencia.map((ref, i) => <fieldset key={i}><legend>Referencia {i + 1}</legend><label htmlFor={`evidence-${i}`}>Documento exacto</label><select id={`evidence-${i}`} required value={ref.evidencia_id || ''} onChange={(e) => edit({ ...draft, procedencia: draft.procedencia.map((v, j) => i === j ? { ...v, evidencia_id: Number(e.target.value) } : v) })}><option value="">Selecciona evidencia</option>{documents.map((doc) => <option key={doc.evidencia_id} value={doc.evidencia_id}>{doc.rol} · Relación {doc.id}</option>)}</select>{Object.entries({ campo: 'Campo o identificador del elemento', localizador: 'Página o sección', original: 'Texto original', motivo: 'Motivo de la transcripción o corrección' }).map(([name, title]) => <Field key={name} name={`ref-${i}-${name}`} label={title} value={ref[name] || ''} onChange={(e) => edit({ ...draft, procedencia: draft.procedencia.map((v, j) => i === j ? { ...v, [name]: e.target.value } : v) })} />)}<Button type="button" onClick={() => edit({ ...draft, procedencia: draft.procedencia.filter((_v, j) => i !== j) })}>Retirar referencia</Button></fieldset>)}<Button type="button" onClick={() => edit({ ...draft, procedencia: [...draft.procedencia, { campo: '', localizador: '', motivo: '' }] })}>Añadir referencia</Button>
       <div className="heading-actions"><Button type="submit" busy={busy}>Guardar propuesta</Button><Button type="button" disabled={!draft.id} onClick={validate}>Validar propuesta</Button></div></fieldset></form>}
+    {draft?.id && !applied && result && <CrawlingDraft key={draft.id} proposal={draft} result={result} countries={countries} types={types} documents={documents} onCreated={(value) => { setApplied(value); setSuccess('Borrador creado y vinculado. Abriendo el editor administrativo.') }} />}
     {result && <Results data={result} />}
     {list?.count > 0 && <><h3>Historial inmutable</h3><ul>{list.results.map((row) => <li key={row.id}><Button onClick={() => setHistorical(row)}>Consultar revisión de propuesta {row.id}</Button> · {row.autor.nombre}</li>)}</ul>{list.count > list.page_size && <nav aria-label="Historial de propuestas"><Button disabled={page === 1} onClick={() => setPage(page - 1)}>Anterior</Button><span>Página {page}</span><Button disabled={page * list.page_size >= list.count} onClick={() => setPage(page + 1)}>Siguiente</Button></nav>}</>}
     {historical && <section><h3>Snapshot histórico {historical.id}</h3><p>{historical.datos.titulo || 'Sin título'}</p><p>{historical.datos.descripcion}</p><Results data={historical.pendientes} /><details><summary>Todos los valores históricos (solo lectura)</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(historical.datos, null, 2)}</pre></details></section>}

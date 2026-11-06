@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from django.conf import settings
 from django.db import models
 from django.db.models import Q, F
@@ -119,6 +119,9 @@ class Incidencia(models.Model):
 
 
 class Revision(models.Model):
+    propuesta = models.ForeignKey('Propuesta', null=True, on_delete=models.PROTECT, related_name='integraciones')
+    convocatoria = models.ForeignKey('convocatorias.Convocatoria', null=True, on_delete=models.PROTECT, related_name='revisiones_integracion')
+    aplicacion = models.ForeignKey('self', null=True, on_delete=models.PROTECT, related_name='resoluciones')
     version = models.ForeignKey('Version', null=True, on_delete=models.PROTECT)
     evidencia = models.ForeignKey('VersionDocumento', null=True, on_delete=models.PROTECT)
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
@@ -136,7 +139,10 @@ class Revision(models.Model):
 
     class Meta:
         db_table = 'AUD_REVISION_RASTREO'
-        constraints = [check('rast_revision_objeto', Q(dimension='configuracion', fuente__isnull=False, incidencia__isnull=True, version__isnull=True, evidencia__isnull=True) | Q(dimension='incidencia', fuente__isnull=True, incidencia__isnull=False, version__isnull=True, evidencia__isnull=True) | Q(dimension__in=['extraccion', 'documental', 'oferente'], fuente__isnull=True, incidencia__isnull=True, version__isnull=False)),
+        constraints = [check('rast_revision_objeto', Q(dimension='configuracion', fuente__isnull=False, incidencia__isnull=True, version__isnull=True, evidencia__isnull=True) | Q(dimension='incidencia', fuente__isnull=True, incidencia__isnull=False, version__isnull=True, evidencia__isnull=True) | Q(dimension__in=['extraccion', 'documental', 'oferente', 'integracion'], fuente__isnull=True, incidencia__isnull=True, version__isnull=False)),
+                       check('rast_revision_integracion', Q(dimension='integracion', propuesta__isnull=False, convocatoria__isnull=False) & (Q(decision='aplicada', aplicacion__isnull=True, sustituye__isnull=True) | Q(decision='resuelta', aplicacion__isnull=False)) | (~Q(dimension='integracion') & Q(propuesta__isnull=True, convocatoria__isnull=True, aplicacion__isnull=True))),
+                       models.UniqueConstraint(fields=['propuesta'], condition=Q(dimension='integracion', decision='aplicada'), name='rast_integracion_propuesta_unica'),
+                       models.UniqueConstraint(fields=['convocatoria'], condition=Q(dimension='integracion', decision='aplicada'), name='rast_integracion_convocatoria_unica'),
                        check('rast_revision_decision', Q(decision__in=['pendiente', 'aprobada', 'rechazada', 'resuelta', 'aplicada'])),
                        check('rast_revision_motivo', Q(motivo__regex=r'\S')),
                        check('rast_revision_editorial', ~Q(dimension__in=['extraccion', 'documental', 'oferente']) | Q(decision__in=['pendiente', 'aprobada', 'rechazada'])),
@@ -158,8 +164,7 @@ class Publicacion(models.Model):
     class Meta:
         db_table = 'TRA_PUBLICACION_FUENTE'
         constraints = [models.UniqueConstraint(fields=['fuente', 'url_normalizada'], name='rast_publicacion_identidad'),
-                       check('rast_publicacion_fechas', Q(ultima_deteccion__gte=F('primera_deteccion'))),
-                       check('rast_publicacion_sin_vinculo', Q(convocatoria__isnull=True))]
+                       check('rast_publicacion_fechas', Q(ultima_deteccion__gte=F('primera_deteccion')))]
 
 
 class Version(models.Model):

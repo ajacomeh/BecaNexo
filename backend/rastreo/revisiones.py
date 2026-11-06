@@ -46,7 +46,7 @@ class RevisionEntrada(serializers.Serializer):
 
 def vigentes(version_id):
     replaced = Revision.objects.filter(version_id=version_id, sustituye__isnull=False).values('sustituye_id')
-    return Revision.objects.filter(version_id=version_id).exclude(pk__in=replaced)
+    return Revision.objects.filter(version_id=version_id, dimension__in=['extraccion', 'documental', 'oferente']).exclude(pk__in=replaced)
 
 
 @transaction.atomic

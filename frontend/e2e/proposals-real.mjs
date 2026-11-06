@@ -133,7 +133,66 @@ try {
   listing = (await api(listPath)).body
   assert.equal(listing.count, 3)
   assert.equal((await api(`/api/gestion/rastreo/publicaciones/${fixture.publication}/`)).body.convocatoria_id, null)
-  console.log('PASS proposals: Django real, PostgreSQL test only, session/CSRF, incomplete save, immutable successors, conflict recovery, reload, validation, keyboard, 1440/390/320px. No canonical link.')
+  if (process.argv.includes('--integrate')) {
+    const latest = listing.results[0]
+    const docResult = (await api(`/api/gestion/rastreo/publicaciones/${fixture.publication}/versiones/${fixture.version}/documentos/?page_size=50`)).body
+    const docs = docResult.results
+    assert(docs.length > 0)
+    const reviewPath = `/api/gestion/rastreo/publicaciones/${fixture.publication}/versiones/${fixture.version}/revisiones/`
+    async function review(dimension, evidenceId = null, additional = {}) {
+      const result = await api(reviewPath, 'POST', { dimension, decision: 'aprobada', motivo: 'Revisión sintética aislada', evidencia_id: evidenceId,
+        sustituye_id: null, clave_accion: randomUUID(), ...additional })
+      assert.equal(result.status, 201, JSON.stringify(result.body)); return result.body.id
+    }
+    const reviewIds = [await review('extraccion'), await review('oferente', docs[0].evidencia_id,
+      { tipo_oferente: 'entidad_ecuatoriana', referencia: 'Encabezado sintético de prueba' })]
+    for (const doc of docs) reviewIds.push(await review('documental', doc.evidencia_id))
+    const institutions = (await api('/api/gestion/instituciones/')).body.results
+    assert(institutions.length > 0)
+    const proposalData = { ...latest.datos, institucion: institutions[0].id,
+      titulo: 'Integración sintética aislada', descripcion: 'Borrador sintético con respaldo de prueba',
+      url_oficial: 'https://example.org/integracion-sintetica' }
+    const refs = [...latest.procedencia.filter((r) => !['titulo', 'institucion', 'url_oficial'].includes(r.campo)),
+      ...['titulo', 'institucion', 'url_oficial'].map((field) => ({ campo: field, evidencia_id: docs[0].evidencia_id,
+        localizador: 'Sección sintética', motivo: 'Transcripción revisada y confirmada' }))]
+    const saved = await api(`/api/gestion/rastreo/propuestas/${latest.id}/`, 'PATCH', {
+      clave_accion: randomUUID(), version_id: latest.version_id, observacion_base_id: latest.observacion_base_id,
+      revisiones: reviewIds, datos: proposalData, procedencia: refs,
+    })
+    assert.equal(saved.status, 200, JSON.stringify(saved.body))
+    assert.equal(saved.body.pendientes.bloqueos.length, 0, JSON.stringify(saved.body.pendientes.bloqueos))
+    await page.reload()
+    await page.getByRole('button', { name: 'Continuar propuesta', exact: true }).click()
+    await page.getByLabel('Correspondencia con la entidad oferente revisada').fill('La entidad sintética corresponde a la evidencia revisada de prueba')
+    if (!docs.some((d) => d.rol === 'bases_pdf')) await page.getByLabel('Ausencia real de bases identificadas').fill('No se identificaron bases en la evidencia sintética')
+    await page.getByLabel(/Confirmo el contenido seleccionado/).check()
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 })
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `confirmation overflow ${width}`)
+      await page.locator('.crawl-draft').screenshot({ path: `test-results/integration-confirm-${width}.png` })
+    }
+    await page.getByRole('button', { name: 'Crear borrador vinculado' }).focus()
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(1200)
+    if (!page.url().includes('/gestion/convocatorias/')) {
+      throw Error('Creación aislada sin navegación: ' + JSON.stringify(await page.getByRole('alert').allTextContents()))
+    }
+    await page.waitForURL('**/gestion/convocatorias/*')
+    const offerId = Number(new URL(page.url()).pathname.split('/').at(-1))
+    assert(Number.isInteger(offerId) && offerId > 0)
+    await page.getByRole('heading', { name: 'Procedencia del rastreo' }).waitFor()
+    const origin = await api(`/api/gestion/rastreo/convocatorias/${offerId}/origen/`)
+    assert.equal(origin.status, 200)
+    assert.equal(origin.body.publicacion_id, fixture.publication)
+    assert.equal((await api(`/api/becas/${offerId}/`)).status, 404)
+    assert.equal((await api(`/api/gestion/convocatorias/${offerId}/`)).body.revision, 'pendiente')
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 })
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `editor overflow ${width}`)
+      await page.locator('.crawl-origin').screenshot({ path: `test-results/integration-origin-${width}.png` })
+    }
+    console.log('PASS integration: Django/PostgreSQL de pruebas, sesión/CSRF, revisiones sintéticas, confirmación, borrador vinculado, origen privado y catálogo oculto; 1440/390/320 px.')
+  } else console.log('PASS proposals: Django real, PostgreSQL test only, session/CSRF, incomplete save, immutable successors, conflict recovery, reload, validation, keyboard, 1440/390/320px. No canonical link.')
 } finally {
   if (browser) await browser.close()
   if (server && server.exitCode === null) { const ended = new Promise(r => server.once('exit', r)); server.kill(); await ended }

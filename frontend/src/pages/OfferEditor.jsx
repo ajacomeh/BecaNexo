@@ -9,6 +9,7 @@ import Message from '../components/Message'
 import Button from '../components/Button'
 import { generalFields, optionFields, benefitFields, requirementFields } from './offerFields'
 import { stateLabel } from './offerDisplay'
+import OriginPanel from '../components/OriginPanel'
 
 async function allInstitutions() {
   const rows = []
@@ -82,7 +83,7 @@ export default function OfferEditor() {
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
   function childSaved(name, row, deletedId) {
-    setNotice('Registro guardado. Revisa y publica nuevamente para mostrar los cambios.'); setLoaded((old) => ({ ...old, offer: { ...old.offer, revision: 'pendiente', estado: old.offer.activa ? 'borrador' : 'pausada',
+    setNotice('Registro guardado. Revisa y publica nuevamente para mostrar los cambios.'); setLoaded((old) => ({ ...old, offer: { ...old.offer, version: old.offer.version + 1, revision: 'pendiente', estado: old.offer.activa ? 'borrador' : 'pausada',
       [name]: deletedId ? old.offer[name].filter((r) => r.id !== deletedId) : old.offer[name].some((r) => r.id === row.id) ? old.offer[name].map((r) => r.id === row.id ? row : r) : [...old.offer[name], row] } }))
   }
   return <OffersLayout><Link className="back-link" to="/gestion/convocatorias"><Icon name="back" /><span>Convocatorias</span></Link><h1>{id ? 'Editar y revisar convocatoria' : 'Crear convocatoria'}</h1><p>Comprueba la información contra las bases oficiales. No verifica documentos de estudiantes.</p>
@@ -94,7 +95,7 @@ export default function OfferEditor() {
         if (!id) navigate(`/gestion/convocatorias/${offer.id}`)
         else { setLoaded((old) => ({ ...old, offer })); setNotice('Cambios guardados. Publica de nuevo después de revisar.') }
       }} /></section>
-      {loaded.offer && <><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
+      {loaded.offer && <><OriginPanel offer={loaded.offer} /><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
         <section className="profile-card"><h2>Revisión y publicación</h2><p className="profile-note">Al publicar confirmas la entidad ecuatoriana y la transcripción de las bases. Se exige una opción activa, descripción y enlace oficial; todos los requisitos activos deben estar revisados. Guarda cada sección antes de publicar.</p>
           <div className="form-actions"><Button icon="publish" busy={busy} onClick={() => action('publicar')}>Validar y publicar</Button><Button icon="pause" disabled={busy} className="button-light" onClick={() => action('pausar')}>Pausar convocatoria</Button>{loaded.offer.revision === 'validada' && loaded.offer.activa && <Link to={`/becas/${id}`}>Ver en el catálogo</Link>}</div></section></>}
     </>}

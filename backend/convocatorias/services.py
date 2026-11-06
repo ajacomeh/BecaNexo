@@ -48,6 +48,10 @@ def touch(obj):
 
 def publicar(obj):
     errors = []
+    from rastreo.integracion import estado_publicacion_integrada
+    origen = estado_publicacion_integrada(obj)
+    if origen and (origen['bloqueos'] or origen['pendientes']):
+        errors.append('La convocatoria integrada conserva revisiones de origen o pendientes materiales sin resolver. Consulta su procedencia antes de publicar.')
     if obj.institucion.pais.codigo != "EC": errors.append("El oferente debe ser ecuatoriano.")
     if not obj.titulo.strip() or not obj.descripcion.strip() or not obj.url_oficial:
         errors.append("Completa título, descripción y enlace oficial.")
