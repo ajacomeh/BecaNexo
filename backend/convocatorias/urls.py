@@ -3,6 +3,7 @@ from . import api
 
 urlpatterns = [
     path("becas/catalogos/", api.Catalogos.as_view()),
+    path("becas/recomendaciones/", api.Recomendaciones.as_view()),
     path("becas/<int:pk>/comparacion/", api.Comparacion.as_view()),
     path("becas/", api.Consulta.as_view()), path("becas/<int:pk>/", api.Consulta.as_view()),
     path("gestion/instituciones/", api.Instituciones.as_view()),

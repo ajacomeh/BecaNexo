@@ -11,6 +11,7 @@ from usuarios.api import AuthView
 from perfiles.api import CatalogosView as CatalogosPerfil
 from perfiles.api import EsPostulante
 from .comparacion import evaluar_convocatoria
+from .recomendaciones import recomendar
 from . import models as m, serializers as s
 from .reglas import CONTRATOS, esquema
 from .services import detalle, audit, touch, publicar, publicas
@@ -175,6 +176,16 @@ class Comparacion(AuthView):
             raise serializers.ValidationError({"detail": "Esta consulta no acepta campos ni un usuario objetivo."})
         convocatoria = get_object_or_404(publicas(), pk=pk)
         return Response(evaluar_convocatoria(request.user, convocatoria))
+
+
+class Recomendaciones(AuthView):
+    permission_classes = [EsPostulante]
+    http_method_names = ["get", "options"]
+
+    def get(self, request):
+        parametros(request, set())
+        return Response({"results": recomendar(request.user),
+                         "aviso": "La afinidad temática no acredita requisitos ni predice la adjudicación. Revisa las condiciones de cada convocatoria."})
 
 
 class Convocatorias(AuthView):

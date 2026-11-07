@@ -7,8 +7,11 @@ import CatalogFilters from '../components/CatalogFilters'
 import CatalogCard from '../components/CatalogCard'
 import Button from '../components/Button'
 import Message from '../components/Message'
+import Recommendations from '../components/Recommendations'
+import { useAuth } from '../auth/context'
 
 export default function PublicCatalog() {
+  const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const query = params.toString()
   const [result, setResult] = useState(null)
@@ -26,6 +29,7 @@ export default function PublicCatalog() {
   const clear = () => { setParams({}) }
   const apply = values => setParams(Object.fromEntries(Object.entries(values).filter(([k, v]) => ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado', 'orden', 'page_size'].includes(k) && v != null && v !== '')))
   return <OffersLayout><div className="public-catalog"><div className="page-heading"><div><p className="eyebrow">EXPLORA TU PRÓXIMO PASO</p><h1>Catálogo de becas</h1><p>Ofertas de entidades ecuatorianas · Destinos nacionales e internacionales</p></div></div>
+    {user?.rol === 'postulante' && catalogs && <Recommendations catalogs={catalogs} />}
     {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={apply} onClear={clear} />}
     {!current && <p role="status"><Icon name="loading" />Cargando catálogo…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => { setResult(null); setRetry(retry + 1) }}>Reintentar</Button></>}

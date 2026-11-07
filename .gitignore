@@ -17,6 +17,7 @@ service-account*.json
 
 # Python
 .venv/
+.local-models/
 __pycache__/
 *.py[cod]
 .pytest_cache/

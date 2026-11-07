@@ -165,3 +165,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Archivo privado, fuera del repositorio; nunca añadido a MEDIA_URL.
 RASTREO_STORAGE_ROOT = env('RASTREO_STORAGE_ROOT', default='')
+
+# Modelo ONNX local, fuera de Git. La falta del modelo no bloquea la comparación por reglas.
+SEMANTIC_MODEL_DIR = env('SEMANTIC_MODEL_DIR', default=str(BASE_DIR.parent / '.local-models' / 'miniLM-multilingual'))
