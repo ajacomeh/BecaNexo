@@ -23,11 +23,11 @@ class AccessError(Exception):
     pass
 
 
-def validate_url(url):
-    if not isinstance(url, str) or url not in ALLOWED:
+def validate_url(url, allowed_urls=ALLOWED):
+    if not isinstance(url, str) or url not in allowed_urls:
         raise AccessError('URL fuera de la lista cerrada HTTPS permitida.')
     parts = urlsplit(url)
-    if (url not in ALLOWED or parts.scheme != 'https' or parts.hostname != HOST
+    if (parts.scheme != 'https' or parts.hostname != HOST
             or parts.username or parts.password or parts.port not in (None, 443)
             or parts.query or parts.fragment):
         raise AccessError('URL fuera de la lista cerrada HTTPS permitida.')
@@ -62,14 +62,15 @@ class PinnedHTTPS(http.client.HTTPSConnection):
 
 
 class Downloader:
-    def __init__(self, pause=2, timeout=15, total_timeout=45):
+    def __init__(self, pause=2, timeout=15, total_timeout=45, allowed_urls=None):
         self.pause, self.timeout, self.total_timeout = pause, timeout, total_timeout
+        self.allowed_urls = set(ALLOWED if allowed_urls is None else allowed_urls)
         self.last = None
         self.history = []
         self.current_record = None
 
     def once(self, url):
-        parts = validate_url(url)
+        parts = validate_url(url, self.allowed_urls)
         address = public_address(parts.hostname)
         conn = PinnedHTTPS(parts.hostname, address, self.timeout)
         waited = 0
@@ -82,7 +83,7 @@ class Downloader:
             self.current_record['inicio_peticion_utc'] = datetime.now(timezone.utc).isoformat()
             self.current_record['inicio_peticion_monotonic'] = self.last
             self.current_record['espera_ms'] = max(0, int(waited * 1000))
-        limit = 8 * 1024 * 1024 if url in PDFS else 2 * 1024 * 1024
+        limit = 8 * 1024 * 1024 if url in PDFS or url.lower().endswith('.pdf') else 2 * 1024 * 1024
         started = time.monotonic()
         try:
             conn.request('GET', parts.path, headers={'User-Agent': AGENT, 'Accept-Encoding': 'identity', 'Accept': 'text/html,application/pdf,text/plain'})
@@ -110,7 +111,7 @@ class Downloader:
     def fetch(self, url, can_fetch=lambda url: True):
         initial = url
         for redirect in range(3):
-            validate_url(url)
+            validate_url(url, self.allowed_urls)
             if not can_fetch(url):
                 raise AccessError('robots.txt impide o no permite confirmar este acceso.')
             for attempt in range(2):
@@ -136,7 +137,7 @@ class Downloader:
                     url = urljoin(url, headers.get('location', ''))
                 except ValueError as exc:
                     raise AccessError('Redirección mal formada.') from exc
-                validate_url(url)
+                validate_url(url, self.allowed_urls)
                 if redirect == 2:
                     raise AccessError('Demasiadas redirecciones.')
                 continue

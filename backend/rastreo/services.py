@@ -3,7 +3,7 @@ import json
 import time
 import http.client
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.robotparser import RobotFileParser
 
 from django.contrib.auth import get_user_model
@@ -16,6 +16,16 @@ from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
 from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion
 from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
+from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, candidate_url, index_pages
+
+
+BASE_POLICY = {'urls': sorted(ALLOWED), 'bytes_html': 2097152, 'bytes_pdf': 8388608, 'reintentos': 1}
+DISCOVERY_POLICY = {**BASE_POLICY, 'descubrimiento': {'indice': INDEX, 'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES}}
+
+
+def supported_policy(source):
+    return ((source.politica_version == 'siau-cerrada/1' and source.politica_acceso == BASE_POLICY)
+            or (source.politica_version == 'siau-indice/2' and source.politica_acceso == DISCOVERY_POLICY))
 
 
 def actor_admin(actor_id):
@@ -48,18 +58,78 @@ def configure(actor_id, reason, active=None, key=None):
         return previous_action.fuente, False
     source = Fuente.objects.select_for_update().filter(url_base=INDEX).first()
     before = snapshot(source.pk) if source else None
-    policy = {'urls': sorted(ALLOWED), 'bytes_html': 2097152, 'bytes_pdf': 8388608, 'reintentos': 1}
+    policy = BASE_POLICY
     if source is None:
         if active is not None:
             raise ValidationError('Primero registre la fuente desactivada.')
         source = Fuente.objects.create(nombre='SIAU', url_base=INDEX, politica_acceso=policy)
-    elif source.adaptador != 'siau' or source.politica_acceso != policy or source.aprobada_publicacion_automatica:
+    elif source.adaptador != 'siau' or not supported_policy(source) or source.aprobada_publicacion_automatica:
         raise ValidationError('Configuración existente diferente: no sobrescribir.')
     elif active is None or source.activa == active:
         return source, False
     else:
         source.activa = active
         source.save(update_fields=['activa'])
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+                            motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
+def enable_discovery(actor_id, reason, key=None):
+    """Amplía el acceso solo con una decisión administrativa auditable."""
+    actor = actor_admin(actor_id)
+    if not reason or not reason.strip():
+        raise ValidationError('Motivo obligatorio.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if (previous.actor_id != actor.pk or previous.motivo != reason.strip()
+                or previous.detalle.get('despues', {}).get('politica_version') != 'siau-indice/2'):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    source = Fuente.objects.select_for_update().get(url_base=INDEX)
+    if source.adaptador != 'siau' or not supported_policy(source) or source.aprobada_publicacion_automatica:
+        raise ValidationError('Fuente fuera del contrato SIAU.')
+    if source.politica_version == 'siau-indice/2':
+        return source, False
+    if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
+        raise ValidationError('No cambiar la política durante una ejecución activa.')
+    before = snapshot(source.pk)
+    source.politica_acceso = DISCOVERY_POLICY
+    source.politica_version = 'siau-indice/2'
+    source.save(update_fields=['politica_acceso', 'politica_version'])
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+                            motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
+def set_frequency(source_id, actor_id, reason, minutes, key=None):
+    actor = actor_admin(actor_id)
+    if not reason or not reason.strip() or not isinstance(minutes, int) or not 60 <= minutes <= 10080:
+        raise ValidationError('Motivo y frecuencia de 60 a 10080 minutos obligatorios.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if (previous.actor_id != actor.pk or previous.fuente_id != source_id or previous.motivo != reason.strip()
+                or previous.detalle.get('despues', {}).get('frecuencia_min') != minutes):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    source = Fuente.objects.select_for_update().get(pk=source_id)
+    if not supported_policy(source) or source.aprobada_publicacion_automatica:
+        raise ValidationError('Fuente fuera del contrato SIAU.')
+    if source.frecuencia_min == minutes:
+        return source, False
+    if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
+        raise ValidationError('No cambiar la frecuencia durante una ejecución activa.')
+    before = snapshot(source.pk)
+    source.frecuencia_min = minutes
+    source.save(update_fields=['frecuencia_min'])
     Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
                             motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
     return source, True
@@ -100,6 +170,8 @@ class PersistentDownloader(Downloader):
         self.sequence = 0
         self.publication = None
         self.page_url = None
+        self.pages = set(PAGES)
+        self.pdfs = set(PDFS)
 
     def record(self, url, record, status, result, document=None, error=None, headers=None):
         self.sequence += 1
@@ -107,7 +179,7 @@ class PersistentDownloader(Downloader):
         started = datetime.fromisoformat(record['inicio_peticion_utc']) if record.get('inicio_peticion_utc') else None
         finished = timezone.now()
         return Acceso.objects.create(ejecucion=self.execution, secuencia=self.sequence, publicacion=self.publication,
-            rol='robots' if url == ROBOTS else 'indice' if url == INDEX else 'bases' if url in PDFS else 'ficha',
+            rol='robots' if url == ROBOTS else 'indice' if url == INDEX else 'bases' if url in self.pdfs else 'ficha',
             url_original=url, url_normalizada=url, url_final=url, admitido_en=admitted,
             inicio_peticion_en=started, fin=max(finished, started or admitted, admitted),
             espera_ms=record.get('espera_ms', 0),
@@ -125,7 +197,7 @@ class PersistentDownloader(Downloader):
             incident(self.execution, 'RED', type(exc).__name__, access)
             raise
         if status == 200:
-            expected = 'application/pdf' if url in PDFS else 'text/plain' if url == ROBOTS else 'text/html'
+            expected = 'application/pdf' if url in self.pdfs else 'text/plain' if url == ROBOTS else 'text/html'
             mime = headers.get('content-type', '').split(';')[0].strip().lower()
             try:
                 if mime != expected:
@@ -133,13 +205,13 @@ class PersistentDownloader(Downloader):
                 prepared = prepare_document(content, mime)
                 with transaction.atomic():
                     document, created = register_document(prepared)
-                    if self.page_url and url in PAGES and self.publication is None:
+                    if self.page_url and url in self.pages and self.publication is None:
                         self.publication = identity(self.execution, self.page_url)
                     prior = Acceso.objects.filter(url_normalizada=url, documento__isnull=False).order_by('-id').first()
                     access = self.record(url, entry, status, 'descargado' if created else 'reutilizado', document, headers=headers)
-                    if url in PDFS and prior and prior.documento_id != document.pk:
+                    if url in self.pdfs and prior and prior.documento_id != document.pk:
                         incident(self.execution, 'PDF_CAMBIADO', 'Nueva huella; no hereda revisión previa.', access, 'aviso')
-                    if url in PDFS:
+                    if url in self.pdfs:
                         incident(self.execution, 'REVISION_DOCUMENTAL_PENDIENTE', 'Descarga técnica correcta; bases no aprobadas.', access, 'aviso')
             except (StorageError, OSError, DatabaseError) as exc:
                 if self.page_url:
@@ -168,10 +240,23 @@ def summary(execution):
 
 def run_manual(source_id, actor_id, key):
     actor_admin(actor_id)
+    return _run(source_id, actor_id, key, 'manual')
+
+
+def run_scheduled(source_id, key=None):
+    return _run(source_id, None, key or uuid.uuid4(), 'programada')
+
+
+def next_due(source):
+    last = Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio').first()
+    return last.inicio + timedelta(minutes=source.frecuencia_min) if last else None
+
+
+def _run(source_id, actor_id, key, origin):
     key = uuid.UUID(str(key))
     existing = Ejecucion.objects.filter(clave_idempotencia=key).first()
     if existing:
-        if existing.fuente_id != source_id or existing.solicitado_por_id != actor_id:
+        if existing.fuente_id != source_id or existing.solicitado_por_id != actor_id or existing.origen != origin:
             raise ValidationError('Clave idempotente pertenece a otra operación.')
         return existing
     with exclusion(source_id) as locked:
@@ -180,9 +265,13 @@ def run_manual(source_id, actor_id, key):
             # Serializa creación incluso para invocaciones omitidas.
             existing = Ejecucion.objects.filter(clave_idempotencia=key).first()
             if existing:
-                if existing.fuente_id != source_id or existing.solicitado_por_id != actor_id:
+                if existing.fuente_id != source_id or existing.solicitado_por_id != actor_id or existing.origen != origin:
                     raise ValidationError('Clave idempotente pertenece a otra operación.')
                 return existing
+            if origin == 'programada':
+                due = next_due(source)
+                if due and due > timezone.now():
+                    return Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio').first()
             reason = None
             if not locked:
                 reason = 'Origen o fuente ocupados por otra ejecución.'
@@ -190,10 +279,10 @@ def run_manual(source_id, actor_id, key):
                 reason = 'Fuente desactivada.'
             elif Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
                 reason = 'Existe una ejecución pendiente de recuperación explícita.'
-            if source.adaptador != 'siau' or source.url_base != INDEX or source.politica_acceso.get('urls') != sorted(ALLOWED):
+            if source.adaptador != 'siau' or source.url_base != INDEX or not supported_policy(source):
                 reason = 'Configuración fuera del contrato SIAU cerrado.'
             now = timezone.now()
-            execution = Ejecucion.objects.create(fuente=source, solicitado_por_id=actor_id, clave_idempotencia=key,
+            execution = Ejecucion.objects.create(fuente=source, solicitado_por_id=actor_id, origen=origin, clave_idempotencia=key,
                 configuracion_snapshot=snapshot(source.pk), version_extractor=EXTRACTOR_VERSION,
                 inicio=now, estado='omitida' if reason else 'en_curso', fin=now if reason else None, error_resumen=reason)
             if reason:
@@ -218,12 +307,22 @@ def run_manual(source_id, actor_id, key):
                     incident(execution, 'ROBOTS', 'Ruta bloqueada por robots.', access)
                     raise AccessError('robots bloquea la ruta.')
                 return downloader.fetch(url, can_fetch=allowed)
+            pages = list(PAGES)
             try:
-                download(INDEX)
+                index = download(INDEX)
+                if source.politica_version == 'siau-indice/2':
+                    discovered, truncated = index_pages(index['contenido'])
+                    if truncated:
+                        incident(execution, 'INDICE_LIMITE', 'El índice supera el máximo de fichas; se requiere revisión.')
+                    pages = list(dict.fromkeys([*PAGES, *discovered]))[:MAX_FICHAS]
+                    downloader.pages.update(pages)
+                    downloader.allowed_urls.update(pages)
             except AccessError:
                 pass  # Fichas autorizadas se investigan aunque falle el índice.
+            except (UnicodeError, ValueError):
+                incident(execution, 'INDICE_ESTRUCTURA', 'Índice no interpretable; se conservan las fichas conocidas.')
             pdf_cache = {}
-            for url in PAGES:
+            for url in pages:
                 downloader.page_url = url
                 downloader.publication = Publicacion.objects.filter(fuente=source, url_normalizada=normalize_url(url)).first()
                 try:
@@ -238,10 +337,14 @@ def run_manual(source_id, actor_id, key):
                     if not item['seccion_completa']:
                         incident(execution, 'ESTRUCTURA', 'HTML fuera de contrato; no estructurar automáticamente.', publication=publication)
                     for link in item['enlaces_bases']:
-                        if link['url'] not in PDFS:
+                        candidate = candidate_url(link['url'], BASE) if source.politica_version == 'siau-indice/2' else None
+                        if link['url'] not in downloader.pdfs and (not candidate or candidate != link['url'] or len(downloader.pdfs) >= MAX_BASES):
                             pending.append({'url': link['url'], 'estado': 'fuera_de_lista'})
                             incident(execution, 'BASE_NO_PERMITIDA', 'Enlace de bases fuera de lista cerrada.', publication=publication)
                             continue
+                        if candidate:
+                            downloader.pdfs.add(candidate)
+                            downloader.allowed_urls.add(candidate)
                         if link['url'] not in pdf_cache:
                             try:
                                 pdf = download(link['url'])
@@ -270,7 +373,8 @@ def run_manual(source_id, actor_id, key):
         except Exception as exc:
             # Sin mensajes de drivers/paths privados ni credenciales en historial.
             incident(execution, 'EJECUCION_FALLIDA', type(exc).__name__)
-            for publication in Publicacion.objects.filter(fuente=source, url_normalizada__in=PAGES):
+            observed_pages = getattr(locals().get('downloader'), 'pages', PAGES)
+            for publication in Publicacion.objects.filter(fuente=source, url_normalizada__in=observed_pages):
                 observe(execution, publication, detail='Ejecución interrumpida por fallo técnico; sin versión nueva.')
             Ejecucion.objects.filter(pk=execution.pk).update(estado='fallida', fin=timezone.now(), error_resumen=type(exc).__name__)
         # BaseException/interrupción dura deja en_curso; el lock se libera y se recupera explícitamente.

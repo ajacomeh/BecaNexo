@@ -1,6 +1,38 @@
 # Rastreo manual persistente: bloques 1 y 2
 
-Desde la raíz del proyecto en PowerShell. No hay frontend nuevo, cron, publicación, usuarios ficticios ni acceso autenticado a PUSAK. Se conservan las seis URLs del adaptador SIAU. `previsualizar_siau` sigue escribiendo únicamente salidas locales ignoradas, sin ORM de rastreo.
+## Bloque 6: descubrimiento y ejecución periódica preparados
+
+La fuente SIAU usa `siau-indice/2` desde la ampliación auditada del 07/11/2026 (revisión de configuración ID 3). El adaptador puede leer el índice oficial y añadir como candidatas hasta 12 fichas HTTPS del mismo dominio cuya ruta sea `/programa-de-becas-nacionales-.../`; admite hasta 24 PDF del mismo dominio bajo `/wp-content/uploads/AAAA/MM/*.pdf`. Cada URL pasa además por robots, DNS público, TLS y los límites de descarga previos. Una candidata detectada no acredita nacionalidad, oferente, vigencia ni documentación: queda para revisión. Otras fuentes y patrones de ruta requieren integración y comprobación independientes. La aprobación automática de publicación permanece deshabilitada.
+
+Comandos operativos **solo tras autorización de escritura para cada acción**. La ampliación auditada y una ejecución manual real (ID 4) ya se realizaron en `becanexo_db`; los ejemplos no son una instrucción para repetirlas:
+
+```powershell
+# Verificar primero la base configurada, la fuente y ausencia de ejecuciones activas.
+.\.venv\Scripts\python.exe backend/manage.py rastreo publicaciones --fuente-id 1
+.\.venv\Scripts\python.exe backend/manage.py rastreo resumen --ejecucion-id 2
+# Ampliación de política con auditoría antes/después; no crea publicaciones.
+$clavePolitica = [guid]::NewGuid().ToString()
+.\.venv\Scripts\python.exe backend/manage.py rastreo habilitar-descubrimiento --actor-id 1 --motivo "Autorizar fichas nacionales del índice SIAU" --clave $clavePolitica
+# Frecuencia configurable de 60 a 10080 minutos, con auditoría antes/después.
+# El valor actual de SIAU es 1440; no cambiarlo en desarrollo sin autorización.
+$claveFrecuencia = [guid]::NewGuid().ToString()
+.\.venv\Scripts\python.exe backend/manage.py rastreo configurar-frecuencia --fuente-id 1 --actor-id 1 --motivo "Ajustar periodicidad SIAU" --frecuencia-min 2880 --clave $claveFrecuencia
+# Una ejecución manual controlada conserva su clave para reintentos idempotentes.
+$claveEjecucion = [guid]::NewGuid().ToString()
+.\.venv\Scripts\python.exe backend/manage.py rastreo ejecutar --fuente-id 1 --actor-id 1 --clave $claveEjecucion
+# Invocación sin actor ficticio; comprueba frecuencia_min y registra ejecuciones debidas.
+.\.venv\Scripts\python.exe backend/manage.py rastreo programado --fuente-id 1
+```
+
+`configurar-frecuencia` exige administrador activo y motivo, rechaza valores fuera de 60–10080 minutos y registra una revisión inmutable con valores antes/después cuando hay cambio. Si falla la auditoría, la transacción revierte la frecuencia. Repetir la misma clave y contenido no duplica la revisión; un valor igual al actual devuelve `cambio=false`.
+
+La ejecución programada usa `origen=programada`, actor nulo, bloqueo PostgreSQL de origen/fuente e índice único de ejecución activa. Si todavía no vence `frecuencia_min`, responde `no_corresponde_aun` sin nueva petición ni fila. Cuando vence, registra accesos, observaciones sin cambios, nuevas versiones o incidencias y estados `finalizada`, `parcial` o `fallida`. Una interrupción dura exige `rastreo recuperar` con administrador real; no se reutiliza evidencia incompleta como aprobada. La CLI no publica, vincula ni crea convocatorias.
+
+Para Windows 11 se preparó `scripts/rastreo-programado.ps1`. **No se creó ni activó una tarea del Programador.** Tras autorizarla, configurar una tarea que ejecute `powershell.exe` con argumentos `-NoProfile -NonInteractive -File "D:\Proyectos\BecaNexo\scripts\rastreo-programado.ps1" -Ejecutar` cada hora, con directorio de inicio `D:\Proyectos\BecaNexo`. En Configuración, elegir «No iniciar una instancia nueva» si la anterior continúa; no habilitar reinicios ilimitados. El intervalo de una hora solo despierta el proceso: `frecuencia_min` de cada fuente controla cuándo corresponde consultar (SIAU: 1440 minutos inicialmente). Usar una cuenta local de servicio con acceso a PostgreSQL y al archivo documental; no poner contraseñas en el script ni en los argumentos. La tarea no depende del navegador. Antes de activarla en desarrollo, revisar respaldo, política, permisos y ventana de operación, y obtener autorización explícita.
+
+Pruebas aisladas reproducibles: `.\.venv\Scripts\python.exe backend/manage.py test rastreo.test_periodico --keepdb --verbosity 1`. El ejecutor Django utiliza `test_becanexo_db` y directorios temporales; las fixtures de índice y fichas no representan descubrimientos reales. La consulta real de solo lectura del 06/11/2026 comprobó robots e índice SIAU HTTP 200, sin descargar fichas ni escribir en desarrollo.
+
+Esta sección conserva el procedimiento histórico de los bloques 1 y 2 para la política cerrada de seis URLs. Desde la raíz del proyecto en PowerShell. No hay publicación, usuarios ficticios ni acceso autenticado a PUSAK. `previsualizar_siau` sigue escribiendo únicamente salidas locales ignoradas, sin ORM de rastreo. El descubrimiento está habilitado por política; la programación de Windows permanece sin activar.
 
 La CLI es una operación local de confianza. `--actor-id` **atribuye** la operación; no es autenticación web. Debe corresponder a un administrador activo existente. Para esta verificación el usuario autorizó seleccionar su cuenta por coincidencia exacta de correo: ID 1. No se modificó la cuenta ni se usó su contraseña.
 
