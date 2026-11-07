@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "convocatorias.apps.ConvocatoriasConfig",
     "favoritos.apps.FavoritosConfig",
     "rastreo.apps.RastreoConfig",
+    "notificaciones.apps.NotificacionesConfig",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

@@ -49,7 +49,12 @@ describe('favoritos', () => {
 
   it('restaura favoritos desde el servidor y permite quitar una oferta oculta', async () => {
     const row = { id: 9, disponible: false, convocatoria: null, aviso: 'Esta oportunidad ya no está disponible.' }
-    vi.spyOn(offersApi, 'get').mockResolvedValueOnce({ count: 1, page_size: 12, results: [row] }).mockResolvedValue({ count: 0, page_size: 12, results: [] })
+    let requests = 0
+    vi.spyOn(offersApi, 'get').mockImplementation((path) => {
+      if (path === 'notificaciones') return Promise.resolve({ no_leidas: 0 })
+      requests += 1
+      return Promise.resolve(requests === 1 ? { count: 1, page_size: 12, results: [row] } : { count: 0, page_size: 12, results: [] })
+    })
     vi.spyOn(offersApi, 'write').mockResolvedValue(null)
     render(<MemoryRouter><Favorites /></MemoryRouter>)
     expect(await screen.findByText(row.aviso)).toBeVisible()
@@ -68,7 +73,12 @@ describe('favoritos', () => {
   })
 
   it('presenta carga, error y reintento del listado', async () => {
-    vi.spyOn(offersApi, 'get').mockRejectedValueOnce(new ApiError('No hay conexión.')).mockResolvedValue({ count: 0, results: [] })
+    let requests = 0
+    vi.spyOn(offersApi, 'get').mockImplementation((path) => {
+      if (path === 'notificaciones') return Promise.resolve({ no_leidas: 0 })
+      requests += 1
+      return requests === 1 ? Promise.reject(new ApiError('No hay conexión.')) : Promise.resolve({ count: 0, results: [] })
+    })
     render(<MemoryRouter><Favorites /></MemoryRouter>)
     expect(screen.getByRole('status')).toHaveTextContent('Cargando favoritos')
     expect(await screen.findByText('No hay conexión.')).toBeVisible()

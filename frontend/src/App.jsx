@@ -13,6 +13,7 @@ import OfferDetail from './pages/OfferDetail'
 import OfferEditor from './pages/OfferEditor'
 import Institutions from './pages/Institutions'
 import Favorites from './pages/Favorites'
+import Notifications from './pages/Notifications'
 import Welcome from './pages/Welcome'
 import Crawling from './pages/Crawling'
 
@@ -32,6 +33,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Welcome />} />
       <Route path="/favoritos" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Favorites /> : <Navigate to="/inicio" replace />} />
+      <Route path="/notificaciones" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Notifications /> : <Navigate to="/inicio" replace />} />
       <Route path="/becas" element={<Offers />} />
       <Route path="/becas/:id" element={<OfferDetail />} />
       <Route path="/gestion/convocatorias" element={admin(<Offers admin />)} />

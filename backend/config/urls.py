@@ -20,6 +20,7 @@ from django.urls import include, path
 urlpatterns = [
     path('api/gestion/rastreo/', include('rastreo.urls')),
     path('api/favoritos/', include('favoritos.urls')),
+    path('api/notificaciones/', include('notificaciones.urls')),
     path('api/', include('convocatorias.urls')),
     path('api/auth/', include('usuarios.urls')),
     path('api/perfil/', include('perfiles.urls')),

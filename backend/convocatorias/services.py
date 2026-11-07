@@ -1,6 +1,7 @@
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
+from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from . import models as m, serializers as s
 
@@ -46,7 +47,9 @@ def touch(obj):
     obj.save(update_fields=["version", "actualizado_en", "revision"])
 
 
+@transaction.atomic
 def publicar(obj):
+    era_publica = obj.activa and obj.revision == "validada" and obj.institucion.pais.codigo == "EC"
     errors = []
     from rastreo.integracion import estado_publicacion_integrada
     origen = estado_publicacion_integrada(obj)
@@ -92,3 +95,6 @@ def publicar(obj):
     obj.version += 1
     obj.actualizado_en = timezone.now()
     obj.save()
+    if not era_publica:
+        from notificaciones.services import avisar_publicacion
+        avisar_publicacion(obj)

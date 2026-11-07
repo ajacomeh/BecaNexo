@@ -263,6 +263,15 @@
 .profile-sidebar nav a { padding: 14px; border-radius: 8px; text-decoration: none; font-size: .9rem; }
 .profile-sidebar nav a.active { background: #2d507a; font-weight: 700; }
 .profile-sidebar nav a:hover { background: #26466d; }
+.notification-nav-count { margin-left: auto; border-radius: 999px; background: #edf3ff; color: #17345c; padding: 0 .4rem; font-weight: 700; }
+.notification-list { list-style: none; padding: 0; margin: 0; }
+.notification-item { display: flex; gap: 1.5rem; justify-content: space-between; align-items: flex-start; overflow-wrap: anywhere; }
+.notification-item h2 { margin: .5rem 0; font-size: 1.15rem; }
+.notification-item p { margin: .5rem 0; }
+.notification-read { background: #f7f9fc; }
+.notification-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; flex-shrink: 0; }
+.notification-actions .button { width: auto; }
+@media (max-width: 700px) { .notification-item { flex-direction: column; } .notification-actions { width: 100%; } }
 .sidebar-account { margin-top: auto; display: grid; gap: 14px; padding: 20px 12px 0; font-size: .85rem; overflow-wrap: anywhere; }
 @media (min-width: 951px) {
   .profile-sidebar { position: sticky; top: 0; height: 100dvh; align-self: start; }
