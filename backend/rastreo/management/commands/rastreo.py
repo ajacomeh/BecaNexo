@@ -2,6 +2,7 @@ import json
 from django.core.management.base import BaseCommand, CommandError
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import connection
 from django.utils import timezone
 from rastreo.models import Fuente, Ejecucion, Publicacion, Version, VersionDocumento, Observacion
 from rastreo.observaciones import differences
@@ -13,7 +14,7 @@ class Command(BaseCommand):
     help = 'Rastreo local de confianza: configurar, activar, desactivar, ejecutar, resumen, recuperar, integridad.'
 
     def add_arguments(self, parser):
-        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'habilitar-descubrimiento', 'configurar-frecuencia', 'ejecutar', 'programado', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
+        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'habilitar-descubrimiento', 'configurar-frecuencia', 'ejecutar', 'programado', 'estado-programacion', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
         parser.add_argument('--actor-id', type=int)
         parser.add_argument('--motivo')
         parser.add_argument('--clave', help='UUID idempotente; obligatorio al ejecutar.')
@@ -54,6 +55,20 @@ class Command(BaseCommand):
                         result.append({'fuente_id': source.pk, 'estado': 'no_corresponde_aun', 'proxima_ejecucion': due})
                     else:
                         result.append(summary(run_scheduled(source.pk)))
+            elif action == 'estado-programacion':
+                if not options['fuente_id'] or options['actor_id'] or options['clave']:
+                    raise ValidationError('Indica solo --fuente-id para consultar la programación.')
+                source = Fuente.objects.get(pk=options['fuente_id'])
+                last = Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio').first()
+                with connection.cursor() as cursor:
+                    cursor.execute('SELECT current_database()')
+                    database = cursor.fetchone()[0]
+                result = {'base': database, 'fuente_id': source.pk, 'activa': source.activa,
+                          'politica_version': source.politica_version, 'frecuencia_min': source.frecuencia_min,
+                          'aprobada_publicacion_automatica': source.aprobada_publicacion_automatica,
+                          'ejecuciones_en_curso': Ejecucion.objects.filter(fuente=source, estado='en_curso').count(),
+                          'ultima_ejecucion': {'id': last.pk, 'estado': last.estado, 'inicio': last.inicio} if last else None,
+                          'proxima_ejecucion': next_due(source)}
             elif action == 'resumen':
                 result = summary(Ejecucion.objects.get(pk=options['ejecucion_id']))
             elif action == 'recuperar':

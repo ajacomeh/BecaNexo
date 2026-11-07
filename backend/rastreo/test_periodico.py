@@ -1,4 +1,5 @@
 import io
+import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -132,6 +133,20 @@ class PeriodicTests(TransactionTestCase):
         self.assertIn('no_corresponde_aun', result.getvalue())
         self.assertEqual(Ejecucion.objects.count(), 1)
         self.assertEqual(Ejecucion.objects.get().origen, 'programada')
+
+    def test_programming_status_is_read_only_and_uses_test_database(self):
+        source = self.source()
+        before = Ejecucion.objects.count()
+        output = io.StringIO()
+        call_command('rastreo', 'estado-programacion', fuente_id=source.pk, stdout=output)
+        status = json.loads(output.getvalue())
+        self.assertEqual(status['base'], 'test_becanexo_db')
+        self.assertEqual(status['fuente_id'], source.pk)
+        self.assertEqual(status['frecuencia_min'], source.frecuencia_min)
+        self.assertFalse(status['aprobada_publicacion_automatica'])
+        self.assertEqual(status['ejecuciones_en_curso'], 0)
+        self.assertIsNone(status['ultima_ejecucion'])
+        self.assertEqual(Ejecucion.objects.count(), before)
 
     def test_robots_blocks_new_candidate_without_fabricating_publication(self):
         source = self.source()
