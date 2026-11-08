@@ -16,7 +16,7 @@ const profileLinks = {
   disponibilidad: ['/preferencias#disponibilidad', 'Actualizar disponibilidad'],
 }
 const labels = { nacionalidad: 'Nacionalidad', edad_a_fecha_referencia: 'Edad a la fecha de referencia', idioma: 'Idioma', nivel: 'Nivel', dedicacion: 'Dedicación', disponible_traslado: 'Disponibilidad de traslado', disponible_extranjero: 'Disponibilidad al extranjero', pais: 'País', provincia_residencia: 'Provincia', ciudad_residencia: 'Ciudad', estado_estudios: 'Estado de estudios', titulo_obtenido: 'Título obtenido', nombre_titulo: 'Nombre del título', area: 'Área', promedio: 'Promedio', escala_min: 'Mínimo de escala', escala_max: 'Máximo de escala' }
-Object.assign(labels, { equivalencia_documentada: 'Referencia de equivalencia de título', equivalencia_provincia: 'Referencia de equivalencia de provincia', equivalencia_ciudad: 'Referencia de equivalencia de ciudad', periodos_sin_superposicion: 'Periodos sin superposición', fecha_corte: 'Fecha de corte' })
+Object.assign(labels, { estado_exigido: 'Estado de estudios exigido', equivalencia_documentada: 'Referencia de equivalencia de título', equivalencia_provincia: 'Referencia de equivalencia de provincia', equivalencia_ciudad: 'Referencia de equivalencia de ciudad', periodos_sin_superposicion: 'Periodos sin superposición', fecha_corte: 'Fecha de corte' })
 function valueText(value, key, catalogs, spec) {
   if (value == null) return 'No declarado'
   if (Array.isArray(value)) return value.map(v => valueText(v, key, catalogs, spec)).join(', ')
@@ -27,16 +27,29 @@ function valueText(value, key, catalogs, spec) {
   return String(value).replaceAll('_', ' ')
 }
 
+function explanationText(item) {
+  if (!item.grupo_formacion) return item.explicacion
+  return item.explicacion?.replaceAll(`Grupo ${item.grupo_formacion}:`, 'Condiciones de una misma formación:')
+    .replaceAll(item.grupo_formacion, 'una misma formación')
+}
+
+function missingEvidenceText(item) {
+  if (item.grupo_formacion && item.resultado === 'no_cumple') return 'Se evaluaron tus formaciones declaradas; ninguna cumple conjuntamente las condiciones académicas de este grupo. Consulta la condición exigida de cada requisito.'
+  if (item.resultado === 'desconocido') return 'No hay datos suficientes para confirmar esta condición; consulta la explicación y la condición exigida.'
+  if (item.resultado === 'no_cumple') return 'Los datos declarados no coinciden con esta condición; consulta la explicación y el valor exigido.'
+  return 'No se requiere un dato individual para esta condición.'
+}
+
 function Evaluation({ item, catalogs }) {
   const type = catalogs.tipos_requisito.find(t => t.codigo === item.tipo)
   const condition = item.condicion_exigida
   return <li>
     <h5>{type?.nombre || item.tipo} · {item.obligatorio ? 'Obligatorio' : 'No obligatorio'}</h5>
-    <p className="small-note">{item.ambito === 'comun' ? 'Requisito común' : item.ambito === 'destino' ? 'Requisito de este destino' : 'Requisito de esta opción'}{item.grupo_formacion && ` · Misma formación: ${item.grupo_formacion}`}</p>
-    <p className="preserve-text">{item.descripcion}</p><p>{item.explicacion}</p>
+    <p className="small-note">{item.ambito === 'comun' ? 'Requisito común' : item.ambito === 'destino' ? 'Requisito de este destino' : 'Requisito de esta opción'}{item.grupo_formacion && ' · Debe cumplirse junto con las otras condiciones del grupo en una misma formación'}</p>
+    <p className="preserve-text">{item.descripcion}</p><p>{explanationText(item)}</p>
     <dl className="detail-data">
-      <div><dt>Dato declarado utilizado</dt><dd>{item.dato_declarado ? Object.entries(item.dato_declarado).map(([k, v]) => <p key={k}>{labels[k] || k}: {valueText(v, k, catalogs)}</p>) : 'Sin dato utilizado'}</dd></div>
-      <div><dt>Condición exigida</dt><dd>{Object.entries(condition.valores || {}).map(([k, v]) => <p key={k}>{type?.esquema_valor?.campos[k]?.label || k}: {valueText(v, k, catalogs, type?.esquema_valor?.campos[k])}</p>)}{condition.fecha_referencia && <p>Fecha de referencia: {condition.fecha_referencia}</p>}</dd></div>
+      <div><dt>Dato declarado utilizado</dt><dd>{item.dato_declarado ? Object.entries(item.dato_declarado).map(([k, v]) => <p key={k}>{labels[k] || k}: {valueText(v, k, catalogs)}</p>) : missingEvidenceText(item)}</dd></div>
+      <div><dt>Condición exigida</dt><dd>{Object.entries(condition.valores || {}).map(([k, v]) => <p key={k}>{type?.esquema_valor?.campos[k]?.label || labels[k] || k}: {valueText(v, k, catalogs, type?.esquema_valor?.campos[k])}</p>)}{condition.fecha_referencia && <p>Fecha de referencia: {condition.fecha_referencia}</p>}</dd></div>
     </dl>
     {item.comprobacion_externa && <div className="comparison-external"><strong>Verificación externa pendiente</strong><p>La entidad oferente comprueba los documentos y certificados. La coincidencia declarada no los acredita.</p>{condition.documento && <p>{condition.documento}</p>}{condition.acreditacion && <p>{condition.acreditacion}</p>}</div>}
     {item.resultado !== 'cumple' && profileLinks[item.seccion_perfil] && <Link className="secondary-link comparison-profile-link" to={profileLinks[item.seccion_perfil][0]}><Icon name="profile" /><span>{profileLinks[item.seccion_perfil][1]}</span></Link>}

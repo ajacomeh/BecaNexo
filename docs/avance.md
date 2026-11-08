@@ -1,5 +1,17 @@
 # Avance de BecaNexo
 
+## Cierre manual del bloque 10 — 07/11/2026
+
+El usuario confirmó satisfactoriamente **cinco comprobaciones manuales** de la explicación académica del comparador con el frontend real. La revisión manual se registra separada de las 20 pruebas focalizadas y los recorridos aislados del bloque. La corrección distingue formaciones declaradas que incumplen conjuntamente las condiciones de datos pendientes, sin exponer claves técnicas ni modificar la elegibilidad. El usuario autorizó un único commit local de cierre, sin push.
+
+## Bloque 10 — validación funcional integral y explicación académica (07/11/2026)
+
+Recorrido aislado con Django real y `test_becanexo_db`, almacenamiento temporal y datos sintéticos: `node e2e/integration-real.mjs --reset-test-db` terminó con código 0 antes de añadir la comprobación visual académica y confirmó registro, sesión, perfil, preferencias, catálogo, comparación, favoritos, recomendaciones, notificaciones, permisos, CSRF y revisión administrativa. `node e2e/proposals-real.mjs --reset-test-db` y su variante `--integrate` terminaron con código 0: guardado/conflicto/recuperación de propuestas, creación de borrador vinculado, procedencia privada y exclusión del catálogo público, a 1440/390/320 px. Se reutilizan las pruebas anteriores de administración de entidades, publicación y notificaciones; no se ejecutó rastreo real ni se publicó nada en desarrollo.
+
+Corrección puntual solo de presentación en `Comparison.jsx`: cuando existe formación declarada pero ninguna cumple conjuntamente un grupo académico, la vista explica ese incumplimiento sin decir «Sin dato utilizado» ni exponer claves como `academico_E_0`. Cuando faltan datos conserva el estado pendiente y su motivo. Los nombres y valores exigidos permanecen visibles; `backend/convocatorias/comparacion.py` y sus reglas no cambiaron. `npm.cmd test -- src/Comparison.test.jsx --reporter=dot` terminó **20/20** después de ajustar una etiqueta de respaldo. La comprobación con backend real del escenario académico E confirmó texto y ausencia de desbordamiento a 1440, 390 y 320 px; se generaron capturas locales ignoradas por Git. Una repetición posterior del recorrido integral alcanzó esa comprobación, pero su cierre final no quedó recuperable tras la interrupción de la sesión; no se cuenta como otro recorrido completo. El recorrido administrativo `--integrate` sí tuvo salida 0 verificable.
+
+Comprobaciones finales: `npm.cmd run lint`, `npm.cmd run build`, `manage.py check` y `git diff --check` aprobaron. No se cambiaron modelos, migraciones, backend, datos ni reglas de elegibilidad. La validación visual del usuario se confirmó después y consta en el cierre manual anterior; la guía de arquitectura sin seguimiento permanece fuera del cambio.
+
 ## Cierre manual del bloque 9 — 07/11/2026
 
 El usuario confirmó satisfactoriamente **cinco comprobaciones visuales** de `/notificaciones` con una sesión real de postulante. Esta revisión manual se registra por separado de las pruebas backend y frontend indicadas abajo. La bandeja, su contador, paginación y marcado de lectura quedaron aceptados para el cierre técnico del bloque. La migración `notificaciones.0001_initial` ya está aplicada en desarrollo, sin operaciones pendientes; se autoriza únicamente un commit local, sin push.

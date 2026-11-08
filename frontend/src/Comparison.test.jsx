@@ -184,6 +184,33 @@ it('presenta disponibilidad completa como coincidencia con requisito parcial', a
   expect(screen.queryByRole('heading', { name: 'Opciones con incumplimientos obligatorios' })).not.toBeInTheDocument()
 })
 
+it('explica formaciones evaluadas sin exponer la clave interna del grupo académico', async () => {
+  const academic = { ...item, tipo: 'FORMACION', descripcion: 'Se exige maestría finalizada', resultado: 'no_cumple',
+    grupo_formacion: 'academico_D_0', dato_declarado: null,
+    explicacion: 'Grupo academico_D_0: ninguna formación declarada satisface conjuntamente las condiciones; todas se descartan por al menos un dato conocido.',
+    condicion_exigida: { valores: { estado_exigido: 'finalizada' } } }
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'no_cumple', requisitos: [academic] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  expect(await screen.findByText('Se exige maestría finalizada')).toBeVisible()
+  expect(screen.getByText(/Se evaluaron tus formaciones declaradas; ninguna cumple conjuntamente/)).toBeVisible()
+  expect(screen.getByText(/Condiciones de una misma formación: ninguna formación declarada/)).toBeVisible()
+  expect(screen.getByText(/Estado de estudios exigido: finalizada/)).toBeVisible()
+  expect(screen.queryByText(/academico_D_0/)).not.toBeInTheDocument()
+  expect(screen.queryByText('Sin dato utilizado')).not.toBeInTheDocument()
+})
+
+it('distingue una condición pendiente sin datos suficientes de un incumplimiento académico', async () => {
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'desconocido', requisitos: [
+    { ...item, tipo: 'FORMACION', resultado: 'desconocido', dato_declarado: null, explicacion: 'No has declarado formaciones; no se interpreta como ausencia de estudios.' },
+  ] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  expect(await screen.findByText(/No hay datos suficientes para confirmar esta condición/)).toBeVisible()
+  expect(screen.getByText(/No has declarado formaciones/)).toBeVisible()
+  expect(screen.queryByText(/Se evaluaron tus formaciones declaradas/)).not.toBeInTheDocument()
+})
+
 it('no sugiere editar el perfil para una acreditación externa o una regla sin revisión', async () => {
   offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'desconocido', requisitos: [
     { ...item, id: 2, tipo: 'ACREDITACION', resultado: 'desconocido', seccion_perfil: null, comprobacion_externa: true },
