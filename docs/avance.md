@@ -1,5 +1,13 @@
 # Avance de BecaNexo
 
+## Bloque 11 — unificación de catálogo y recomendaciones (09/11/2026)
+
+`/becas` presenta un solo espacio de resultados con los modos «Todas las becas» y «Para ti · IA» para postulantes. El primero conserva filtros, orden y paginación; el segundo muestra el orden, la elegibilidad y la afinidad devueltos por la API existente, sin aplicar filtros del catálogo. Al alternar se reutiliza la respuesta de recomendaciones de la misma sesión; «Actualizar recomendaciones» consulta de nuevo. Al cerrar sesión o cambiar de usuario se desmonta el estado privado del catálogo. La carga de metadatos de tarjetas se separó del listado general: un error en este listado no impide consultar recomendaciones. Ambos modos conservan `CatalogCard`, detalle y favoritos. No cambiaron backend, ONNX ni reglas de comparación.
+
+Verificación con API simulada en Vitest: `npm.cmd test -- src/Recommendations.test.jsx src/Catalog.test.jsx --reporter=dot`, **23/23** aprobadas tras los últimos ajustes; cubre sustitución de listados, orden, datos pendientes/incumplidos, filtros, paginación, carga, errores independientes, reintento, ausencia, favorito y cambio de cuenta. `npm.cmd run lint` y `npm.cmd run build` terminaron con código 0 después del último ajuste de carga. Recorrido de navegador con API simulada y Vite local: 1440, 390 y 320 px sin desbordamiento; en cada tamaño hubo una tarjeta en modo IA, selector activo y foco conservado al activarlo por teclado. El ejecutor terminó con código 0 y se cerró solo el Vite auxiliar iniciado para esa revisión. No se modificaron datos.
+
+El usuario confirmó después **siete comprobaciones manuales satisfactorias** del catálogo y las recomendaciones con una sesión real de postulante. Se registran aparte de las pruebas con API simulada y autorizan el commit local de cierre del bloque 11, sin push.
+
 ## Cierre manual del bloque 10 — 07/11/2026
 
 El usuario confirmó satisfactoriamente **cinco comprobaciones manuales** de la explicación académica del comparador con el frontend real. La revisión manual se registra separada de las 20 pruebas focalizadas y los recorridos aislados del bloque. La corrección distingue formaciones declaradas que incumplen conjuntamente las condiciones de datos pendientes, sin exponer claves técnicas ni modificar la elegibilidad. El usuario autorizó un único commit local de cierre, sin push.

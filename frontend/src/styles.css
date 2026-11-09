@@ -10,6 +10,13 @@
 .name-dialog .button { min-width: 0; }
 
 .public-catalog .catalog-filters { padding: 22px; }
+.public-catalog .catalog-modes { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0; }
+.public-catalog .catalog-modes .button { min-width: 0; width: auto; }
+.public-catalog .catalog-modes .catalog-mode-active { background: #19375a; color: white; }
+.public-catalog .catalog-modes .catalog-mode-active:hover { background: #254c77; }
+.public-catalog .catalog-recommendations-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin: 0 0 24px; }
+.public-catalog .catalog-recommendations-heading > div { flex: 1 1 320px; min-width: 0; }
+.public-catalog .catalog-recommendations-heading p { margin: 8px 0 0; line-height: 1.5; }
 .public-catalog .catalog-filters h2 { margin-bottom: 18px; }
 .public-catalog .catalog-filters form { gap: 16px; }
 .public-catalog .catalog-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: end; }
