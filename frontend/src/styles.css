@@ -36,6 +36,19 @@
 .public-catalog .catalog-card-actions > .catalog-detail-link:hover { background: #1d4ed8; }
 .public-catalog .catalog-card-actions .favorite-control { min-width: 0; }
 .public-catalog .catalog-coverage-note { margin-top: 24px; }
+.admin-offers .catalog-filters { padding: 22px; }
+.admin-offers .catalog-filters h2 { margin-bottom: 8px; }
+.admin-offers .catalog-filter-status { margin: 0 0 16px; color: #53647e; font-size: .875rem; }
+.admin-offers .catalog-filters form { display: grid; gap: 16px; }
+.admin-offers .catalog-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: end; }
+.admin-offers .field > span { display: block; margin-bottom: 8px; font-size: .875rem; font-weight: 650; color: #53647e; }
+.admin-offers .catalog-filters summary { cursor: pointer; padding: 10px 0; color: #1d4ed8; font-weight: 600; }
+.admin-offers .catalog-filters summary:focus-visible { outline: 3px solid #087f8c; outline-offset: 2px; }
+.admin-offers .catalog-filters details .catalog-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
+.admin-offers .form-actions .button { min-width: 0; width: auto; }
+.admin-offers .catalog-results-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin: 24px 0; color: #53647e; }
+.admin-offers .catalog-results-heading .field { display: grid; grid-template-columns: auto minmax(140px, 200px); align-items: center; gap: 6px 12px; }
+.admin-offers .catalog-results-heading .field label { margin: 0; }
 .offer-card-heading { display: grid; justify-items: start; gap: 8px; width: 100%; }
 .offer-card-heading h2 { line-height: 1.35; overflow-wrap: anywhere; }
 .offer-provider { color: #53647e; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
@@ -123,7 +136,7 @@
 .benefit-list li { padding-block: 12px; }
 .benefit-list h3, .benefit-list h4 { margin-bottom: 6px; font-weight: 700; }
 .benefit-list p { margin-bottom: 8px; }
-@media (max-width: 1200px) { .public-catalog .catalog-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1200px) { .public-catalog .catalog-filter-grid, .admin-offers .catalog-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .public-catalog .catalog-filter-grid, .public-catalog .catalog-filters details .catalog-filter-grid { grid-template-columns: 1fr; }
   .public-catalog .catalog-results-heading .field { grid-template-columns: 1fr; width: 100%; }
@@ -131,6 +144,9 @@
   .public-catalog .catalog-card { padding: 20px; }
   .public-catalog .catalog-card-actions > *, .public-catalog .catalog-card-actions .button { width: 100%; }
   .public-catalog .catalog-card-actions > .secondary-link { width: 100%; }
+  .admin-offers .catalog-filter-grid, .admin-offers .catalog-filters details .catalog-filter-grid { grid-template-columns: 1fr; }
+  .admin-offers .catalog-results-heading .field { grid-template-columns: 1fr; width: 100%; }
+  .admin-offers .catalog-filters .form-actions .button { width: 100%; }
 }
 
 .comparison-option { margin-top: 20px; padding: 20px; border: 1px solid #d7dfed; border-left: 5px solid #087f8c; border-radius: 10px; overflow-wrap: anywhere; }

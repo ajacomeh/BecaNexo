@@ -1,5 +1,15 @@
 # Avance de BecaNexo
 
+## Bloque 14 — filtros de Administración → Convocatorias (09/11/2026)
+
+La bandeja administrativa reutiliza el formulario compacto de filtros del catálogo con búsqueda, nivel, modalidad y destino en una cuadrícula adaptable; tipo de beca y estado se agrupan en «Más filtros». Se distinguen las opciones sin filtro de los estados reales, se indica cuántos filtros están aplicados y se añaden «Aplicar filtros» y «Limpiar filtros». «Ordenar por» está junto al contador de resultados. Las rutas, parámetros de búsqueda, paginación y acciones administrativas se conservan; no cambiaron API, permisos ni datos.
+
+Verificación con API simulada: `npm.cmd test -- src/Offers.test.jsx src/Catalog.test.jsx --reporter=dot`, **29/29** aprobadas tras corregir una expectativa de la prueba nueva; cubren aplicación, limpieza, expansión, valores, orden y conservación del catálogo público. Lint y build terminaron con código 0. Recorrido visual con API simulada a 1440, 390 y 320 px: formulario y selector de orden sin desbordamiento, «Más filtros» inicialmente cerrado y desplegado en móvil.
+
+El usuario confirmó manualmente los filtros y su diseño. Detectó que los controles «Anterior — Página 1 — Siguiente» seguían visibles con una sola página. La bandeja ahora calcula las páginas con `count` y `page_size`, oculta la navegación con cero o una página y conserva los límites de los botones en varias páginas. `Offers.test.jsx` **16/16** con API simulada después del ajuste: cero, una y varias páginas, avance y retroceso, aplicación y limpieza de filtros y orden; lint, build y `git diff --check` con código 0.
+
+**Cierre manual:** el usuario validó el diseño compacto, los filtros principales y «Más filtros», aplicar y limpiar, orden, opciones predeterminadas, ausencia de paginación con una sola página y presentación visual. La navegación entre varias páginas no pudo verificarse manualmente porque los datos reales no alcanzan dos páginas; se comprobó únicamente con API simulada, incluidos los casos de cero, una y varias páginas. Esta limitación no se presenta como validación manual.
+
 ## Bloque 13 — detalle público de becas (09/11/2026)
 
 Se compactó el detalle sin cambiar contratos ni elegibilidad: el enlace oficial y favoritos aparecen junto al título y la entidad; los datos de cierre, nivel, modalidad, destino y financiamiento permanecen visibles en el encabezado. El resumen general precede a la comparación; se ajustaron márgenes de tarjetas y paneles para reducir espacio vacío. Los requisitos que pertenecen a un mismo grupo académico muestran una etiqueta legible y una explicación compartida, sin exponer claves internas ni repetir la condición en cada fila. Las condiciones originales, beneficios por opción, documentación y referencias permanecen consultables.

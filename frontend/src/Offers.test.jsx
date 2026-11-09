@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import OfferForm from './components/OfferForm'
@@ -12,8 +12,92 @@ import { requirementFields, generalFields, benefitFields } from './pages/offerFi
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: { nombre: 'Admin sintético', rol: 'administrador' }, logout: vi.fn() }) }))
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }], areas: [], idiomas: [], tipos_beca: [], tipos_requisito: [], niveles: [], modalidades: [] }
+const filterCatalogs = { ...catalogs, niveles: [{ valor: 'maestria', nombre: 'Maestría' }], modalidades: [{ valor: 'virtual', nombre: 'Virtual' }], tipos_beca: [{ id: 3, nombre: 'Mérito' }] }
+const adminListing = { count: 1, page: 1, page_size: 12, results: [{ id: 4, estado: 'borrador', titulo: 'Convocatoria sintética', institucion: { nombre: 'Entidad ficticia' }, beneficios: [], opciones: [], cierre: null }] }
 
 describe('convocatorias', () => {
+  it('aplica y limpia filtros administrativos, conserva los valores al contraer Más filtros y señala los activos', async () => {
+    const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs : adminListing)
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)
+    const user = userEvent.setup()
+    const form = await screen.findByRole('heading', { name: 'Filtros de búsqueda' })
+    const filters = form.closest('section')
+    expect(within(filters).getByText('Sin filtros activos')).toBeVisible()
+    expect(within(filters).getByRole('option', { name: 'Todos los niveles' })).toBeInTheDocument()
+    expect(within(filters).getByRole('option', { name: 'Todas las modalidades' })).toBeInTheDocument()
+    expect(within(filters).getByRole('option', { name: 'Todos los destinos' })).toBeInTheDocument()
+    expect(within(filters).queryByRole('option', { name: 'Sin declarar' })).not.toBeInTheDocument()
+    await user.type(within(filters).getByLabelText('Buscar título, institución o área'), 'Convocatoria')
+    await user.selectOptions(within(filters).getByLabelText('Nivel'), 'maestria')
+    const more = within(filters).getByText('Más filtros').closest('details')
+    expect(more.open).toBe(false)
+    await user.click(within(filters).getByText('Más filtros'))
+    await user.selectOptions(within(filters).getByLabelText('Tipo de beca'), '3')
+    await user.selectOptions(within(filters).getByLabelText('Estado'), 'borrador')
+    await user.click(within(filters).getByText('Más filtros'))
+    expect(more.open).toBe(false)
+    await user.click(within(filters).getByText('Más filtros'))
+    expect(within(filters).getByLabelText('Tipo de beca')).toHaveValue('3')
+    expect(within(filters).getByLabelText('Estado')).toHaveValue('borrador')
+    await user.click(within(filters).getByRole('button', { name: 'Aplicar filtros' }))
+    await waitFor(() => expect(get).toHaveBeenCalledWith('gestion/convocatorias', expect.objectContaining({ q: 'Convocatoria', nivel: 'maestria', tipo_beca: '3', estado: 'borrador' })))
+    expect(await screen.findByText('4 filtros activos')).toBeVisible()
+    const previousRequests = get.mock.calls.filter(([path]) => path === 'gestion/convocatorias').length
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    await waitFor(() => expect(get.mock.calls.filter(([path]) => path === 'gestion/convocatorias')).toHaveLength(previousRequests + 1))
+    expect(get.mock.calls.filter(([path]) => path === 'gestion/convocatorias').at(-1)[1]).toEqual({})
+    expect(screen.getByText('Sin filtros activos')).toBeVisible()
+    expect(screen.getByLabelText('Nivel')).toHaveValue('')
+  })
+
+  it('ordena resultados administrativos sin perder filtros y vuelve a la primera página', async () => {
+    const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs : adminListing)
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias?nivel=maestria&page=2']}><Offers admin /></MemoryRouter>)
+    const order = await screen.findByLabelText('Ordenar por')
+    expect(screen.getByText('1 filtro activo')).toBeVisible()
+    await userEvent.selectOptions(order, 'titulo')
+    await waitFor(() => expect(get).toHaveBeenCalledWith('gestion/convocatorias', { nivel: 'maestria', orden: 'titulo' }))
+    expect(screen.getByLabelText('Nivel')).toHaveValue('maestria')
+    expect(screen.getByLabelText('Ordenar por')).toHaveValue('titulo')
+  })
+
+  it.each([0, 1])('oculta la paginación administrativa con %i convocatorias', async count => {
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs : { ...adminListing, count, results: count ? adminListing.results : [] })
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)
+    expect(await screen.findByText(`${count} convocatorias encontradas`)).toBeVisible()
+    expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument()
+  })
+
+  it('pagina varias páginas y actualiza los controles al ordenar, filtrar y limpiar', async () => {
+    const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path, params = {}) => path === 'becas/catalogos' ? filterCatalogs : {
+      ...adminListing, count: params.estado ? 1 : 25, page: Number(params.page || 1),
+    })
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias?q=Oferta&page=2']}><Offers admin /></MemoryRouter>)
+    const user = userEvent.setup()
+    let pagination = await screen.findByRole('navigation', { name: 'Paginación' })
+    expect(within(pagination).getByText('Página 2 de 3')).toBeVisible()
+    expect(within(pagination).getByRole('button', { name: 'Anterior' })).toBeEnabled()
+    expect(within(pagination).getByRole('button', { name: 'Siguiente' })).toBeEnabled()
+    await user.click(within(pagination).getByRole('button', { name: 'Siguiente' }))
+    pagination = await screen.findByRole('navigation', { name: 'Paginación' })
+    expect(await within(pagination).findByText('Página 3 de 3')).toBeVisible()
+    expect(within(pagination).getByRole('button', { name: 'Siguiente' })).toBeDisabled()
+    await user.click(within(pagination).getByRole('button', { name: 'Anterior' }))
+    expect(await screen.findByText('Página 2 de 3')).toBeVisible()
+    await user.selectOptions(screen.getByLabelText('Ordenar por'), 'titulo')
+    expect(await screen.findByText('Página 1 de 3')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled()
+    await waitFor(() => expect(get).toHaveBeenCalledWith('gestion/convocatorias', { q: 'Oferta', orden: 'titulo' }))
+    await user.click(screen.getByText('Más filtros'))
+    await user.selectOptions(screen.getByLabelText('Estado'), 'borrador')
+    await user.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+    expect(await screen.findByText('1 convocatorias encontradas')).toBeVisible()
+    expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+    expect(await screen.findByText('Página 1 de 3')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled()
+  })
+
   it('envía día de cierre sin hora y conserva el literal de origen', async () => {
     const save = vi.fn().mockResolvedValue({})
     render(<OfferForm fields={generalFields(catalogs, [{ id: 1, nombre: 'Entidad ficticia' }])} onSubmit={save} />)
