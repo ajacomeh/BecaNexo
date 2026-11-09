@@ -176,6 +176,7 @@ it('mantiene separados los datos de dos opciones y permite consultar paneles y r
   expect(documentPanel).toHaveTextContent('Original o copia certificada')
   expect(documentPanel).not.toHaveTextContent('Documento de identidad')
   expect(within(first).queryByText('Certificado de estudios')).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Documentación requerida', level: 2 }).closest('section')).toHaveClass('profile-card', 'offer-documents-common')
   expect(screen.getByText('Documentos comunes a la convocatoria').parentElement).toHaveTextContent('Documento de identidad')
   const source = within(first).getByText('Referencia y evidencia en las bases').closest('details')
   await userEvent.click(within(first).getByText('Referencia y evidencia en las bases'))
@@ -186,14 +187,17 @@ it('mantiene separados los datos de dos opciones y permite consultar paneles y r
 it('agrupa la verificación común y conserva las condiciones y referencias por requisito', () => {
   const requirementCatalogs = { ...catalogs, tipos_requisito: [{ id: 1, nombre: 'Edad', esquema_valor: { campos: { minimo: { label: 'Edad mínima' } } } }, { id: 2, nombre: 'Dedicación', esquema_valor: { campos: {} } }] }
   const rows = [
-    { id: 1, tipo_requisito: 1, obligatorio: true, texto_original: 'Mayor de 21 años', valor_estructurado: { minimo: 21 }, modo_comprobacion: 'datos_declarados', referencia_bases: 'Sección 1' },
-    { id: 2, tipo_requisito: 2, obligatorio: true, texto_original: 'Tiempo parcial disponible', modo_comprobacion: 'datos_declarados', referencia_bases: 'Sección 2' },
+    { id: 1, tipo_requisito: 1, obligatorio: true, texto_original: 'Mayor de 21 años', valor_estructurado: { minimo: 21 }, modo_comprobacion: 'datos_declarados', referencia_bases: 'Sección 1', grupo_formacion: 'academico_E_0' },
+    { id: 2, tipo_requisito: 2, obligatorio: true, texto_original: 'Tiempo parcial disponible', modo_comprobacion: 'datos_declarados', referencia_bases: 'Sección 2', grupo_formacion: 'academico_E_0' },
   ]
   const { rerender } = render(<RequirementList records={rows} catalogs={requirementCatalogs} />)
   expect(screen.getAllByText(/Para todos los requisitos de este grupo/)).toHaveLength(1)
   expect(screen.getByText('Mayor de 21 años')).toBeVisible()
   expect(screen.getByText('Tiempo parcial disponible')).toBeVisible()
   expect(screen.getByText('Edad mínima').nextElementSibling).toHaveTextContent('21')
+  expect(screen.getByText('Los requisitos con el mismo grupo académico deben cumplirse con una misma formación.')).toBeVisible()
+  expect(screen.getAllByText('Grupo académico 1')).toHaveLength(2)
+  expect(screen.queryByText(/academico_E_0/)).not.toBeInTheDocument()
   const references = screen.getAllByText('Referencia y evidencia en las bases').map(node => node.closest('details'))
   expect(references.every(panel => !panel.open)).toBe(true)
   expect(references[0]).toHaveTextContent('Sección 1')

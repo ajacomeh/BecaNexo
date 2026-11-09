@@ -34,17 +34,18 @@ function ruleText(value, spec, catalogs) {
 export function RequirementList({ records, catalogs, nested = false }) {
   const Heading = nested ? 'h4' : 'h3'
   const sharedVerification = records.length > 1 && records.every(r => r.modo_comprobacion === records[0].modo_comprobacion)
+  const academicGroups = [...new Set(records.map(r => r.grupo_formacion).filter(Boolean))]
+  const groupNumbers = new Map(academicGroups.map((group, index) => [group, index + 1]))
   const verificationText = r => r.modo_comprobacion === 'entidad_oferente'
     ? 'Verificación externa por la entidad oferente. BecaNexo no acredita este requisito.'
     : 'Condición sobre datos declarados. No constituye una verificación documental.'
-  return records.length ? <div className="requirement-group">{sharedVerification && <p className="requirement-group-note accent-note">Para todos los requisitos de este grupo: {verificationText(records[0])}</p>}<ul className="detail-list">{records.map((r) => {
+  return records.length ? <div className="requirement-group">{sharedVerification && <p className="requirement-group-note accent-note">Para todos los requisitos de este grupo: {verificationText(records[0])}</p>}{academicGroups.length > 0 && <p className="requirement-group-note">Los requisitos con el mismo grupo académico deben cumplirse con una misma formación.</p>}<ul className="detail-list">{records.map((r) => {
     const type = catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)
     const values = Object.entries(r.valor_estructurado || {})
-    return <li key={r.id} className="requirement-item"><Heading>{type?.nombre || 'Requisito'} <span className="requirement-kind">{r.obligatorio ? 'Obligatorio' : 'Preferencia'}</span></Heading><p className="preserve-text">{r.texto_original}</p>
+    return <li key={r.id} className="requirement-item"><Heading>{type?.nombre || 'Requisito'} <span className="requirement-kind">{r.obligatorio ? 'Obligatorio' : 'Preferencia'}</span>{r.grupo_formacion && <span className="requirement-group-label">Grupo académico {groupNumbers.get(r.grupo_formacion)}</span>}</Heading><p className="preserve-text">{r.texto_original}</p>
       {values.length > 0 && <dl className="detail-data requirement-values">{values.map(([key, value]) => <div key={key}><dt>{type?.esquema_valor?.campos?.[key]?.label || key}</dt><dd>{ruleText(value, type?.esquema_valor?.campos?.[key], catalogs)}</dd></div>)}</dl>}
       {r.fecha_referencia && <p>Fecha de referencia: {r.fecha_referencia}</p>}
       {r.destino && <p>Condición del destino: {catalogs.paises.find(p => p.id === r.destino)?.nombre || 'No especificado'}</p>}
-      {r.grupo_formacion && <p>Debe cumplirse con una misma formación junto al grupo: {r.grupo_formacion}.</p>}
       {r.documento_exigido && <p>Documento exigido: {r.documento_exigido}</p>}{r.detalle_acreditacion && <p>Condiciones documentales: {r.detalle_acreditacion}</p>}
       {!sharedVerification && <p className="accent-note">{verificationText(r)}</p>}
       {r.referencia_bases && <details className="detail-reference"><summary>Referencia y evidencia en las bases</summary><p className="preserve-text">{r.referencia_bases}</p></details>}
@@ -62,13 +63,14 @@ export function Documentation({ offer, catalogs, scopeId, showWarning = true }) 
   const groups = [{ id: null, title: 'Documentos comunes a la convocatoria' }, ...offer.opciones.map(o => ({ id: o.id, title: `Documentos de la opción: ${o.programa || `${o.nivel} / ${o.modalidad}`} (#${o.id})` }))]
     .filter(group => scopeId === undefined || group.id === scopeId)
   const scoped = scopeId !== undefined
-  return <section className={scoped ? 'offer-documents-scoped' : 'profile-card'} aria-label={scoped ? 'Documentación de este ámbito' : undefined}>
-    {scoped ? <h3>Documentación requerida</h3> : <h2>Documentación requerida</h2>}
+  const nested = scoped && scopeId !== null
+  return <section className={nested ? 'offer-documents-scoped' : 'profile-card offer-detail-section offer-documents-common'} aria-label={nested ? 'Documentación de este ámbito' : undefined}>
+    {nested ? <h3>Documentación requerida</h3> : <h2>Documentación requerida</h2>}
     {showWarning && <p>Los documentos se presentan ante la entidad oferente. BecaNexo no los recibe ni acredita; su verificación externa permanece pendiente.</p>}
     {!documents.length && <p>{scoped ? 'No se registraron documentos para este ámbito. Consulta las bases oficiales.' : 'Consulta las bases oficiales para confirmar la documentación requerida'}</p>}
     {groups.map(group => {
       const rows = documents.filter(r => (r.opcion_estudio ?? null) === group.id)
-      return rows.length ? <div key={group.id ?? 'common'}>{scoped ? <h4>{group.title}</h4> : <h3>{group.title}</h3>}<ul className="detail-list">{rows.map(r => {
+      return rows.length ? <div key={group.id ?? 'common'}>{nested ? <h4>{group.title}</h4> : <h3>{group.title}</h3>}<ul className="detail-list">{rows.map(r => {
         const v = r.valor_estructurado || {}
         const type = catalogs.tipos_requisito.find(t => t.id === r.tipo_requisito)
         const title = v.documento || v.certificados_admitidos || r.documento_exigido || 'Documento indicado en las bases'
@@ -140,26 +142,26 @@ export default function OfferDetail() {
   return <OffersLayout><Link className="back-link" to="/becas"><Icon name="back" /><span>Volver al catálogo</span></Link>
     {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
     {!data && !error && <p role="status"><Icon name="loading" />Cargando convocatoria…</p>}
-    {offer && <><header className="offer-detail-hero"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div>
+    {offer && <><header className="offer-detail-hero"><div className="offer-hero-top"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div>
+      <div className="offer-hero-actions">{officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
+        <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div></div>
       <dl className="offer-hero-facts"><div><dt>Cierre</dt><dd>{closingText(offer)}</dd></div>
         {options.length > 0 && <><div><dt>{options.length === 1 ? 'Nivel y modalidad' : 'Niveles y modalidades'}</dt><dd>{unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</dd></div>
           <div><dt>{destinations.length === 1 ? 'Destino' : 'Destinos'}</dt><dd>{destinations.join(', ') || 'No especificado'}</dd></div></>}
         {financing.length > 0 && <div className="offer-hero-financing"><dt>Financiamiento</dt><dd>{financing.map((line, index) => <span key={index}>{line}</span>)}</dd></div>}</dl>
-      <div className="offer-hero-actions">{officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
-        <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div>
-      <p className="small-note">El enlace oficial permite consultar la convocatoria; no necesariamente abre un formulario de postulación.</p></header>
+      {officialUrl && <p className="small-note">El enlace oficial permite consultar la convocatoria; no necesariamente abre un formulario de postulación.</p>}</header>
       {offer.estado === 'cerrada' && <Message kind="info">La fecha de cierre ya pasó. Esta oferta se conserva para consulta.</Message>}
       {offer.estado === 'cierre_hoy' && <Message kind="info">El cierre está indicado solo por día. No se conoce la hora; consulta el sitio oficial antes de postular.</Message>}
-      <Comparison key={offer.id} offerId={offer.id} catalogs={data.catalogs} />
-      <section className="profile-card"><h2>Resumen y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
+      <section className="profile-card offer-detail-section"><h2>Resumen y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
         <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Cobertura publicada</dt><dd>{display(offer.cobertura_tipo)}</dd></div>
           <div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div>{offer.cierre_original && <div><dt>Cierre según fuente</dt><dd>{offer.cierre_original}</dd></div>}
           <div><dt>Publicación en la fuente</dt><dd>{display(offer.fecha_publicacion)}</dd></div><div><dt>Gastos no cubiertos</dt><dd>{display(offer.gastos_no_cubiertos)}</dd></div><div><dt>Obligaciones</dt><dd>{display(offer.obligaciones_beneficiario)}</dd></div></dl><p className="small-note">Los instantes se muestran en America/Guayaquil. Un cierre expresado solo como día no tiene hora confirmada.</p></section>
-      <h2 className="section-heading">Opciones de estudio</h2><p className="small-note offer-options-note">Las condiciones y documentos de cada opción se consultan por separado. La entidad oferente verifica los documentos y certificados; BecaNexo no los recibe.</p>{offer.opciones.map((o, index) => <OptionStudy key={o.id} option={o} index={index} offer={offer} catalogs={data.catalogs} />)}
-      <section className="profile-card"><h2>Beneficios comunes</h2><BenefitList records={offer.beneficios.filter((b) => !b.opcion_estudio)} /><p className="profile-note">Cada porcentaje corresponde exclusivamente al concepto financiado. No representa el costo total de estudiar.</p></section>
-      <section className="profile-card"><h2>Requisitos comunes</h2><RequirementList records={offer.requisitos.filter((r) => !r.opcion_estudio && !isDocument(r, data.catalogs))} catalogs={data.catalogs} /></section>
+      <Comparison key={offer.id} offerId={offer.id} catalogs={data.catalogs} />
+      <h2 className="section-heading offer-options-heading">Opciones de estudio</h2><p className="small-note offer-options-note">Las condiciones y documentos de cada opción se consultan por separado. La entidad oferente verifica los documentos y certificados; BecaNexo no los recibe.</p>{offer.opciones.map((o, index) => <OptionStudy key={o.id} option={o} index={index} offer={offer} catalogs={data.catalogs} />)}
+      <section className="profile-card offer-detail-section"><h2>Beneficios comunes</h2><BenefitList records={offer.beneficios.filter((b) => !b.opcion_estudio)} /><p className="profile-note">Cada porcentaje corresponde exclusivamente al concepto financiado. No representa el costo total de estudiar.</p></section>
+      <section className="profile-card offer-detail-section"><h2>Requisitos comunes</h2><RequirementList records={offer.requisitos.filter((r) => !r.opcion_estudio && !isDocument(r, data.catalogs))} catalogs={data.catalogs} /></section>
       <Documentation offer={offer} catalogs={data.catalogs} scopeId={null} showWarning={false} />
-      <section className="profile-card offer-source"><h2>Bases y postulación externa</h2><p>La postulación se realiza en la plataforma de la entidad oferente.</p><p>BecaNexo no tramita solicitudes ni adjudica becas.</p>
+      <section className="profile-card offer-source offer-detail-section"><h2>Bases y postulación externa</h2><p>La postulación se realiza en la plataforma de la entidad oferente.</p><p>BecaNexo no tramita solicitudes ni adjudica becas.</p>
         {basesUrl && basesUrl !== officialUrl && <a className="secondary-link" href={basesUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar bases oficiales</span></a>}{offer.actualizado_en && <p className="small-note">Última actualización: {date(offer.actualizado_en)}</p>}</section></>}
   </OffersLayout>
 }
