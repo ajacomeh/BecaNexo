@@ -1,5 +1,11 @@
 # Avance de BecaNexo
 
+## Cierre del bloque 12 — rastreo automático SIAU (09/11/2026)
+
+La tarea habilitada `BecaNexo-Rastreo-SIAU` inició automáticamente el rastreador el 09/11/2026 a las 14:43:27 (UTC−5). Los eventos del Programador registran inicio y finalización de `powershell.exe` con código 0. La ejecución persistida ID 5, de origen `programada`, transcurrió de 14:43:41 a 14:44:10, terminó `finalizada` y sin error resumido. Observó las cuatro publicaciones existentes y creó cuatro versiones clasificadas `cambio_bytes`; esto no demuestra cambios sustanciales. Incorporó cinco documentos (total: 21) y registró cuatro avisos `REVISION_DOCUMENTAL_PENDIENTE`, sujetos a revisión administrativa, no errores del rastreador.
+
+Un segundo disparo de la misma tarea a las 14:46 finalizó con código 0 y quedó en el JSONL como `no_corresponde_aun`, sin crear otra ejecución: se respetó la frecuencia interna de 1440 minutos. La tarea tiene un único desencadenante horario; la causa de los dos disparos próximos no quedó determinada. El último resultado del Programador fue 0, sin ejecuciones omitidas. La programación y el rastreo automático quedaron verificados; permanece pendiente la revisión editorial de la evidencia documental. No se modificaron código, configuración, datos ni la tarea durante este diagnóstico.
+
 ## Bloque 11 — unificación de catálogo y recomendaciones (09/11/2026)
 
 `/becas` presenta un solo espacio de resultados con los modos «Todas las becas» y «Para ti · IA» para postulantes. El primero conserva filtros, orden y paginación; el segundo muestra el orden, la elegibilidad y la afinidad devueltos por la API existente, sin aplicar filtros del catálogo. Al alternar se reutiliza la respuesta de recomendaciones de la misma sesión; «Actualizar recomendaciones» consulta de nuevo. Al cerrar sesión o cambiar de usuario se desmonta el estado privado del catálogo. La carga de metadatos de tarjetas se separó del listado general: un error en este listado no impide consultar recomendaciones. Ambos modos conservan `CatalogCard`, detalle y favoritos. No cambiaron backend, ONNX ni reglas de comparación.
