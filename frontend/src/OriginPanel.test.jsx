@@ -38,6 +38,23 @@ it('no presenta procedencia en una convocatoria manual', async () => {
   expect(screen.queryByText('Registrar resolución comprobada')).not.toBeInTheDocument()
 })
 
+it('muestra la correspondencia estable entre candidato y opción sin confundir alternativas iguales', async () => {
+  vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('/documentos')
+    ? { count: 0, results: [] } : { ...origin,
+      aplicacion: { propuesta_id: 3, opciones_ids: { o1: 11, o2: 12 } },
+      estado: { bloqueos: [], pendientes: [] },
+      resoluciones: [{ id: 15, pendiente_id: 'opciones.o3', motivo: 'Revisión exacta',
+        evidencia_id: 8, opcion_candidata_id: 'o3', opcion_estudio_id: 13 }] })
+  render(<MemoryRouter><OriginPanel offer={{ id: 7, version: 1,
+    opciones: [{ id: 11, programa: 'Programa compartido' }, { id: 12, programa: 'Programa compartido' }] }} /></MemoryRouter>)
+  const user = userEvent.setup()
+  await user.click(await screen.findByText('Correspondencias de opciones creadas'))
+  expect(screen.getByText(/Candidato o1 → opción 11: Programa compartido/)).toBeVisible()
+  expect(screen.getByText(/Candidato o2 → opción 12: Programa compartido/)).toBeVisible()
+  await user.click(screen.getByText('Resoluciones registradas'))
+  expect(screen.getByText(/Candidato o3 → opción 13/)).toBeVisible()
+})
+
 it('permite revisar cierre por día y tope, pero mantiene pendiente la apertura sin hora', async () => {
   vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('/documentos')
     ? { count: 0, results: [] } : { ...origin, estado: { bloqueos: [], pendientes: [

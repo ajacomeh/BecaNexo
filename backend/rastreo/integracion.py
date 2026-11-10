@@ -266,6 +266,7 @@ def crear_borrador(actor_id, proposal_id, payload):
               'observacion_base_id': proposal.observacion_base_id,
               'revisiones': sorted(data['revisiones']), 'pendientes': pending,
               'omitidos': omitted, 'seleccionados': {k: [{'id': row['id'], 'motivo': row['motivo']} for row in data.get(k, [])] for k in selected},
+              'opciones_ids': {candidate_id: row.pk for candidate_id, row in option_rows.items()},
               'motivo_institucion': data['motivo_institucion'],
               'motivo_bases_ausentes': data.get('motivo_bases_ausentes', ''),
               'version_convocatoria': offer.version}
@@ -285,6 +286,7 @@ def representar_aplicacion(row):
     return {'convocatoria_id': row.convocatoria_id, 'propuesta_id': row.propuesta_id,
             'revision_integracion_id': row.pk, 'revision': row.convocatoria.revision,
             'publica': row.convocatoria.activa and row.convocatoria.revision == 'validada' and row.convocatoria.institucion.pais.codigo == 'EC',
+            'opciones_ids': row.detalle.get('opciones_ids', {}),
             'pendientes': row.detalle.get('pendientes', []),
             'omitidos': row.detalle.get('omitidos', [])}
 
@@ -311,7 +313,26 @@ def estado_publicacion_integrada(offer):
     return {'aplicacion_id': applied.pk, 'bloqueos': [], 'pendientes': pending}
 
 
-def _comprobacion_pendiente(item, offer, proposal):
+def _opcion_candidata(offer, proposal, candidate_id, applied=None):
+    """Usa el vínculo auditado; para integraciones antiguas solo acepta una coincidencia exacta."""
+    candidate = _candidatos(proposal)['opciones'].get(candidate_id)
+    if not candidate:
+        return None
+    mapped_id = (applied.detalle.get('opciones_ids') or {}).get(candidate_id) if applied else None
+    if applied and not mapped_id:
+        linked = Revision.objects.filter(aplicacion=applied, dimension='integracion', decision='resuelta',
+            detalle__opcion_candidata_id=candidate_id).order_by('-id').first()
+        mapped_id = linked.detalle.get('opcion_estudio_id') if linked else None
+    rows = offer.opciones.filter(pk=mapped_id) if mapped_id else offer.opciones.filter(
+        programa=candidate.get('texto'), nivel=candidate.get('nivel'), modalidad=candidate.get('modalidad'))
+    matches = [row for row in rows.prefetch_related('paises')
+               if row.programa == candidate.get('texto') and row.nivel == candidate.get('nivel')
+               and row.modalidad == candidate.get('modalidad')
+               and set(row.paises.values_list('codigo', flat=True)) == set(candidate.get('paises', []))]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _comprobacion_pendiente(item, offer, proposal, applied=None):
     code, field = item['codigo'], item['campo']
     if code == 'PRECISION_TEMPORAL':
         if field != 'cierre_original' or not offer.cierre_dia or offer.cierre or not (offer.cierre_original or '').strip():
@@ -337,8 +358,8 @@ def _comprobacion_pendiente(item, offer, proposal):
         rows = offer.beneficios.filter(concepto=candidate.get('concepto'), tope_original=candidate['tope'], tope_monto__isnull=False, tope_moneda__isnull=False)
         if candidate.get('ambito') == 'comun':
             return rows.filter(opcion_estudio__isnull=True).exists()
-        option = _candidatos(proposal)['opciones'].get(candidate.get('opcion'))
-        return bool(option) and rows.filter(opcion_estudio__programa=option.get('texto'), opcion_estudio__nivel=option.get('nivel'), opcion_estudio__modalidad=option.get('modalidad')).exists()
+        option = _opcion_candidata(offer, proposal, candidate.get('opcion'), applied)
+        return bool(option) and rows.filter(opcion_estudio=option).exists()
     if code == 'DESCRIPCION_PENDIENTE':
         return bool(offer.descripcion.strip())
     if code == 'SIN_OPCIONES':
@@ -349,19 +370,13 @@ def _comprobacion_pendiente(item, offer, proposal):
         if not candidate:
             return False
         if kind == 'opciones':
-            rows = offer.opciones.filter(programa=candidate.get('texto'), nivel=candidate.get('nivel'), modalidad=candidate.get('modalidad'))
-            return any(set(row.paises.values_list('codigo', flat=True)) == set(candidate.get('paises', [])) for row in rows)
+            return _opcion_candidata(offer, proposal, candidate_id, applied) is not None
         scope = candidate.get('ambito', 'pendiente')
         if scope == 'pendiente':
             return False
         option = None
         if scope in ('opcion', 'destino'):
-            target = _candidatos(proposal).get('opciones', {}).get(candidate.get('opcion'))
-            if not target:
-                return False
-            option = next((row for row in offer.opciones.filter(
-                programa=target.get('texto'), nivel=target.get('nivel'), modalidad=target.get('modalidad'))
-                if set(row.paises.values_list('codigo', flat=True)) == set(target.get('paises', []))), None)
+            option = _opcion_candidata(offer, proposal, candidate.get('opcion'), applied)
             if not option:
                 return False
         if kind == 'beneficios':
@@ -400,7 +415,7 @@ def resolver_pendiente(actor_id, offer_id, payload):
     issue = next((x for x in applied.detalle['pendientes'] if x['id'] == data['pendiente_id']), None)
     if not issue or issue['codigo'] not in MATERIALES:
         raise serializers.ValidationError({'pendiente_id': 'No es un pendiente material de esta aplicación.'})
-    if not _comprobacion_pendiente(issue, offer, applied.propuesta):
+    if not _comprobacion_pendiente(issue, offer, applied.propuesta, applied):
         raise serializers.ValidationError({'pendiente_id': 'Los datos canónicos aún no acreditan la resolución.'})
     evidence = applied.propuesta.version.documentos.filter(pk=data['evidencia_id']).first()
     if not evidence or not any(r.dimension == 'documental' and r.evidencia_id == evidence.pk and r.decision == 'aprobada' for r in vigentes(applied.version_id)):
@@ -432,6 +447,14 @@ def resolver_pendiente(actor_id, offer_id, payload):
     detail = {'pendiente_id': issue['id'], 'evidencia_id': evidence.pk,
               'version_convocatoria': offer.version, 'hash_convocatoria': data['hash_convocatoria'],
               'hash_peticion': request_hash, 'motivo': data['motivo']}
+    if '.' in issue['campo']:
+        kind, candidate_id = issue['campo'].split('.', 1)
+        candidate = _candidatos(applied.propuesta).get(kind, {}).get(candidate_id)
+        option_id = candidate_id if kind == 'opciones' else candidate.get('opcion') if candidate else None
+        if option_id:
+            option = _opcion_candidata(offer, applied.propuesta, option_id, applied)
+            if option:
+                detail.update(opcion_candidata_id=option_id, opcion_estudio_id=option.pk)
     return Revision.objects.create(actor=actor, version=applied.version, propuesta=applied.propuesta,
         convocatoria=offer, aplicacion=applied, dimension='integracion', decision='resuelta',
         motivo=data['motivo'], detalle=detail, sustituye=previous, clave_accion=key), True

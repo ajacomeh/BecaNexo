@@ -95,7 +95,7 @@ class IntegridadIntegracionTests(TransactionTestCase):
             cursor.execute('SELECT current_database()')
             self.assertEqual(cursor.fetchone()[0], 'test_becanexo_db')
 
-    def reviewed_proposal(self, *, options=None):
+    def reviewed_proposal(self, *, options=None, benefits=None):
         relation = self.version.documentos.first()
         def review(dimension, evidence=None, **extra):
             row, _ = registrar(self.actor.pk, self.version.pk, dict(dimension=dimension,
@@ -110,10 +110,11 @@ class IntegridadIntegracionTests(TransactionTestCase):
             observacion_base_id=self.pub.observaciones.first().pk, revisiones=ids,
             datos={'institucion': self.institution.pk, 'titulo': 'Beca sintética rastreada',
                    'descripcion': 'Bases sintéticas revisadas', 'url_oficial': 'https://example.org/oficial',
-                   'opciones': options or []},
+                   'opciones': options or [], 'beneficios': benefits or []},
             procedencia=[{'campo': field, 'evidencia_id': relation.pk, 'localizador': 'Sección sintética',
                           'motivo': 'Transcripción revisada'} for field in
-                         ['institucion', 'titulo', 'url_oficial'] + [f"opciones.{x['id']}" for x in (options or [])]])
+                         ['institucion', 'titulo', 'url_oficial'] + [f"opciones.{x['id']}" for x in (options or [])]
+                         + [f"beneficios.{x['id']}" for x in (benefits or [])]])
         proposal, _ = guardar(self.actor.pk, self.pub.pk, body, self.proposal.pk)
         return proposal, ids
 
@@ -168,6 +169,57 @@ class IntegridadIntegracionTests(TransactionTestCase):
         self.assertEqual(list(applied.convocatoria.opciones.first().paises.values_list('codigo', flat=True)), ['EC'])
         self.assertFalse(any(x['codigo'] == 'CANDIDATO_PENDIENTE' for x in applied.detalle['pendientes']))
         self.assertFalse(publicas().filter(pk=applied.convocatoria_id).exists())
+
+    def test_selected_options_same_level_keep_explicit_ids(self):
+        candidates = [
+            {'id': 'o1', 'texto': 'Programa igual', 'nivel': 'maestria', 'modalidad': 'virtual', 'paises': ['EC']},
+            {'id': 'o2', 'texto': 'Programa igual', 'nivel': 'maestria', 'modalidad': 'virtual', 'paises': ['EC']},
+        ]
+        benefit = {'id': 'b1', 'texto': 'Cobertura de matrícula', 'concepto': 'Matrícula',
+                   'ambito': 'opcion', 'opcion': 'o2'}
+        proposal, ids = self.reviewed_proposal(options=candidates, benefits=[benefit])
+        selected = [{'id': item['id'], 'motivo': 'Bases sintéticas revisadas', 'datos': {
+            'nivel': item['nivel'], 'modalidad': item['modalidad'], 'programa': item['texto'],
+            'paises': [self.institution.pais_id]}} for item in candidates]
+        body = self.confirmation(proposal, ids, selected=selected)
+        body['beneficios'] = [{'id': 'b1', 'motivo': 'Cobertura sintética revisada', 'datos': {
+            'opcion_estudio': 'o2', 'concepto': 'Matrícula', 'porcentaje': None,
+            'monto': None, 'moneda': None, 'detalle': 'Cobertura de matrícula'}}]
+        applied, created = crear_borrador(self.actor.pk, proposal.pk, body)
+        self.assertTrue(created)
+        mapping = applied.detalle['opciones_ids']
+        self.assertEqual(set(mapping), {'o1', 'o2'})
+        self.assertNotEqual(mapping['o1'], mapping['o2'])
+        self.assertEqual(OpcionEstudio.objects.get(pk=mapping['o2']).programa, 'Programa igual')
+        self.assertEqual(applied.convocatoria.beneficios.get().opcion_estudio_id, mapping['o2'])
+        admin = APIClient(); admin.force_login(self.actor)
+        origin = admin.get(f'/api/gestion/rastreo/convocatorias/{applied.convocatoria_id}/origen/')
+        self.assertEqual(origin.status_code, 200)
+        self.assertEqual(origin.data['aplicacion']['opciones_ids'], mapping)
+        repeated, created = crear_borrador(self.actor.pk, proposal.pk, body)
+        self.assertFalse(created)
+        self.assertEqual(repeated.pk, applied.pk)
+        self.assertFalse(publicas().filter(pk=applied.convocatoria_id).exists())
+
+    def test_ambiguous_unselected_option_remains_pending(self):
+        candidate = {'id': 'o1', 'texto': 'Programa igual', 'nivel': 'maestria',
+                     'modalidad': 'virtual', 'paises': ['EC']}
+        proposal, ids = self.reviewed_proposal(options=[candidate])
+        applied, _ = crear_borrador(self.actor.pk, proposal.pk, self.confirmation(proposal, ids))
+        offer = applied.convocatoria
+        issue = next(x for x in applied.detalle['pendientes'] if x['campo'] == 'opciones.o1')
+        for _ in range(2):
+            row = OpcionEstudio.objects.create(convocatoria=offer, nivel='maestria', modalidad='virtual', programa='Programa igual')
+            row.paises.add(self.institution.pais)
+        self.assertFalse(_comprobacion_pendiente(issue, offer, proposal, applied))
+        evidence = self.version.documentos.first()
+        body = {'clave_accion': str(uuid.uuid4()), 'pendiente_id': issue['id'],
+                'evidencia_id': evidence.pk, 'motivo': 'Evidencia sintética',
+                'version_convocatoria': offer.version, 'hash_convocatoria': digest(detalle(offer))}
+        with self.assertRaises(ValidationError):
+            resolver_pendiente(self.actor.pk, offer.pk, body)
+        self.assertFalse(Revision.objects.filter(aplicacion=applied, decision='resuelta').exists())
+        self.assertIn(issue['id'], {x['id'] for x in estado_publicacion_integrada(offer)['pendientes']})
 
     def test_reviewed_day_and_cap_literal_keep_publication_blocked_until_resolution(self):
         proposal, ids = self.reviewed_proposal()

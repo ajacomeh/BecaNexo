@@ -21,15 +21,21 @@ export const optionFields = (c) => [select('nivel', 'Nivel', choices(c.niveles, 
   select('activa', 'Opción activa', bool, { required: true, kind: 'boolean' }), text('programa', 'Programa'), text('institucion_destino', 'Institución de destino'),
   text('inicio_estudios', 'Inicio de estudios', { type: 'date' }), text('duracion_meses', 'Duración en meses', { type: 'number', kind: 'integer' }),
   text('cupos', 'Cupos', { type: 'number', kind: 'integer' }), select('paises', 'Países de estudio', choices(c.paises), { multiple: true, kind: 'ids' })]
-const scope = (options) => select('opcion_estudio', 'Ámbito (sin declarar = común)', options.map((o) => ({ value: o.id, label: `${o.nivel} / ${o.modalidad} · #${o.id}` })), { kind: 'id' })
-export const benefitFields = (options) => [scope(options), text('concepto', 'Concepto financiado', { required: true }),
+const optionDescription = (option, countries) => [option.programa || 'Programa no especificado', `${option.nivel} / ${option.modalidad}`,
+  option.institucion_destino, (option.paises || []).map(id => countries.find(country => country.id === id)?.nombre || String(id)).join(', ')].filter(Boolean).join(' · ')
+export const optionLabel = (option, countries = [], options = []) => {
+  const description = optionDescription(option, countries)
+  return options.filter(other => optionDescription(other, countries) === description).length > 1 ? `${description} · #${option.id}` : description
+}
+const scope = (options, countries) => select('opcion_estudio', 'Ámbito (sin declarar = común)', options.map((o) => ({ value: o.id, label: optionLabel(o, countries, options) })), { kind: 'id' })
+export const benefitFields = (options, countries = []) => [scope(options, countries), text('concepto', 'Concepto financiado', { required: true }),
   text('porcentaje', 'Porcentaje de este concepto', { type: 'number', kind: 'number' }), text('monto', 'Importe fijo (no es tope)', { type: 'number', kind: 'number' }),
   text('moneda', 'Moneda del importe fijo', { maxLength: 3 }), text('tope_original', 'Tope literal según las bases', { hint: 'Conserva el símbolo y texto originales; $ no confirma USD.' }),
   text('tope_monto', 'Valor máximo del tope, si está claro', { type: 'number', kind: 'number' }), text('tope_moneda', 'Moneda confirmada del tope (opcional)', { maxLength: 3, hint: 'Deja vacío si la fuente no confirma el código monetario.' }),
   select('periodicidad', 'Periodicidad', enumOptions(['unico', 'mensual', 'anual', 'otra'])), text('detalle', 'Detalle de cobertura', { type: 'textarea' })]
 export const requirementFields = (type, c, options) => {
   const documental = ['DOCUMENTO', 'ACREDITACION'].includes(type.codigo)
-  const fields = [scope(options), text('texto_original', 'Texto original del requisito', { type: 'textarea', required: true }),
+  const fields = [scope(options, c.paises), text('texto_original', 'Texto original del requisito', { type: 'textarea', required: true }),
     select('destino', 'Destino específico (requiere opción; vacío = todos)', choices(c.paises), { kind: 'id' }),
     select('obligatorio', 'Condición obligatoria', bool, { kind: 'boolean', required: true }), select('validado', 'Transcripción revisada por administrador', bool, { kind: 'boolean', required: true }),
     select('activo', 'Requisito activo', bool, { kind: 'boolean', required: true }), text('fecha_referencia', 'Fecha de referencia según las bases', { type: 'date' }),

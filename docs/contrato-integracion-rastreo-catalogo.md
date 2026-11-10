@@ -1,5 +1,9 @@
 # Contrato propuesto de integración entre rastreo y catálogo
 
+## Estado de identidad de opciones (bloque 15, 09/11/2026)
+
+El código actual usa `OpcionEstudio.id` como identidad individual y retira la unicidad por convocatoria, nivel y modalidad mediante `convocatorias.0005`, probada en `test_becanexo_db` y aplicada en desarrollo con autorización el 09/11/2026. Las FK de países, beneficios y requisitos permanecen por ID. Al crear un borrador, `AUD_REVISION_RASTREO.detalle.opciones_ids` conserva la correspondencia inmutable de ID candidato a ID canónico; las resoluciones posteriores registran también el ID comprobado. Para aplicaciones históricas sin correspondencia, solo se permite una coincidencia exacta y única de programa, nivel, modalidad y países. Si existen varias, el pendiente sigue material y no se elige una opción arbitrariamente. La actualización automática de convocatorias vinculadas continúa fuera de alcance. Las referencias posteriores a la restricción anterior se conservan como registro del contrato original.
+
 ## Estado vigente de precisión de datos
 
 Las migraciones `rastreo.0010`–`0012` se aplicaron en desarrollo y el segundo bloque quedó cerrado en Git. El bloque actual añade `cierre_dia` separado del instante `cierre` y campos de tope distintos del importe fijo; sus migraciones `convocatorias.0003`–`0004` se aplicaron en desarrollo el 06/11/2026. Los extractos literales y los snapshots revisados siguen separados de valores canónicos. Día de cierre y tope solo entran al borrador con procedencia y nunca levantan por sí solos pendientes editoriales. La publicación conserva revisión exacta, resolución motivada y las demás restricciones. Apertura sin hora, opciones con identidad ambigua y actualización de convocatorias vinculadas permanecen fuera de este bloque.

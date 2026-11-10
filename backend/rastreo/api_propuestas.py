@@ -93,6 +93,8 @@ class OrigenBorrador(AuthView):
             'estado': estado_publicacion_integrada(offer), 'version_convocatoria': offer.version,
             'hash_convocatoria': digest(detalle(offer)),
             'resoluciones': [{'id': row.pk, 'pendiente_id': row.detalle.get('pendiente_id'), 'motivo': row.motivo,
+                             'opcion_candidata_id': row.detalle.get('opcion_candidata_id'),
+                             'opcion_estudio_id': row.detalle.get('opcion_estudio_id'),
                              'evidencia_id': row.detalle.get('evidencia_id'), 'creada_en': row.creada_en}
                             for row in Revision.objects.filter(aplicacion=applied, dimension='integracion', decision='resuelta').order_by('id')]})
 

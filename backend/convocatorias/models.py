@@ -101,8 +101,7 @@ class OpcionEstudio(models.Model):
     class Meta:
         db_table = "MAE_OPCION_ESTUDIO"
         ordering = ["id"]
-        constraints = [models.UniqueConstraint(fields=["convocatoria", "nivel", "modalidad"], name="opcion_identidad"),
-                       dominio("nivel", NIVELES, "opcion_nivel"), dominio("modalidad", MODALIDADES, "opcion_modalidad"),
+        constraints = [dominio("nivel", NIVELES, "opcion_nivel"), dominio("modalidad", MODALIDADES, "opcion_modalidad"),
                        models.CheckConstraint(condition=Q(cupos__isnull=True) | Q(cupos__gt=0), name="opcion_cupos"),
                        models.CheckConstraint(condition=Q(duracion_meses__isnull=True) | Q(duracion_meses__gt=0), name="opcion_duracion")]
 

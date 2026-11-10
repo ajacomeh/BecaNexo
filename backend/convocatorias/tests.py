@@ -11,6 +11,34 @@ from . import models as m
 
 
 class ConvocatoriasTests(TestCase):
+    def test_opciones_mismo_nivel_y_modalidad_conservan_ambitos(self):
+        c = self.oferta()["id"]
+        first = self.opcion(c, programa="Programa A", institucion_destino="Institución A", paises=[self.ec.pk])
+        second = self.opcion(c, programa="Programa B", institucion_destino="Institución B", paises=[self.es.pk])
+        self.assertNotEqual(first["id"], second["id"])
+        base = f"/api/gestion/convocatorias/{c}/"
+        benefit_a = self.write(base + "beneficios/", {"concepto": "Matrícula", "porcentaje": 80,
+            "opcion_estudio": first["id"]}, expected=201).data
+        benefit_b = self.write(base + "beneficios/", {"concepto": "Transporte", "porcentaje": 40,
+            "opcion_estudio": second["id"]}, expected=201).data
+        rule_a = self.requisito(c, "DOCUMENTO", {"documento": "Documento A"}, opcion_estudio=first["id"]).data
+        rule_b = self.requisito(c, "DOCUMENTO", {"documento": "Documento B"}, opcion_estudio=second["id"]).data
+        self.write(base + f"opciones/{first['id']}/", {"programa": "Programa A revisado"}, "patch", 200)
+        self.assertEqual(m.OpcionEstudio.objects.get(pk=second["id"]).programa, "Programa B")
+        self.write(base + "publicar/", expected=200)
+        detail = self.public.get(f"/api/becas/{c}/").data
+        self.assertEqual({o["id"] for o in detail["opciones"]}, {first["id"], second["id"]})
+        self.assertEqual({b["opcion_estudio"] for b in detail["beneficios"]}, {first["id"], second["id"]})
+        self.assertEqual({r["opcion_estudio"] for r in detail["requisitos"]}, {first["id"], second["id"]})
+        self.assertEqual(self.public.get("/api/becas/?nivel=maestria&modalidad=presencial&destino=ES").data["count"], 1)
+        self.assertEqual(self.public.get("/api/becas/?nivel=maestria&modalidad=virtual&destino=ES").data["count"], 0)
+        self.client.force_login(self.student)
+        comparison = self.client.get(f"/api/becas/{c}/comparacion/").data
+        self.assertEqual({o["id"] for o in comparison["opciones"]}, {first["id"], second["id"]})
+        self.assertEqual({r["id"] for o in comparison["opciones"] for r in o["requisitos"]}, {rule_a["id"], rule_b["id"]})
+        self.assertEqual(m.Beneficio.objects.get(pk=benefit_a["id"]).opcion_estudio_id, first["id"])
+        self.assertEqual(m.Beneficio.objects.get(pk=benefit_b["id"]).opcion_estudio_id, second["id"])
+
     def test_documentacion_consulta_edicion_y_verificacion_externa(self):
         c = self.oferta()["id"]
         option = self.opcion(c)["id"]
@@ -117,13 +145,14 @@ class ConvocatoriasTests(TestCase):
         self.assertEqual(m.Evento.objects.filter(convocatoria_id=c).count(), 6)
         self.write(path, {}, "delete", 405)
 
-    def test_opciones_paises_unicidad(self):
+    def test_opciones_paises_y_identidad_por_id(self):
         c = self.oferta()["id"]
         option = self.opcion(c)
         self.assertEqual(set(option["paises"]), {self.ec.pk, self.es.pk})
         path = f"/api/gestion/convocatorias/{c}/opciones/"
         self.write(path, {"nivel": "grado", "modalidad": "virtual", "paises": [self.ec.pk]*2}, expected=400)
-        self.write(path, {"nivel": "maestria", "modalidad": "presencial"}, expected=400)
+        same_academic = self.write(path, {"nivel": "maestria", "modalidad": "presencial"}, expected=201).data
+        self.assertNotEqual(same_academic["id"], option["id"])
         self.write(path + str(option["id"]) + "/", {"cupos": 0}, "patch", 400)
         self.write(path + str(option["id"]) + "/", {"duracion_meses": -1}, "patch", 400)
 

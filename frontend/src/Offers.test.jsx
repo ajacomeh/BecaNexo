@@ -181,6 +181,27 @@ describe('convocatorias', () => {
     expect(screen.queryByText('Cambios guardados.')).not.toBeInTheDocument()
   })
 
+  it('edita por ID dos opciones con nivel y modalidad iguales sin confundirlas', async () => {
+    const options = [
+      { id: 11, nivel: 'maestria', modalidad: 'virtual', programa: 'Programa A', institucion_destino: 'Institución A', paises: [1], activa: true },
+      { id: 12, nivel: 'maestria', modalidad: 'virtual', programa: 'Programa B', institucion_destino: 'Institución B', paises: [1], activa: true },
+    ]
+    const offer = { id: 41, institucion: { id: 1 }, revision: 'pendiente', estado: 'borrador',
+      opciones: options, beneficios: [], requisitos: [] }
+    const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs
+      : path === 'gestion/convocatorias/41' ? offer : { count: 1, results: [{ id: 1, nombre: 'Entidad' }] })
+    const write = vi.spyOn(offersApi, 'write').mockResolvedValue({ ...options[1], programa: 'Programa B editado' })
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
+    const region = within(await screen.findByRole('region', { name: 'Opciones de estudio' }))
+    expect(region.getByText(/Programa A · maestria \/ virtual · Institución A/)).toBeVisible()
+    expect(region.getByText(/Programa B · maestria \/ virtual · Institución B/)).toBeVisible()
+    await userEvent.click(region.getAllByRole('button', { name: 'Editar' })[1])
+    expect(region.getByLabelText('Programa')).toHaveValue('Programa B')
+    await userEvent.click(region.getByRole('button', { name: 'Guardar opciones de estudio' }))
+    await waitFor(() => expect(write).toHaveBeenCalledWith('gestion/convocatorias/41/opciones/12', 'PATCH', expect.objectContaining({ programa: 'Programa B' })))
+    expect(get).toHaveBeenCalledWith('gestion/convocatorias/41')
+  })
+
   it('renderiza condiciones documentales como texto y verificación externa', () => {
     render(<RequirementList catalogs={catalogs} records={[{ id: 1, texto_original: '<script>alert(1)</script>', obligatorio: true, modo_comprobacion: 'entidad_oferente', valor_estructurado: {} }]} />)
     expect(screen.getByText('<script>alert(1)</script>')).toBeVisible()

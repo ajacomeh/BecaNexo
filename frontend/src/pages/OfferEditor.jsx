@@ -7,7 +7,7 @@ import OfferForm from '../components/OfferForm'
 import ConfirmDelete from '../components/ConfirmDelete'
 import Message from '../components/Message'
 import Button from '../components/Button'
-import { generalFields, optionFields, benefitFields, requirementFields } from './offerFields'
+import { generalFields, optionFields, benefitFields, requirementFields, optionLabel } from './offerFields'
 import { stateLabel } from './offerDisplay'
 import OriginPanel from '../components/OriginPanel'
 
@@ -26,7 +26,7 @@ function Records({ name, title, offer, catalogs, onSaved }) {
   const [typeId, setTypeId] = useState('')
   const records = offer[name]
   const type = catalogs.tipos_requisito.find((t) => t.id === Number(typeId))
-  const fields = name === 'opciones' ? optionFields(catalogs) : name === 'beneficios' ? benefitFields(offer.opciones) : type ? requirementFields(type, catalogs, offer.opciones) : []
+  const fields = name === 'opciones' ? optionFields(catalogs) : name === 'beneficios' ? benefitFields(offer.opciones, catalogs.paises) : type ? requirementFields(type, catalogs, offer.opciones) : []
   const initial = editing ? { activa: true, activo: true, obligatorio: true, validado: false, relacion_formacion: 'pendiente', ...editing,
     ...Object.fromEntries(Object.entries(editing.valor_estructurado || {}).map(([key, value]) => [`regla_${key}`, value])) } : {}
   async function save(values) {
@@ -49,7 +49,7 @@ function Records({ name, title, offer, catalogs, onSaved }) {
   }
   return <section className="profile-card" aria-label={title}><h2>{title}</h2>
     {name === 'requisitos' && <p className="profile-note">Revisar la transcripción no verifica documentos de postulantes. Los certificados los comprueba la entidad oferente.</p>}
-    <ul className="record-list offer-records">{records.map((r) => <li key={r.id}><span>{name === 'opciones' ? `${r.nivel} / ${r.modalidad}${r.activa ? '' : ' · Inactiva'}` : name === 'beneficios' ? r.concepto : `${catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)?.nombre}: ${r.texto_original}${r.activo ? '' : ' · Inactivo'}`}</span>
+    <ul className="record-list offer-records">{records.map((r) => <li key={r.id}><span>{name === 'opciones' ? `${optionLabel(r, catalogs.paises, records)}${r.activa ? '' : ' · Inactiva'}` : name === 'beneficios' ? r.concepto : `${catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)?.nombre}: ${r.texto_original}${r.activo ? '' : ' · Inactivo'}`}</span>
       <div className="record-actions"><button className="text-button" disabled={editing !== null} onClick={() => { setEditing(r); setTypeId(String(r.tipo_requisito || '')) }}><Icon name="edit" /><span>Editar</span></button>
         {name === 'beneficios' && <button className="text-button danger-text" disabled={editing !== null} onClick={() => setDeleting(r)}><Icon name="delete" /><span>Eliminar</span></button>}</div></li>)}</ul>
     {!records.length && <p className="empty-note">Todavía no hay registros. Lo no informado se conserva como desconocido.</p>}

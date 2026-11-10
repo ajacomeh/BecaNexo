@@ -2,9 +2,28 @@ import { expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import OfferForm from './components/OfferForm'
-import { requirementFields } from './pages/offerFields'
+import { requirementFields, benefitFields, optionLabel } from './pages/offerFields'
 
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }], areas: [], idiomas: [] }
+it('distingue opciones con igual nivel y modalidad en los ámbitos de beneficios y requisitos', async () => {
+  const options = [
+    { id: 4, nivel: 'maestria', modalidad: 'virtual', programa: 'Programa A', institucion_destino: 'Institución A', paises: [1] },
+    { id: 5, nivel: 'maestria', modalidad: 'virtual', programa: 'Programa B', institucion_destino: 'Institución B', paises: [1] },
+  ]
+  const fields = benefitFields(options, catalogs.paises)
+  expect(fields[0].options.map(item => item.value)).toEqual([4, 5])
+  expect(fields[0].options[0].label).toContain('Programa A · maestria / virtual · Institución A · Ecuador')
+  expect(requirementFields({ codigo: 'DOCUMENTO', esquema_valor: { campos: {} } }, catalogs, options)[0].options[1].label).toContain('Programa B')
+  const save = vi.fn()
+  render(<OfferForm fields={fields} onSubmit={save} />)
+  await userEvent.selectOptions(screen.getByLabelText(/Ámbito/), '5')
+  await userEvent.type(screen.getByLabelText(/Concepto financiado/), 'Matrícula')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ opcion_estudio: 5 }))
+  const same = [options[0], { ...options[0], id: 6 }]
+  expect(optionLabel(same[0], catalogs.paises, same)).toContain('#4')
+  expect(optionLabel(same[1], catalogs.paises, same)).toContain('#6')
+})
 it('configura niveles, grupo y destino con controles y conserva valores explícitos', async () => {
   const fields = requirementFields({ codigo: 'FORMACION', esquema_valor: { campos: { niveles_admitidos: { label: 'Niveles admitidos', kind: 'lista', required: false, options: ['grado', 'maestria'] } } } }, catalogs, [{ id: 4, nivel: 'maestria', modalidad: 'virtual' }])
   const save = vi.fn()
