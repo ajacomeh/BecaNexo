@@ -97,7 +97,7 @@ export default function OfferEditor() {
       }} /></section>
       {loaded.offer && <><OriginPanel offer={loaded.offer} /><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
         <section className="profile-card"><h2>Revisión y publicación</h2><p className="profile-note">Al publicar confirmas la entidad ecuatoriana y la transcripción de las bases. Se exige una opción activa, descripción y enlace oficial; todos los requisitos activos deben estar revisados. Guarda cada sección antes de publicar.</p>
-          <div className="form-actions"><Button icon="publish" busy={busy} onClick={() => action('publicar')}>Validar y publicar</Button><Button icon="pause" disabled={busy} className="button-light" onClick={() => action('pausar')}>Pausar convocatoria</Button>{loaded.offer.revision === 'validada' && loaded.offer.activa && <Link to={`/becas/${id}`}>Ver en el catálogo</Link>}</div></section></>}
+          <div className="form-actions"><Button icon="publish" busy={busy} onClick={() => action('publicar')}>Validar y publicar</Button>{loaded.offer.revision === 'validada' && loaded.offer.activa && <><Button icon="pause" disabled={busy} className="button-light" onClick={() => action('pausar')}>Pausar convocatoria</Button><Link to={`/becas/${id}`}>Ver en el catálogo</Link></>}</div></section></>}
     </>}
   </OffersLayout>
 }

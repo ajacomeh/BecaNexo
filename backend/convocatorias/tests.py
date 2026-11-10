@@ -72,10 +72,10 @@ class ConvocatoriasTests(TestCase):
     def setUpTestData(cls):
         cls.admin = get_user_model().objects.create_user(email="admin-ofertas@example.com", password="Testing-Only-74!", nombre="Administrador sintético", rol="administrador")
         cls.student = get_user_model().objects.create_user(email="postulante-ofertas@example.com", password="Testing-Only-74!", nombre="Postulante sintético", is_staff=True)
-        cls.ec = Pais.objects.create(codigo="EC", nombre="Ecuador")
-        cls.es = Pais.objects.create(codigo="ES", nombre="España")
+        cls.ec, _ = Pais.objects.get_or_create(codigo="EC", defaults={"nombre": "Ecuador"})
+        cls.es, _ = Pais.objects.get_or_create(codigo="ES", defaults={"nombre": "España"})
         cls.area = Area.objects.create(nombre="Área sintética")
-        Idioma.objects.create(codigo="en", nombre="Inglés")
+        Idioma.objects.get_or_create(codigo="en", defaults={"nombre": "Inglés"})
         call_command("cargar_catalogos_convocatorias", verbosity=0)
         cls.institution = m.Institucion.objects.create(nombre="DEMO sintética", sector="publico", pais=cls.ec)
 
@@ -128,10 +128,11 @@ class ConvocatoriasTests(TestCase):
             m.Evento.objects.create(actor=self.admin, accion="inválida", cambios={})
 
     def test_borrador_publicacion_pausa_edicion(self):
+        public_count = self.public.get("/api/becas/").data["count"]
         c = self.oferta()["id"]
         path = f"/api/gestion/convocatorias/{c}/"
         self.assertEqual(self.public.get(f"/api/becas/{c}/").status_code, 404)
-        self.assertEqual(self.public.get("/api/becas/").data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/").data["count"], public_count)
         self.write(path + "publicar/", expected=400)
         self.opcion(c)
         self.write(path + "publicar/", expected=200)
@@ -144,6 +145,29 @@ class ConvocatoriasTests(TestCase):
         self.assertEqual(self.public.get(f"/api/becas/{c}/").status_code, 404)
         self.assertEqual(m.Evento.objects.filter(convocatoria_id=c).count(), 6)
         self.write(path, {}, "delete", 405)
+
+    def test_pausar_solo_publicada_activa_sin_duplicar_version_auditoria(self):
+        pk = self.oferta()["id"]
+        path = f"/api/gestion/convocatorias/{pk}/"
+        before = m.Convocatoria.objects.get(pk=pk)
+        events = m.Evento.objects.filter(convocatoria_id=pk).count()
+        self.write(path + "pausar/", expected=400)
+        before.refresh_from_db()
+        self.assertEqual((before.revision, before.activa, before.version), ("pendiente", True, 1))
+        self.assertEqual(m.Evento.objects.filter(convocatoria_id=pk).count(), events)
+
+        self.opcion(pk)
+        self.write(path + "publicar/", expected=200)
+        self.write(path + "pausar/", expected=200)
+        paused = m.Convocatoria.objects.get(pk=pk)
+        version = paused.version
+        events = m.Evento.objects.filter(convocatoria_id=pk).count()
+        self.assertEqual((paused.revision, paused.activa), ("validada", False))
+        self.write(path + "pausar/", expected=400)
+        paused.refresh_from_db()
+        self.assertEqual(paused.version, version)
+        self.assertEqual(m.Evento.objects.filter(convocatoria_id=pk).count(), events)
+        self.assertEqual(self.public.get(f"/api/becas/{pk}/").status_code, 404)
 
     def test_opciones_paises_y_identidad_por_id(self):
         c = self.oferta()["id"]

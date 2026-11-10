@@ -61,6 +61,7 @@ function CatalogBody({ user }) {
   const current = result?.query === query ? result : null
   const data = current?.data
   const currentRecommendations = recommendations?.userId === userId && recommendations?.retry === recommendationsRetry ? recommendations : null
+  const hasActiveFilters = ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado'].some(key => Boolean(params.get(key)))
   const clear = () => { setParams({}) }
   const retryCatalogs = () => { setCatalogError(''); setCatalogRetry(value => value + 1) }
   const apply = values => setParams(Object.fromEntries(Object.entries(values).filter(([k, v]) => ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado', 'orden', 'page_size'].includes(k) && v != null && v !== '')))
@@ -77,7 +78,7 @@ function CatalogBody({ user }) {
     {!catalogs && catalogError && <><Message>{catalogError}</Message><Button icon="refresh" onClick={retryCatalogs}>Reintentar datos del catálogo</Button></>}
     {data && catalogs && <><div className="catalog-results-heading"><p role="status">{data.count} {data.count === 1 ? 'convocatoria encontrada' : 'convocatorias encontradas'}</p><div className="field"><label htmlFor="catalog-order">Ordenar por</label><select id="catalog-order" aria-describedby="catalog-order-hint" value={params.get('orden') || 'recientes'} onChange={e => apply({ ...Object.fromEntries(params), orden: e.target.value })}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option></select><small id="catalog-order-hint">Se aplica al seleccionar.</small></div></div>
       <div className="offer-grid">{data.results.map(offer => <CatalogCard key={offer.id} offer={offer} catalogs={catalogs} />)}</div>
-      {data.count === 0 && <section className="profile-card"><h2>No hay convocatorias con estos filtros</h2><p>Puedes cambiar la búsqueda o restablecer los filtros.</p><Button icon="clear" onClick={clear}>Restablecer filtros</Button></section>}
+      {data.count === 0 && <section className="profile-card"><h2>{hasActiveFilters ? 'No encontramos becas que coincidan con los filtros seleccionados' : 'No hay convocatorias disponibles actualmente'}</h2>{hasActiveFilters && <><p>Puedes cambiar la búsqueda o restablecer los filtros.</p><Button icon="clear" onClick={clear}>Restablecer filtros</Button></>}</section>}
       {data.count > data.page_size && <nav className="pagination" aria-label="Paginación"><Button icon="previous" disabled={data.page <= 1} onClick={() => setParams({ ...Object.fromEntries(params), page: data.page - 1 })}>Anterior</Button><span>Página {data.page}</span><Button icon="next" disabled={data.page * data.page_size >= data.count} onClick={() => setParams({ ...Object.fromEntries(params), page: data.page + 1 })}>Siguiente</Button></nav>}
       {data.results.some(o => o.beneficios.some(b => b.porcentaje != null)) && <p className="profile-note catalog-coverage-note">Los porcentajes corresponden al concepto indicado, no al costo total. Revisa las condiciones de cada opción.</p>}
     </>}

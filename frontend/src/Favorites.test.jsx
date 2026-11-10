@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { offersApi, ApiError } from './api/client'
@@ -61,6 +61,55 @@ describe('favoritos', () => {
     expect(screen.queryByRole('link', { name: 'Ver convocatoria' })).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Quitar de favoritos' }))
     expect(await screen.findByText('Aún no tienes favoritos')).toBeVisible()
+  })
+
+  it.each([0, 1, 8, 12])('oculta paginación con %i favoritos, incluidos los no disponibles', async count => {
+    const rows = Array.from({ length: count }, (_, index) => ({ id: index + 1, disponible: false,
+      convocatoria: null, aviso: 'Esta oportunidad ya no está disponible.' }))
+    vi.spyOn(offersApi, 'get').mockResolvedValue({ count, page: 1, page_size: 12, results: rows })
+    render(<MemoryRouter><Favorites /></MemoryRouter>)
+    if (count) expect(await screen.findAllByText('Esta oportunidad ya no está disponible.')).toHaveLength(count)
+    else expect(await screen.findByText('Aún no tienes favoritos')).toBeVisible()
+    expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument()
+  })
+
+  it('navega varias páginas y respeta los límites sin excluir favoritos no disponibles', async () => {
+    const get = vi.spyOn(offersApi, 'get').mockImplementation(async (_, { page }) => ({ count: 25, page, page_size: 12,
+      results: Array.from({ length: page === 3 ? 1 : 12 }, (_, index) => ({ id: (page - 1) * 12 + index + 1,
+        disponible: false, convocatoria: null, aviso: 'Esta oportunidad ya no está disponible.' })) }))
+    render(<MemoryRouter><Favorites /></MemoryRouter>)
+    const user = userEvent.setup()
+    let nav = await screen.findByRole('navigation', { name: 'Paginación' })
+    expect(within(nav).getByText('Página 1 de 3')).toBeVisible()
+    expect(within(nav).getByRole('button', { name: 'Anterior' })).toBeDisabled()
+    await user.click(within(nav).getByRole('button', { name: 'Siguiente' }))
+    nav = await screen.findByRole('navigation', { name: 'Paginación' })
+    expect(await within(nav).findByText('Página 2 de 3')).toBeVisible()
+    expect(within(nav).getByRole('button', { name: 'Anterior' })).toBeEnabled()
+    await user.click(within(nav).getByRole('button', { name: 'Siguiente' }))
+    expect(await screen.findByText('Página 3 de 3')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Anterior' }))
+    expect(await screen.findByText('Página 2 de 3')).toBeVisible()
+    expect(get).toHaveBeenCalledWith('favoritos', { page: 3 })
+  })
+
+  it('regresa a la última página válida cuando el total disminuye', async () => {
+    let removed = false
+    const get = vi.spyOn(offersApi, 'get').mockImplementation(async (_, { page }) => ({ count: removed ? 12 : 13,
+      page, page_size: 12, results: page === 1 ? Array.from({ length: 12 }, (_, index) => ({ id: index + 1,
+        disponible: false, convocatoria: null, aviso: 'Esta oportunidad ya no está disponible.' }))
+        : removed ? [] : [{ id: 13, disponible: false, convocatoria: null, aviso: 'Esta oportunidad ya no está disponible.' }] }))
+    const write = vi.spyOn(offersApi, 'write').mockImplementation(async () => { removed = true })
+    render(<MemoryRouter><Favorites /></MemoryRouter>)
+    await userEvent.click(within(await screen.findByRole('navigation', { name: 'Paginación' })).getByRole('button', { name: 'Siguiente' }))
+    expect(await screen.findByText('Página 2 de 2')).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Quitar de favoritos' }))
+    expect(await screen.findAllByText('Esta oportunidad ya no está disponible.')).toHaveLength(12)
+    expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('favoritos', { page: 2 })
+    expect(get).toHaveBeenCalledWith('favoritos', { page: 1 })
+    expect(write).toHaveBeenCalledTimes(1)
   })
 
   it('no inventa el cierre de una oferta guardada cuando el resumen no incluye la fecha', async () => {

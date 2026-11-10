@@ -56,6 +56,18 @@ it.each([0, 1, 12])('oculta paginación según metadatos count=%i, no según tar
   expect(screen.queryByRole('navigation', { name: 'Paginación', exact: true })).not.toBeInTheDocument()
 })
 
+it('distingue catálogo vacío de búsqueda sin coincidencias', async () => {
+  const u = userEvent.setup()
+  setup('/becas', 0)
+  expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument()
+  await u.type(screen.getByLabelText('Buscar título, institución o área'), 'inexistente')
+  await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+  expect(await screen.findByText('No encontramos becas que coincidan con los filtros seleccionados')).toBeVisible()
+  await u.click(screen.getByRole('button', { name: 'Restablecer filtros' }))
+  expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
+})
+
 it('omite datos vacíos, muestra una sola ausencia de cierre y conserva retorno seguro de favoritos', () => {
   render(<MemoryRouter><CatalogCard offer={offer} catalogs={catalogs} /></MemoryRouter>)
   expect(screen.getAllByText('Fecha de cierre no informada')).toHaveLength(1)
@@ -95,7 +107,7 @@ it('conserva error y reintento sin mostrar resultados obsoletos', async () => {
   expect(await screen.findByText('Error de prueba')).toBeVisible()
   vi.mocked(offersApi.get).mockImplementation(async path => path === 'becas/catalogos' ? catalogs : { results: [], count: 0, page: 1, page_size: 12 })
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
-  expect(await screen.findByText('No hay convocatorias con estos filtros')).toBeVisible()
+  expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
   const stateOptions = within(screen.getByLabelText('Estado')).getAllByRole('option', { hidden: true }).map(o => o.value)
   expect(stateOptions).toEqual(['', 'abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'])
 })

@@ -162,7 +162,7 @@ describe('convocatorias', () => {
   it('muestra catálogo vacío sin inventar ofertas', async () => {
     vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path === 'becas/catalogos' ? catalogs : { count: 0, page: 1, page_size: 12, results: [] })
     render(<MemoryRouter><Offers /></MemoryRouter>)
-    expect(await screen.findByText('No hay convocatorias con estos filtros')).toBeVisible()
+    expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
     expect(screen.queryByText(/compatibilidad/i)).not.toBeInTheDocument()
   })
 
@@ -200,6 +200,32 @@ describe('convocatorias', () => {
     await userEvent.click(region.getByRole('button', { name: 'Guardar opciones de estudio' }))
     await waitFor(() => expect(write).toHaveBeenCalledWith('gestion/convocatorias/41/opciones/12', 'PATCH', expect.objectContaining({ programa: 'Programa B' })))
     expect(get).toHaveBeenCalledWith('gestion/convocatorias/41')
+  })
+
+  it.each([
+    ['borrador', 'pendiente', true],
+    ['pausada', 'validada', false],
+  ])('no ofrece pausar una convocatoria %s', async (estado, revision, activa) => {
+    const offer = { id: 41, titulo: 'Convocatoria sintética', institucion: { id: 1, nombre: 'Entidad' },
+      estado, revision, activa, version: 1, opciones: [], beneficios: [], requisitos: [] }
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs
+      : path === 'gestion/convocatorias/41' ? offer : { count: 1, results: [{ id: 1, nombre: 'Entidad' }] })
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
+    await screen.findByText(/Revisión:/)
+    expect(screen.queryByRole('button', { name: 'Pausar convocatoria' })).not.toBeInTheDocument()
+  })
+
+  it('retira la acción de pausa tras pausar una convocatoria publicada', async () => {
+    const offer = { id: 41, titulo: 'Convocatoria sintética', institucion: { id: 1, nombre: 'Entidad' },
+      estado: 'abierta', revision: 'validada', activa: true, version: 1, opciones: [], beneficios: [], requisitos: [] }
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs
+      : path === 'gestion/convocatorias/41' ? offer : { count: 1, results: [{ id: 1, nombre: 'Entidad' }] })
+    const write = vi.spyOn(offersApi, 'write').mockResolvedValue({ ...offer, estado: 'pausada', activa: false, version: 2 })
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
+    await userEvent.click(await screen.findByRole('button', { name: 'Pausar convocatoria' }))
+    expect(await screen.findByText('Convocatoria pausada.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Pausar convocatoria' })).not.toBeInTheDocument()
+    expect(write).toHaveBeenCalledTimes(1)
   })
 
   it('renderiza condiciones documentales como texto y verificación externa', () => {

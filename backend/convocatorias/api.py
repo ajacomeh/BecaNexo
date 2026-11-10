@@ -278,6 +278,8 @@ class Accion(AuthView):
             before = detalle(obj)
             if accion == "publicar": publicar(obj)
             else:
+                if not obj.activa or obj.revision != "validada":
+                    raise serializers.ValidationError({"detail": "Solo se puede pausar una convocatoria publicada y activa."})
                 obj.activa = False
                 obj.version += 1
                 obj.actualizado_en = timezone.now()
