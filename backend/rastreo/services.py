@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.db import connection, transaction, DatabaseError
 from django.utils import timezone
 
-from convocatorias.siau_red import Downloader, AccessError, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
+from convocatorias.siau_red import Downloader, AccessError, SourceBackoff, retry_after_at, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
 from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
 from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion
 from .observaciones import identity, observe, normalize_url
@@ -303,6 +303,10 @@ class PersistentDownloader(Downloader):
             access = self.record(url, entry, status, result, error=None if result == 'redirigido' else f'HTTP_{status}')
             if result == 'error':
                 incident(self.execution, 'HTTP', f'HTTP {status}; no cancela convocatorias.', access)
+            if status in (429, 503):
+                due = retry_after_at(headers)
+                if due:
+                    incident(self.execution, 'REINTENTO_FUENTE', due.isoformat(), access, 'aviso')
         Ejecucion.objects.filter(pk=self.execution.pk).update(latido_en=timezone.now())
         return status, headers, content
 
@@ -317,9 +321,9 @@ def summary(execution):
             'convocatorias_creadas': 0, 'revision_documental': 'pendiente'}
 
 
-def run_manual(source_id, actor_id, key):
+def run_manual(source_id, actor_id, key, manual_context=None):
     actor_admin(actor_id)
-    return _run(source_id, actor_id, key, 'manual')
+    return _run(source_id, actor_id, key, 'manual', manual_context)
 
 
 def run_scheduled(source_id, key=None):
@@ -327,11 +331,20 @@ def run_scheduled(source_id, key=None):
 
 
 def next_due(source):
-    last = Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio').first()
-    return last.inicio + timedelta(minutes=source.frecuencia_min) if last else None
+    # Una captura extraordinaria no reinicia las 24 horas del Programador.
+    last = (Ejecucion.objects.filter(fuente=source).exclude(estado='omitida')
+            .exclude(configuracion_snapshot__solicitud_extraordinaria__isnull=False)
+            .order_by('-inicio', '-id').first())
+    scheduled = last.inicio + timedelta(minutes=source.frecuencia_min) if last else None
+    from .web_frequency import extraordinary_enabled, global_due, source_retry_due
+    retry_limit = source_retry_due(source)
+    if extraordinary_enabled():
+        global_limit = global_due(source)
+        return max(filter(None, (scheduled, global_limit, retry_limit)), default=None)
+    return max(filter(None, (scheduled, retry_limit)), default=None)
 
 
-def _run(source_id, actor_id, key, origin):
+def _run(source_id, actor_id, key, origin, manual_context=None):
     key = uuid.UUID(str(key))
     existing = Ejecucion.objects.filter(clave_idempotencia=key).first()
     if existing:
@@ -361,8 +374,13 @@ def _run(source_id, actor_id, key, origin):
             if source.adaptador != 'siau' or source.url_base != INDEX or not supported_policy(source):
                 reason = 'Configuración fuera del contrato SIAU cerrado.'
             now = timezone.now()
+            configuration = snapshot(source.pk)
+            if manual_context:
+                kind = ('solicitud_extraordinaria' if manual_context.get('modalidad') == 'extraordinaria'
+                        else 'solicitud_manual')
+                configuration[kind] = manual_context
             execution = Ejecucion.objects.create(fuente=source, solicitado_por_id=actor_id, origen=origin, clave_idempotencia=key,
-                configuracion_snapshot=snapshot(source.pk), version_extractor=EXTRACTOR_VERSION,
+                configuracion_snapshot=configuration, version_extractor=EXTRACTOR_VERSION,
                 inicio=now, estado='omitida' if reason else 'en_curso', fin=now if reason else None, error_resumen=reason)
             if reason:
                 incident(execution, 'OMITIDA', reason, severity='aviso')
@@ -396,6 +414,8 @@ def _run(source_id, actor_id, key, origin):
                     pages = list(dict.fromkeys([*PAGES, *discovered]))[:MAX_FICHAS]
                     downloader.pages.update(pages)
                     downloader.allowed_urls.update(pages)
+            except SourceBackoff:
+                raise
             except AccessError:
                 pass  # Fichas autorizadas se investigan aunque falle el índice.
             except (UnicodeError, ValueError):
@@ -410,6 +430,8 @@ def _run(source_id, actor_id, key, origin):
                     pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
                     downloader.pages.update(pages)
                     downloader.allowed_urls.update(pages)
+                except SourceBackoff:
+                    raise
                 except AccessError:
                     pass  # Fichas conocidas siguen disponibles; el acceso fallido queda registrado.
                 except (UnicodeError, ValueError):
@@ -442,6 +464,8 @@ def _run(source_id, actor_id, key, origin):
                             try:
                                 pdf = download(link['url'])
                                 pdf_cache[link['url']] = execution.accesos.filter(url_normalizada=pdf['url'], documento__isnull=False).select_related('documento').latest('id').documento
+                            except SourceBackoff:
+                                raise
                             except (AccessError, ValueError):
                                 pdf_cache[link['url']] = None
                         document = pdf_cache[link['url']]
@@ -451,6 +475,8 @@ def _run(source_id, actor_id, key, origin):
                         else:
                             evidence.append({'rol': 'bases_pdf', 'url': link['url'], 'url_original': link['url_original'], 'documento': document})
                     observe(execution, publication, item, evidence, pending)
+                except SourceBackoff:
+                    raise
                 except (AccessError, ValueError, ValidationError) as exc:
                     publication = downloader.publication
                     incident(execution, 'FICHA_INCOMPLETA', type(exc).__name__, publication=publication)

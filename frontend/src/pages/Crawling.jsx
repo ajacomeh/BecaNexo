@@ -7,6 +7,7 @@ import Button from '../components/Button'
 import Message from '../components/Message'
 import CrawlingReviews from '../components/CrawlingReviews'
 import CrawlingProposal from '../components/CrawlingProposal'
+import CrawlingControl from '../components/CrawlingControl'
 import './Crawling.css'
 
 const prefix = 'gestion/rastreo'
@@ -61,7 +62,7 @@ function SourceFilter() {
 
 function Publications() {
   const [filters, setFilters] = useState({})
-  return <><form className="profile-card crawl-filters" onSubmit={(event) => {
+  return <><CrawlingControl /><form className="profile-card crawl-filters" onSubmit={(event) => {
     event.preventDefault(); const data = new FormData(event.currentTarget)
     setFilters({ q: data.get('q'), ...(data.get('fuente') ? { fuente: data.get('fuente') } : {}) })
   }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" /></label><SourceFilter /><Button icon="search" type="submit">Buscar</Button></form>

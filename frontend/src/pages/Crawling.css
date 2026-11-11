@@ -1,4 +1,23 @@
 .crawl { min-width: 0; overflow-wrap: anywhere; }
+.crawl-control { margin-block: 1.5rem; }
+.crawl-control-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.crawl-control-heading > div { min-width: 0; }
+.crawl-control-heading h2 { margin-top: 0; }
+.crawl-control-heading .button { flex: none; }
+.crawl-control-status { margin-top: .8rem; }
+.crawl-control-status p { margin-block: .35rem; }
+.crawl-control-source { font-weight: 600; color: #19375a; }
+.crawl-control-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-block: .8rem; }
+.crawl-control-mode { min-width: 0; padding: .8rem 1rem; border: 1px solid #d6e3ed; border-radius: 8px; background: #f7f9fc; }
+.crawl .profile-card .crawl-control-mode h3 { margin: 0 0 .45rem; font-size: 1rem; color: #19375a; }
+.crawl-control-mode p { overflow-wrap: anywhere; }
+.crawl-control-availability { margin-top: .8rem; padding: .65rem .8rem; border-left: 3px solid #167b88; background: #eef6f7; }
+.crawl-confirm { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem; background: #102642bd; }
+.crawl-confirm form { width: min(100%, 32rem); box-sizing: border-box; padding: 1.25rem; border-radius: 12px; background: white; box-shadow: 0 12px 40px #10264266; }
+.crawl-confirm label { display: block; font-weight: 600; margin-block: 1rem .4rem; }
+.crawl-confirm input { box-sizing: border-box; width: 100%; min-height: 3rem; padding: .7rem; border: 1px solid #8097b5; border-radius: 8px; font: inherit; }
+.crawl-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .75rem; margin-top: 1rem; }
+@media (max-width: 600px) { .crawl-control-heading { align-items: stretch; flex-direction: column; } .crawl-control-modes { grid-template-columns: minmax(0, 1fr); } }
 .crawl > nav { margin-block: 1.5rem; }
 .crawl .crawl-list > li { display: block; }
 .crawl .crawl-list > li > div, .crawl .crawl-list > li > article { width: 100%; min-width: 0; }

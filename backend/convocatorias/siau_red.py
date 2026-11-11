@@ -4,7 +4,8 @@ import ipaddress
 import socket
 import ssl
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit, urljoin
 
 HOST = 'siau.senescyt.gob.ec'
@@ -22,6 +23,27 @@ AGENT = 'BecaNexoPreview/0.1 (academic research; bounded public preview)'
 
 class AccessError(Exception):
     pass
+
+
+class SourceBackoff(AccessError):
+    """La fuente pidió reducir accesos; no continuar con otras URL."""
+
+
+def retry_after_at(headers, now=None):
+    value = headers.get('retry-after', '').strip()
+    if not value:
+        return None
+    now = now or datetime.now(timezone.utc)
+    if value.isdecimal():
+        try:
+            return now + timedelta(seconds=int(value))
+        except (OverflowError, ValueError):
+            return datetime.max.replace(tzinfo=timezone.utc)
+    try:
+        result = parsedate_to_datetime(value)
+        return result.astimezone(timezone.utc) if result.tzinfo else None
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def validate_url(url, allowed_urls=ALLOWED):
@@ -130,7 +152,9 @@ class Downloader:
                     if isinstance(exc, ssl.SSLError) or attempt == 1:
                         raise AccessError('Error de conexión: ' + type(exc).__name__) from exc
                     continue
-                if status in (502, 503, 504) and attempt == 0:
+                if status in (429, 503):
+                    raise SourceBackoff(f'HTTP {status}; reducir accesos a la fuente.')
+                if status in (502, 504) and attempt == 0:
                     continue
                 break
             if status in (301, 302, 303, 307, 308):

@@ -4,7 +4,7 @@ import json
 import socket
 import ssl
 import tempfile
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,7 +14,7 @@ from django.test import SimpleTestCase, override_settings
 
 from .siau_bases import REVIEWS, annotate_pdf, compare_pdf
 from .siau_extraccion import extract_html, fecha, validate_observation, menciones_academicas
-from .siau_red import AccessError, Downloader, INDEX, PAGES, PDFS, ROBOTS, public_address, validate_url
+from .siau_red import AccessError, Downloader, INDEX, PAGES, PDFS, ROBOTS, public_address, validate_url, retry_after_at
 
 FIXTURE = Path(__file__).parent / 'fixtures/siau/ficha_sintetica.html'
 
@@ -191,12 +191,26 @@ class NetworkTests(SimpleTestCase):
                 downloader.fetch(PAGES[0])
 
     def test_http_errors_and_retry_limit(self):
-        for status, attempts in ((404, 1), (403, 1), (429, 1), (503, 2)):
+        for status, attempts in ((404, 1), (403, 1), (429, 1), (503, 1)):
             downloader = Downloader()
             with patch.object(downloader, 'once', return_value=(status, {}, b'')) as request:
                 with self.assertRaisesMessage(AccessError, f'HTTP {status}'):
                     downloader.fetch(PAGES[0])
                 self.assertEqual(request.call_count, attempts)
+
+    def test_retry_after_blocks_immediate_retry(self):
+        moment = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
+        self.assertEqual(retry_after_at({'retry-after': '300'}, moment),
+                         datetime(2026, 11, 11, 12, 5, tzinfo=timezone.utc))
+        self.assertEqual(retry_after_at({'retry-after': 'Wed, 11 Nov 2026 13:00:00 GMT'}, moment),
+                         datetime(2026, 11, 11, 13, tzinfo=timezone.utc))
+        self.assertIsNone(retry_after_at({'retry-after': 'invalid'}, moment))
+        for status in (429, 503):
+            downloader = Downloader()
+            with patch.object(downloader, 'once', return_value=(status, {'retry-after': '300'}, b'')) as request:
+                with self.assertRaises(AccessError):
+                    downloader.fetch(PAGES[0])
+                request.assert_called_once()
 
     def test_timeout_bounded_and_tls_error_not_bypassed(self):
         for error, attempts in ((TimeoutError(), 2), (ssl.SSLError(), 1)):

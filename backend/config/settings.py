@@ -29,6 +29,9 @@ SECRET_KEY = env("DJANGO_SECRET_KEY")
 
 DEBUG = env("DJANGO_DEBUG")
 
+# Excepción operativa cerrada hasta verificar condiciones del portal y autorizarla.
+RASTREO_EXTRAORDINARIO_HABILITADO = env.bool("RASTREO_EXTRAORDINARIO_HABILITADO", default=False)
+
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
 
 

@@ -15,16 +15,17 @@ function open(path = '/gestion/rastreo') { render(<MemoryRouter initialEntries={
 it('muestra carga, error, reintento y vacío sin acciones editoriales', async () => {
   let failed = false
   const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => {
+    if (path.endsWith('/control')) return { politica_version: 'siau-indice/2', frecuencia_min: 1440, puede_iniciar: false }
     if (path.endsWith('/fuentes')) return list([{id: 1, nombre: 'SIAU prueba'}])
     if (!failed) { failed = true; throw new Error('Error simulado') }
     return list()
   })
   open()
-  expect(screen.getAllByRole('status')[0]).toHaveTextContent('Cargando')
+  expect(screen.getAllByRole('status').some(node => node.textContent.includes('Cargando'))).toBe(true)
   expect(await screen.findByText('Error simulado')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
   expect(await screen.findByText('No hay registros para esta consulta.')).toBeVisible()
-  expect(get).toHaveBeenCalledTimes(3)
+  expect(get).toHaveBeenCalledTimes(4)
   expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
   expect(screen.queryByRole('button', { name: /aprobar|publicar|ejecutar/i })).not.toBeInTheDocument()
 })
@@ -88,7 +89,7 @@ it('postulante no puede navegar a Rastreo ni ve su menú', async () => {
   open('/gestion/rastreo')
   expect(screen.queryByRole('heading', { name: 'Rastreo' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Rastreo' })).not.toBeInTheDocument()
-  expect(get).not.toHaveBeenCalled()
+  expect(get.mock.calls.some(([path]) => path.startsWith('gestion/rastreo'))).toBe(false)
 })
 import { within } from '@testing-library/react'
 import Button from './components/Button'
