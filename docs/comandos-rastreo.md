@@ -2,7 +2,31 @@
 
 ## Bloque 6: descubrimiento y ejecución periódica preparados
 
-La fuente SIAU usa `siau-indice/2` desde la ampliación auditada del 07/11/2026 (revisión de configuración ID 3). El adaptador puede leer el índice oficial y añadir como candidatas hasta 12 fichas HTTPS del mismo dominio cuya ruta sea `/programa-de-becas-nacionales-.../`; admite hasta 24 PDF del mismo dominio bajo `/wp-content/uploads/AAAA/MM/*.pdf`. Cada URL pasa además por robots, DNS público, TLS y los límites de descarga previos. Una candidata detectada no acredita nacionalidad, oferente, vigencia ni documentación: queda para revisión. Otras fuentes y patrones de ruta requieren integración y comprobación independientes. La aprobación automática de publicación permanece deshabilitada.
+### Ampliación nacional preparada (bloque 16, etapa 3)
+
+La fuente real pasó de `siau-indice/2` a `siau-nacionales/3` mediante la revisión auditada ID 4 el 10/11/2026. La política conserva el índice y las cuatro fichas históricas, y añade únicamente la primera página HTML de `https://siau.senescyt.gob.ec/portfolio/convocatorias/`. Solo acepta tarjetas de `category-convocatorias` con título de beca nacional y URL HTTPS del mismo dominio; confirma título, fecha de cierre y sección de requisitos en la ficha antes de crear su identidad. Todo pasa por robots, DNS público, TLS y límites existentes. El índice anuncia más páginas mediante AJAX: el rastreador no envía ese POST y registra cobertura **parcial**. Las bases que no sean PDF permitido, como ZIP, quedan pendientes de revisión sin descarga. Una candidata no acredita oferente ecuatoriano, vigencia ni aprobación editorial.
+
+La captura manual única del 11/11/2026 quedó como ejecución ID 6, parcial por cobertura del índice y ZIP fuera del contrato PDF; registró OCCITEC como publicación rastreada, sin crear convocatoria. El script de Windows admite las políticas auditadas `/2` y `/3`, pero mantiene las comprobaciones de base esperada, fuente activa y publicación automática deshabilitada. Su modo `-Comprobar` aprobó bajo `/3`; la tarea existente se rehabilitó sin alterar sus disparadores. No volver a lanzar el ejemplo manual de abajo para esta captura.
+
+Tras autorización expresa, con una cuenta administradora real y sin ejecuciones en curso, la transición auditada e idempotente se solicita desde la raíz con una UUID nueva:
+
+```powershell
+$claveNacionales = [guid]::NewGuid().ToString()
+.\.venv\Scripts\python.exe backend/manage.py rastreo habilitar-nacionales --actor-id <ID_ADMIN_AUTORIZADO> --motivo "Autorizar indice nacional SIAU" --clave $claveNacionales
+```
+
+Comprobar después `rastreo estado-programacion --fuente-id 1`. El comando **no ejecuta** rastreo ni cambia la frecuencia; el Programador de Windows seguirá usando el control interno de 1440 minutos. No ejecutar la transición ni una captura real sin autorización y respaldo vigente.
+
+Si una incidencia exige volver exclusivamente a `siau-indice/2`, primero comprobar que no exista ejecución activa ni disparo concurrente del Programador. Con autorización administrativa separada, motivo y UUID nuevos, usar el comando auditado; conserva publicaciones, versiones y documentos:
+
+```powershell
+$claveReversion = [guid]::NewGuid().ToString()
+.\.venv\Scripts\python.exe backend/manage.py rastreo revertir-nacionales --actor-id <ID_ADMIN_AUTORIZADO> --motivo "Revertir política nacional SIAU tras incidencia verificada" --clave $claveReversion
+```
+
+Consultar después `rastreo estado-programacion --fuente-id 1` y la revisión de configuración registrada. Este procedimiento queda preparado; **no se ejecutó la reversión en desarrollo**.
+
+La fuente SIAU usó `siau-indice/2` desde la ampliación auditada del 07/11/2026 (revisión de configuración ID 3) hasta la transición del 10/11/2026. El adaptador puede leer el índice oficial y añadir como candidatas hasta 12 fichas HTTPS del mismo dominio; admite hasta 24 PDF del mismo dominio bajo `/wp-content/uploads/AAAA/MM/*.pdf`. Cada URL pasa además por robots, DNS público, TLS y los límites de descarga previos. Una candidata detectada no acredita nacionalidad, oferente, vigencia ni documentación: queda para revisión. Otras fuentes y patrones de ruta requieren integración y comprobación independientes. La aprobación automática de publicación permanece deshabilitada.
 
 Comandos operativos **solo tras autorización de escritura para cada acción**. La ampliación auditada y una ejecución manual real (ID 4) ya se realizaron en `becanexo_db`; los ejemplos no son una instrucción para repetirlas:
 

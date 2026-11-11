@@ -15,6 +15,7 @@ PDFS = [ROOT + '/wp-content/uploads/2026/07/bn_aa_jdne2026_bases_rf.pdf',
         ROOT + '/wp-content/uploads/2026/10/bn_4to_nivel_2026_13102026_vf-1.pdf']
 ROBOTS = ROOT + '/robots.txt'
 INDEX = ROOT + '/convocatorias/'
+NATIONAL_INDEX = ROOT + '/portfolio/convocatorias/'
 ALLOWED = frozenset([ROBOTS, INDEX, *PAGES, *PDFS])
 AGENT = 'BecaNexoPreview/0.1 (academic research; bounded public preview)'
 

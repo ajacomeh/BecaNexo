@@ -40,7 +40,7 @@ try {
     $codigoError = 'BASE_INESPERADA'
     if ($estado.base -cne $BaseEsperada) { throw "Base inesperada; se esperaba $BaseEsperada." }
     $codigoError = 'CONFIGURACION_INSEGURA'
-    if (-not $estado.activa -or $estado.politica_version -cne 'siau-indice/2' -or $estado.aprobada_publicacion_automatica) {
+    if (-not $estado.activa -or $estado.politica_version -cnotin @('siau-indice/2', 'siau-nacionales/3') -or $estado.aprobada_publicacion_automatica) {
         throw 'La fuente no cumple las condiciones aprobadas para la programación.'
     }
     if ($Comprobar) {

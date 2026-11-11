@@ -11,21 +11,24 @@ from django.core.exceptions import ValidationError
 from django.db import connection, transaction, DatabaseError
 from django.utils import timezone
 
-from convocatorias.siau_red import Downloader, AccessError, INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
+from convocatorias.siau_red import Downloader, AccessError, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
 from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
 from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion
 from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
-from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, candidate_url, index_pages
+from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, candidate_url, index_pages, national_index_pages, national_ficha_content
 
 
 BASE_POLICY = {'urls': sorted(ALLOWED), 'bytes_html': 2097152, 'bytes_pdf': 8388608, 'reintentos': 1}
 DISCOVERY_POLICY = {**BASE_POLICY, 'descubrimiento': {'indice': INDEX, 'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES}}
+NATIONAL_POLICY = {**BASE_POLICY, 'descubrimiento': {'indice': INDEX, 'indice_nacionales': NATIONAL_INDEX,
+    'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES, 'max_paginas_nacionales': 1}}
 
 
 def supported_policy(source):
     return ((source.politica_version == 'siau-cerrada/1' and source.politica_acceso == BASE_POLICY)
-            or (source.politica_version == 'siau-indice/2' and source.politica_acceso == DISCOVERY_POLICY))
+            or (source.politica_version == 'siau-indice/2' and source.politica_acceso == DISCOVERY_POLICY)
+            or (source.politica_version == 'siau-nacionales/3' and source.politica_acceso == NATIONAL_POLICY))
 
 
 def actor_admin(actor_id):
@@ -93,10 +96,81 @@ def enable_discovery(actor_id, reason, key=None):
     source = Fuente.objects.select_for_update().get(url_base=INDEX)
     if source.adaptador != 'siau' or not supported_policy(source) or source.aprobada_publicacion_automatica:
         raise ValidationError('Fuente fuera del contrato SIAU.')
-    if source.politica_version == 'siau-indice/2':
+    if source.politica_version in ('siau-indice/2', 'siau-nacionales/3'):
         return source, False
+    if source.politica_version != 'siau-cerrada/1':
+        raise ValidationError('La política actual no admite esta transición.')
     if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
         raise ValidationError('No cambiar la política durante una ejecución activa.')
+    before = snapshot(source.pk)
+    source.politica_acceso = DISCOVERY_POLICY
+    source.politica_version = 'siau-indice/2'
+    source.save(update_fields=['politica_acceso', 'politica_version'])
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+                            motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
+def enable_national_discovery(actor_id, reason, key=None):
+    """Autoriza por separado el segundo índice; no altera la fuente por importar código."""
+    actor = actor_admin(actor_id)
+    if not reason or not reason.strip():
+        raise ValidationError('Motivo obligatorio.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if (previous.actor_id != actor.pk or previous.motivo != reason.strip()
+                or previous.detalle.get('despues', {}).get('politica_version') != 'siau-nacionales/3'):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    source = Fuente.objects.select_for_update().get(url_base=INDEX)
+    if source.adaptador != 'siau' or not supported_policy(source) or source.aprobada_publicacion_automatica:
+        raise ValidationError('Fuente fuera de la política SIAU vigente para ampliar.')
+    if source.politica_version == 'siau-nacionales/3':
+        return source, False
+    if source.politica_version != 'siau-indice/2':
+        raise ValidationError('Se requiere primero siau-indice/2.')
+    if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
+        raise ValidationError('No cambiar la política durante una ejecución activa.')
+    before = snapshot(source.pk)
+    source.politica_acceso = NATIONAL_POLICY
+    source.politica_version = 'siau-nacionales/3'
+    source.save(update_fields=['politica_acceso', 'politica_version'])
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+                            motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
+def revert_national_discovery(actor_id, reason, key=None):
+    """Vuelve solo a la política anterior; conserva capturas y auditoría."""
+    actor = actor_admin(actor_id)
+    if not reason or not reason.strip():
+        raise ValidationError('Motivo obligatorio.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        before = previous.detalle.get('antes') or {}
+        after = previous.detalle.get('despues') or {}
+        if (previous.actor_id != actor.pk or previous.motivo != reason.strip()
+                or before.get('politica_version') != 'siau-nacionales/3'
+                or after.get('politica_version') != 'siau-indice/2'):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    source = Fuente.objects.select_for_update().get(url_base=INDEX)
+    if source.adaptador != 'siau' or not supported_policy(source) or source.aprobada_publicacion_automatica:
+        raise ValidationError('Fuente fuera del contrato SIAU.')
+    if source.politica_version == 'siau-indice/2':
+        return source, False
+    if source.politica_version != 'siau-nacionales/3':
+        raise ValidationError('La política actual no admite esta reversión.')
+    if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
+        raise ValidationError('No revertir la política durante una ejecución activa.')
     before = snapshot(source.pk)
     source.politica_acceso = DISCOVERY_POLICY
     source.politica_version = 'siau-indice/2'
@@ -179,7 +253,7 @@ class PersistentDownloader(Downloader):
         started = datetime.fromisoformat(record['inicio_peticion_utc']) if record.get('inicio_peticion_utc') else None
         finished = timezone.now()
         return Acceso.objects.create(ejecucion=self.execution, secuencia=self.sequence, publicacion=self.publication,
-            rol='robots' if url == ROBOTS else 'indice' if url == INDEX else 'bases' if url in self.pdfs else 'ficha',
+            rol='robots' if url == ROBOTS else 'indice' if url in (INDEX, NATIONAL_INDEX) else 'bases' if url in self.pdfs else 'ficha',
             url_original=url, url_normalizada=url, url_final=url, admitido_en=admitted,
             inicio_peticion_en=started, fin=max(finished, started or admitted, admitted),
             espera_ms=record.get('espera_ms', 0),
@@ -197,6 +271,11 @@ class PersistentDownloader(Downloader):
             incident(self.execution, 'RED', type(exc).__name__, access)
             raise
         if status == 200:
+            if (self.page_url == url and url not in PAGES and self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/3'
+                    and not national_ficha_content(content)):
+                access = self.record(url, entry, status, 'bloqueado', error='FICHA_FUERA_ALCANCE')
+                incident(self.execution, 'FICHA_FUERA_ALCANCE', 'La ficha no conserva la estructura nacional anunciada en el índice.', access, 'aviso')
+                raise AccessError('Ficha fuera del alcance nacional verificado.')
             expected = 'application/pdf' if url in self.pdfs else 'text/plain' if url == ROBOTS else 'text/html'
             mime = headers.get('content-type', '').split(';')[0].strip().lower()
             try:
@@ -310,7 +389,7 @@ def _run(source_id, actor_id, key, origin):
             pages = list(PAGES)
             try:
                 index = download(INDEX)
-                if source.politica_version == 'siau-indice/2':
+                if source.politica_version in ('siau-indice/2', 'siau-nacionales/3'):
                     discovered, truncated = index_pages(index['contenido'])
                     if truncated:
                         incident(execution, 'INDICE_LIMITE', 'El índice supera el máximo de fichas; se requiere revisión.')
@@ -321,6 +400,20 @@ def _run(source_id, actor_id, key, origin):
                 pass  # Fichas autorizadas se investigan aunque falle el índice.
             except (UnicodeError, ValueError):
                 incident(execution, 'INDICE_ESTRUCTURA', 'Índice no interpretable; se conservan las fichas conocidas.')
+            if source.politica_version == 'siau-nacionales/3':
+                downloader.allowed_urls.add(NATIONAL_INDEX)
+                try:
+                    national = download(NATIONAL_INDEX)
+                    discovered, truncated = national_index_pages(national['contenido'])
+                    if truncated or len(pages) + len([url for url in discovered if url not in pages]) > MAX_FICHAS:
+                        incident(execution, 'INDICE_LIMITE', 'Índice nacional con cobertura parcial; existen más páginas o fichas que el límite.')
+                    pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
+                    downloader.pages.update(pages)
+                    downloader.allowed_urls.update(pages)
+                except AccessError:
+                    pass  # Fichas conocidas siguen disponibles; el acceso fallido queda registrado.
+                except (UnicodeError, ValueError):
+                    incident(execution, 'INDICE_ESTRUCTURA', 'Índice nacional no interpretable; se conservan las fichas conocidas.')
             pdf_cache = {}
             for url in pages:
                 downloader.page_url = url
@@ -337,7 +430,7 @@ def _run(source_id, actor_id, key, origin):
                     if not item['seccion_completa']:
                         incident(execution, 'ESTRUCTURA', 'HTML fuera de contrato; no estructurar automáticamente.', publication=publication)
                     for link in item['enlaces_bases']:
-                        candidate = candidate_url(link['url'], BASE) if source.politica_version == 'siau-indice/2' else None
+                        candidate = candidate_url(link['url'], BASE) if source.politica_version in ('siau-indice/2', 'siau-nacionales/3') else None
                         if link['url'] not in downloader.pdfs and (not candidate or candidate != link['url'] or len(downloader.pdfs) >= MAX_BASES):
                             pending.append({'url': link['url'], 'estado': 'fuera_de_lista'})
                             incident(execution, 'BASE_NO_PERMITIDA', 'Enlace de bases fuera de lista cerrada.', publication=publication)

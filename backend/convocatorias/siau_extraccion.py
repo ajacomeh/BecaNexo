@@ -26,7 +26,7 @@ class FichaHTML(HTMLParser):
         text = ' '.join(''.join(self.buffer).split())
         if text:
             self.lines.append(text)
-            if 'Requisitos generales para aplicar' in text:
+            if 'Requisitos generales para aplicar' in text or 'REQUISITOS GENERALES' in text:
                 self.requirements_seen = True
         self.buffer = []
 
@@ -140,10 +140,13 @@ def extract_html(download):
             return inline
         index = next((i for i, line in enumerate(lines) if line.casefold().rstrip(':') == label.casefold()), None)
         return lines[index + 1] if index is not None and index + 1 < len(lines) else ''
-    description = section('¿Quiénes pueden aplicar?', '¿Cuál es la cobertura')
+    description = (section('¿Quiénes pueden aplicar?', '¿Cuál es la cobertura')
+                   or section('dirigida esta convocatoria', 'Requisitos para aplicar'))
     coverage = section('¿Cuál es la cobertura', '¿Cómo postular')
-    requirements = section('Requisitos generales para aplicar')
-    instructions = section('¿Cómo postular?', 'Requisitos generales para aplicar')
+    requirements = (section('Requisitos generales para aplicar')
+                    or section('REQUISITOS GENERALES', 'Preguntas frecuentes'))
+    instructions = (section('¿Cómo postular?', 'Requisitos generales para aplicar')
+                    or section('Lugar de presentación de postulaciones'))
     # No confundir un nombre de portal ni una mención de pie de página con oferente.
     entity = re.search(r'Ministerio de Educación, Deporte y Cultura\s*[–-]\s*MINEDEC', description)
     amounts = []

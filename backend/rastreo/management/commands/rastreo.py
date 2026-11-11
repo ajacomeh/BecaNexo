@@ -6,7 +6,7 @@ from django.db import connection
 from django.utils import timezone
 from rastreo.models import Fuente, Ejecucion, Publicacion, Version, VersionDocumento, Observacion
 from rastreo.observaciones import differences
-from rastreo.services import configure, enable_discovery, set_frequency, run_manual, run_scheduled, next_due, recover, summary
+from rastreo.services import configure, enable_discovery, enable_national_discovery, revert_national_discovery, set_frequency, run_manual, run_scheduled, next_due, recover, summary
 from rastreo.storage import integrity_report, StorageError
 
 
@@ -14,7 +14,7 @@ class Command(BaseCommand):
     help = 'Rastreo local de confianza: configurar, activar, desactivar, ejecutar, resumen, recuperar, integridad.'
 
     def add_arguments(self, parser):
-        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'habilitar-descubrimiento', 'configurar-frecuencia', 'ejecutar', 'programado', 'estado-programacion', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
+        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'habilitar-descubrimiento', 'habilitar-nacionales', 'revertir-nacionales', 'configurar-frecuencia', 'ejecutar', 'programado', 'estado-programacion', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
         parser.add_argument('--actor-id', type=int)
         parser.add_argument('--motivo')
         parser.add_argument('--clave', help='UUID idempotente; obligatorio al ejecutar.')
@@ -34,6 +34,12 @@ class Command(BaseCommand):
                 result = {'fuente_id': source.pk, 'activa': source.activa, 'aprobada_publicacion_automatica': False, 'cambio': changed}
             elif action == 'habilitar-descubrimiento':
                 source, changed = enable_discovery(options['actor_id'], options['motivo'], options['clave'])
+                result = {'fuente_id': source.pk, 'politica_version': source.politica_version, 'cambio': changed}
+            elif action == 'habilitar-nacionales':
+                source, changed = enable_national_discovery(options['actor_id'], options['motivo'], options['clave'])
+                result = {'fuente_id': source.pk, 'politica_version': source.politica_version, 'cambio': changed}
+            elif action == 'revertir-nacionales':
+                source, changed = revert_national_discovery(options['actor_id'], options['motivo'], options['clave'])
                 result = {'fuente_id': source.pk, 'politica_version': source.politica_version, 'cambio': changed}
             elif action == 'configurar-frecuencia':
                 source, changed = set_frequency(options['fuente_id'], options['actor_id'], options['motivo'], options['frecuencia_min'], options['clave'])
