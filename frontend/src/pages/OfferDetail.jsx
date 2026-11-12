@@ -139,17 +139,18 @@ export default function OfferDetail() {
   const financing = offer ? benefitSummary(offer.beneficios) : []
   const officialUrl = offer ? documentLink(offer.url_oficial) : null
   const basesUrl = offer ? documentLink(offer.url_bases) : null
+  const demonstration = offer?.titulo?.endsWith('(Ficticia)')
   return <OffersLayout><Link className="back-link" to="/becas"><Icon name="back" /><span>Volver al catálogo</span></Link>
     {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
     {!data && !error && <p role="status"><Icon name="loading" />Cargando convocatoria…</p>}
     {offer && <><header className="offer-detail-hero"><div className="offer-hero-top"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div>
-      <div className="offer-hero-actions">{officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
+      <div className="offer-hero-actions">{demonstration ? <p className="small-note">Convocatoria ficticia para demostración; no admite postulaciones.</p> : officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
         <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div></div>
       <dl className="offer-hero-facts"><div><dt>Cierre</dt><dd>{closingText(offer)}</dd></div>
         {options.length > 0 && <><div><dt>{options.length === 1 ? 'Nivel y modalidad' : 'Niveles y modalidades'}</dt><dd>{unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</dd></div>
           <div><dt>{destinations.length === 1 ? 'Destino' : 'Destinos'}</dt><dd>{destinations.join(', ') || 'No especificado'}</dd></div></>}
         {financing.length > 0 && <div className="offer-hero-financing"><dt>Financiamiento</dt><dd>{financing.map((line, index) => <span key={index}>{line}</span>)}</dd></div>}</dl>
-      {officialUrl && <p className="small-note">El enlace oficial permite consultar la convocatoria; no necesariamente abre un formulario de postulación.</p>}</header>
+      {!demonstration && officialUrl && <p className="small-note">El enlace oficial permite consultar la convocatoria; no necesariamente abre un formulario de postulación.</p>}</header>
       {offer.estado === 'cerrada' && <Message kind="info">La fecha de cierre ya pasó. Esta oferta se conserva para consulta.</Message>}
       {offer.estado === 'cierre_hoy' && <Message kind="info">El cierre está indicado solo por día. No se conoce la hora; consulta el sitio oficial antes de postular.</Message>}
       <section className="profile-card offer-detail-section"><h2>Resumen y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
@@ -161,7 +162,7 @@ export default function OfferDetail() {
       <section className="profile-card offer-detail-section"><h2>Beneficios comunes</h2><BenefitList records={offer.beneficios.filter((b) => !b.opcion_estudio)} /><p className="profile-note">Cada porcentaje corresponde exclusivamente al concepto financiado. No representa el costo total de estudiar.</p></section>
       <section className="profile-card offer-detail-section"><h2>Requisitos comunes</h2><RequirementList records={offer.requisitos.filter((r) => !r.opcion_estudio && !isDocument(r, data.catalogs))} catalogs={data.catalogs} /></section>
       <Documentation offer={offer} catalogs={data.catalogs} scopeId={null} showWarning={false} />
-      <section className="profile-card offer-source offer-detail-section"><h2>Bases y postulación externa</h2><p>La postulación se realiza en la plataforma de la entidad oferente.</p><p>BecaNexo no tramita solicitudes ni adjudica becas.</p>
-        {basesUrl && basesUrl !== officialUrl && <a className="secondary-link" href={basesUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar bases oficiales</span></a>}{offer.actualizado_en && <p className="small-note">Última actualización: {date(offer.actualizado_en)}</p>}</section></>}
+      <section className="profile-card offer-source offer-detail-section"><h2>{demonstration ? 'Datos de demostración' : 'Bases y postulación externa'}</h2>{demonstration ? <p>Esta convocatoria es ficticia. No existen bases ni postulación reales.</p> : <><p>La postulación se realiza en la plataforma de la entidad oferente.</p><p>BecaNexo no tramita solicitudes ni adjudica becas.</p></>}
+        {!demonstration && basesUrl && basesUrl !== officialUrl && <a className="secondary-link" href={basesUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar bases oficiales</span></a>}{offer.actualizado_en && <p className="small-note">Última actualización: {date(offer.actualizado_en)}</p>}</section></>}
   </OffersLayout>
 }

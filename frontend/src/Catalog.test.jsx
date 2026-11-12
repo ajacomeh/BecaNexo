@@ -144,6 +144,17 @@ it('destaca el enlace oficial válido y conserva ámbitos y precisión en el det
   expect(screen.getByText(/Beneficios específicos de esta opción/).parentElement).toHaveTextContent('80.00')
 })
 
+it('identifica una beca ficticia sin presentar sus enlaces de ejemplo como oficiales', async () => {
+  const detail = { ...offer, titulo: 'Beca de demostración (Ficticia)', descripcion: 'DEMOSTRACIÓN',
+    url_oficial: 'https://example.org/demo', url_bases: 'https://example.org/demo/bases', requisitos: [] }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? catalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText(/Convocatoria ficticia para demostración/)).toBeVisible()
+  expect(screen.getByText(/No existen bases ni postulación reales/)).toBeVisible()
+  expect(screen.queryByRole('link', { name: 'Ver convocatoria oficial' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Consultar bases oficiales' })).not.toBeInTheDocument()
+})
+
 it('mantiene separados los datos de dos opciones y permite consultar paneles y referencias', async () => {
   const optionCatalogs = { ...catalogs, tipos_requisito: [
     { id: 1, codigo: 'EDAD', nombre: 'Edad', esquema_valor: { campos: { minimo: { label: 'Edad mínima' } } } },
