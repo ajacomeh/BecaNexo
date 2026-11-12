@@ -10,6 +10,7 @@ const modules = {
     { route: '/perfil', icon: 'profile', title: 'Mi perfil', description: 'Revisa y actualiza tu información declarada.' },
     { route: '/preferencias', icon: 'preferences', title: 'Idiomas y preferencias', description: 'Gestiona tus idiomas y preferencias de estudio.' },
     { route: '/favoritos', icon: 'favorite', title: 'Mis favoritas', description: 'Consulta las becas que has guardado.' },
+    { route: '/notificaciones', icon: 'notifications', title: 'Notificaciones', description: 'Consulta los avisos y las novedades sobre tus oportunidades de becas' },
   ],
   administrador: [
     { route: '/gestion/convocatorias', icon: 'offers', title: 'Convocatorias', description: 'Gestiona las ofertas del catálogo.' },

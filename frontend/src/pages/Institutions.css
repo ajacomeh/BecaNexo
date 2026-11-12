@@ -1,0 +1,14 @@
+.institution-search { display: flex; flex-direction: row; align-items: end; gap: 1rem; width: 100%; }
+.institution-search label { display: grid; gap: .5rem; flex: 1; min-width: 0; font-weight: 600; color: #19375a; }
+.institution-search input { width: 100%; min-height: 46px; padding: .7rem; border: 1px solid #8097b5; border-radius: 8px; background: #fff; color: #19375a; font: inherit; }
+.institution-search input:focus-visible { outline: 3px solid #167b88; outline-offset: 2px; }
+.institution-search-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.institution-search-actions .button { width: auto; min-width: 0; }
+.institution-list-heading { margin-bottom: .75rem; }
+.institution-list-heading .small-note { margin: .3rem 0 0; }
+.institution-list { margin-bottom: 0; }
+.institution-list li { gap: 1rem; }
+.institution-identity { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; min-width: 0; }
+.institution-identity strong { overflow-wrap: anywhere; }
+.institution-list .text-button { display: inline-flex; align-items: center; gap: .4rem; flex: none; }
+@media (max-width: 600px) { .institution-search { align-items: stretch; flex-direction: column; } .institution-search-actions .button { flex: 1; } }

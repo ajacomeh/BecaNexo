@@ -9,7 +9,7 @@ const auth = vi.hoisted(() => ({ status: 'authenticated', user: { nombre: 'Admin
 vi.mock('./auth/context', () => ({ useAuth: () => auth }))
 afterEach(() => { cleanup(); vi.restoreAllMocks(); auth.status = 'authenticated'; auth.user = { nombre: 'Admin sintético', rol: 'administrador' } })
 const list = (results = [], count = results.length) => ({ results, count, page: 1, page_size: 12 })
-const publication = { id: 1, titulo: 'Publicación sintética', fuente: { id: 1, nombre: 'SIAU prueba' }, url_original: 'https://example.org/ficha', version_observada_id: 1 }
+const publication = { id: 1, titulo: 'Publicación sintética', fuente: { id: 1, nombre: 'SIAU prueba' }, url_original: 'https://example.org/ficha', primera_deteccion: '2026-11-01T10:00:00Z', ultima_deteccion: '2026-11-02T10:00:00Z', version_observada_id: 1 }
 function open(path = '/gestion/rastreo') { render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>) }
 
 it('muestra carga, error, reintento y vacío sin acciones editoriales', async () => {
@@ -42,6 +42,22 @@ it('envía búsqueda, fuente y paginación bajo los resultados', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Buscar' }))
   await screen.findByText('Página 1 de 3 · 25 registros')
   expect(get).toHaveBeenLastCalledWith('gestion/rastreo/publicaciones', { q: 'beca', fuente: '1', page: 1 })
+})
+
+it('limpia los filtros de publicaciones y mantiene el acceso al detalle', async () => {
+  const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes') ? list([{ id: 1, nombre: 'SIAU prueba' }]) : list([publication]))
+  open()
+  expect(await screen.findByRole('link', { name: 'Abrir publicación' })).toHaveAttribute('href', '/gestion/rastreo/publicaciones/1')
+  expect(document.querySelectorAll('.crawl-publication-dates dt')).toHaveLength(2)
+  expect(screen.getByText('No es una convocatoria aprobada del catálogo.')).toBeVisible()
+  await userEvent.type(screen.getByLabelText('Buscar título o URL'), 'beca')
+  await userEvent.selectOptions(screen.getByLabelText('Fuente'), '1')
+  await userEvent.click(screen.getByRole('button', { name: 'Buscar' }))
+  expect(get).toHaveBeenCalledWith('gestion/rastreo/publicaciones', { q: 'beca', fuente: '1', page: 1 })
+  await userEvent.click(screen.getByRole('button', { name: 'Limpiar' }))
+  expect(screen.getByLabelText('Buscar título o URL')).toHaveValue('')
+  expect(screen.getByLabelText('Fuente')).toHaveValue('')
+  expect(get).toHaveBeenCalledWith('gestion/rastreo/publicaciones', { page: 1 })
 })
 
 it('consulta la versión observada A aunque exista B y renderiza texto sin HTML', async () => {

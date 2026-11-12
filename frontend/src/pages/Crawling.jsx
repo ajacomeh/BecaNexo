@@ -43,7 +43,7 @@ function Origin({ url }) {
   return valid ? <a href={url} target="_blank" rel="noopener noreferrer">{url}</a> : <span>{url}</span>
 }
 
-function SourceFilter() {
+function SourceFilter({ value, onChange }) {
   const [page, setPage] = useState(1)
   const [retry, setRetry] = useState(0)
   const [state, setState] = useState({ options: [], loading: true, more: false, error: '' })
@@ -54,7 +54,7 @@ function SourceFilter() {
     }).catch(error => { if (live) setState(previous => ({ ...previous, loading: false, error: error.message })) })
     return () => { live = false }
   }, [page, retry])
-  return <div className="crawl-source"><label htmlFor="crawl-source">Fuente</label><select id="crawl-source" name="fuente" defaultValue=""><option value="">Todas las fuentes</option>{state.options.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select>
+  return <div className="crawl-source"><label htmlFor="crawl-source">Fuente</label><select id="crawl-source" name="fuente" value={value} onChange={event => onChange(event.target.value)}><option value="">Todas las fuentes</option>{state.options.map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}</select>
     {state.loading && <span role="status"><Icon name="loading" />Cargando fuentes…</span>}{state.error && <><Message>{state.error}</Message><Button icon="refresh" type="button" onClick={() => { setState(s => ({ ...s, loading: true, error: '' })); setRetry(retry + 1) }}>Reintentar fuentes</Button></>}
     {state.more && !state.error && <Button icon="add" type="button" busy={state.loading} onClick={() => { setState(s => ({ ...s, loading: true })); setPage(page + 1) }}>Más fuentes</Button>}
   </div>
@@ -62,11 +62,13 @@ function SourceFilter() {
 
 function Publications() {
   const [filters, setFilters] = useState({})
+  const [query, setQuery] = useState('')
+  const [source, setSource] = useState('')
   return <><CrawlingControl /><form className="profile-card crawl-filters" onSubmit={(event) => {
-    event.preventDefault(); const data = new FormData(event.currentTarget)
-    setFilters({ q: data.get('q'), ...(data.get('fuente') ? { fuente: data.get('fuente') } : {}) })
-  }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" /></label><SourceFilter /><Button icon="search" type="submit">Buscar</Button></form>
-    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><p>{p.fuente.nombre}</p><Origin url={p.url_original} /><p>Primera detección: {date(p.primera_deteccion)}<br />Última detección: {date(p.ultima_deteccion)}</p><p className="profile-note">Publicación detectada · No es una convocatoria del catálogo</p><Link className="secondary-link" to={`publicaciones/${p.id}`}><Icon name="detail" /><span>Abrir publicación</span></Link></article>} />
+    event.preventDefault()
+    setFilters({ q: query, ...(source ? { fuente: source } : {}) })
+  }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" value={query} onChange={event => setQuery(event.target.value)} /></label><SourceFilter value={source} onChange={setSource} /><div className="crawl-filter-actions"><Button icon="search" type="submit">Buscar</Button>{(query || source || filters.q || filters.fuente) && <Button icon="clear" className="button-light" type="button" onClick={() => { setQuery(''); setSource(''); setFilters({}) }}>Limpiar</Button>}</div></form>
+    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article className="crawl-publication"><div className="crawl-publication-heading"><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><span className="status-pill">Detectada</span></div><p className="crawl-publication-source">{p.fuente.nombre}</p><p className="crawl-publication-url"><Origin url={p.url_original} /></p><dl className="crawl-publication-dates"><div><dt>Primera detección</dt><dd>{date(p.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(p.ultima_deteccion)}</dd></div></dl><div className="crawl-publication-footer"><p className="profile-note">No es una convocatoria aprobada del catálogo.</p><Link className="secondary-link" to={`publicaciones/${p.id}`}><Icon name="detail" /><span>Abrir publicación</span></Link></div></article>} />
   </>
 }
 

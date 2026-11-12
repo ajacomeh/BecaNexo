@@ -97,6 +97,9 @@ for (const role of [null, 'postulante', 'administrador']) {
       await page.goto('/gestion/instituciones')
       const add = page.getByRole('button', { name: 'Añadir entidad oferente' })
       await expect(add).toBeVisible()
+      const search = await page.getByRole('searchbox', { name: 'Buscar entidad' }).boundingBox()
+      const submit = await page.getByRole('button', { name: 'Buscar', exact: true }).boundingBox()
+      expect(submit.y).toBeGreaterThan(search.y + search.height)
       expect(await add.evaluate(el => Boolean(el.closest('section').querySelector('.record-list').compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING))).toBeTruthy()
       await noOverflow(page)
       await page.screenshot({ path: info.outputPath('instituciones-mobile.png'), fullPage: true })
@@ -104,6 +107,11 @@ for (const role of [null, 'postulante', 'administrador']) {
       await expect(page.getByRole('heading', { name: 'Nueva entidad oferente' })).toBeVisible()
       await page.getByRole('button', { name: 'Cancelar' }).click()
       await page.setViewportSize({ width: 1440, height: 900 })
+      const desktopSearch = await page.getByRole('searchbox', { name: 'Buscar entidad' }).boundingBox()
+      const desktopSubmit = await page.getByRole('button', { name: 'Buscar', exact: true }).boundingBox()
+      expect(desktopSearch.x).toBeLessThan(desktopSubmit.x)
+      expect(desktopSearch.width).toBeGreaterThan(desktopSubmit.width)
+      expect(Math.abs(desktopSearch.y - desktopSubmit.y)).toBeLessThan(2)
       await page.screenshot({ path: info.outputPath('instituciones-desktop.png') })
     }
     if (role === 'postulante') {

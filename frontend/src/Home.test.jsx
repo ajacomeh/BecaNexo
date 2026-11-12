@@ -1,14 +1,15 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import AuthProvider from './auth/AuthProvider'
-import { authApi } from './api/client'
+import { authApi, offersApi } from './api/client'
 import App from './App'
 
 afterEach(() => vi.restoreAllMocks())
 
 it.each([
-  ['postulante', [['Explorar becas', '/becas'], ['Mi perfil', '/perfil'], ['Idiomas y preferencias', '/preferencias'], ['Mis favoritas', '/favoritos']]],
+  ['postulante', [['Explorar becas', '/becas'], ['Mi perfil', '/perfil'], ['Idiomas y preferencias', '/preferencias'], ['Mis favoritas', '/favoritos'], ['Notificaciones', '/notificaciones']]],
   ['administrador', [['Convocatorias', '/gestion/convocatorias'], ['Entidades oferentes', '/gestion/instituciones'], ['Rastreo', '/gestion/rastreo']]],
 ])('integra Inicio de %s sin duplicar acciones de cuenta', async (rol, links) => {
   vi.spyOn(authApi, 'me').mockResolvedValue({ id: 99, nombre: 'María de prueba', rol })
@@ -31,4 +32,9 @@ it.each([
   expect(screen.queryByText('Tu cuenta')).not.toBeInTheDocument()
   expect(screen.queryByText(/PANTALLA INICIAL DEL AVANCE|Avance inicial/)).not.toBeInTheDocument()
   expect(screen.getByText('Tu espacio en BecaNexo')).toBeVisible()
+  if (rol === 'postulante') {
+    vi.spyOn(offersApi, 'get').mockResolvedValue({ results: [], count: 0, page_size: 12, no_leidas: 0 })
+    await userEvent.click(cards.getByRole('link', { name: 'Notificaciones', exact: true }))
+    expect(await screen.findByRole('heading', { name: 'Notificaciones' })).toBeVisible()
+  }
 })

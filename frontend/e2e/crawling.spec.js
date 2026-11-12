@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const list = (results) => ({ count: results.length, page: 1, page_size: 12, results })
-const p = { id: 1, titulo: 'Publicación sintética para revisión visual', fuente: { id: 1, nombre: 'Fuente sintética' }, url_original: 'https://example.org/' + 'ruta-larga-'.repeat(15), version_observada_id: 1 }
+const p = { id: 1, titulo: 'Publicación sintética para revisión visual ' + 'programa-largo-'.repeat(8), fuente: { id: 1, nombre: 'Fuente sintética' }, url_original: 'https://example.org/' + 'ruta-larga-'.repeat(15), primera_deteccion: '2026-10-27T10:00:00Z', ultima_deteccion: '2026-10-28T10:00:00Z', version_observada_id: 1 }
 test('bandeja de solo consulta en escritorio y móvil con API simulada', async ({ page }, info) => {
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
@@ -21,6 +21,13 @@ test('bandeja de solo consulta en escritorio y móvil con API simulada', async (
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/gestion/rastreo')
     await expect(page.getByRole('link', { name: p.titulo })).toBeVisible()
+    const dates = page.locator('.crawl-publication-dates > div')
+    await expect(dates).toHaveCount(2)
+    const firstDate = await dates.first().boundingBox(), lastDate = await dates.last().boundingBox()
+    if (width > 600) expect(Math.abs(firstDate.y - lastDate.y)).toBeLessThan(2)
+    else expect(lastDate.y).toBeGreaterThan(firstDate.y)
+    await expect(page.getByRole('link', { name: 'Abrir publicación' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
     expect(await page.locator('.crawl-filters').evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(400)
     await expect(page.getByLabel('Buscar título o URL')).toHaveCSS('border-top-width', '1px')
     await page.getByRole('link', { name: p.titulo }).click()

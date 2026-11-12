@@ -24,13 +24,14 @@ for (const rol of ['postulante', 'administrador']) test(`Inicio integrado de ${r
     const nav = page.getByRole('navigation', { name: 'Navegación principal' })
     await expect(nav.getByRole('link', { name: 'Inicio', exact: true })).toHaveAttribute('aria-current', 'page')
     const cards = page.getByRole('navigation', { name: 'Accesos de Inicio' }).getByRole('link')
-    await expect(cards).toHaveCount(rol === 'postulante' ? 4 : 3)
+    await expect(cards).toHaveCount(rol === 'postulante' ? 5 : 3)
     await cards.first().focus()
     await page.keyboard.press('Tab')
     await expect(cards.nth(1)).toBeFocused()
     await expect(cards.nth(1)).toHaveCSS('outline-style', 'solid')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
     await page.screenshot({ path: info.outputPath(`inicio-${rol}-${width}.png`), fullPage: true })
+    if (rol === 'administrador') {
     const pencil = page.getByRole('button', { name: 'Editar nombre', exact: true })
     await expect(pencil).toHaveAttribute('title', 'Editar nombre')
     await expect(pencil).toHaveAttribute('type', 'button')
@@ -58,6 +59,10 @@ for (const rol of ['postulante', 'administrador']) test(`Inicio integrado de ${r
     await expect(page.locator('.sidebar-name')).toContainText(`Nombre sintético ${width}`)
     await page.reload()
     await expect(page.getByRole('heading', { name: `Hola, Nombre sintético ${width}` })).toBeVisible()
+    } else {
+      await expect(page.getByRole('button', { name: 'Editar nombre', exact: true })).toHaveCount(0)
+      await expect(page.getByRole('navigation', { name: 'Accesos de Inicio' }).getByRole('link', { name: 'Notificaciones', exact: true })).toHaveAttribute('href', '/notificaciones')
+    }
     await expect(page.getByRole('button', { name: 'Cerrar sesión', exact: true })).toHaveCount(1)
     await page.getByRole('button', { name: 'Cerrar sesión', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Inicia sesión', exact: true })).toBeVisible()

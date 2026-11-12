@@ -1,10 +1,11 @@
 .crawl { min-width: 0; overflow-wrap: anywhere; }
-.crawl-control { margin-block: 1.5rem; }
+.crawl-control { margin-block: 1.25rem; }
 .crawl-control-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .crawl-control-heading > div { min-width: 0; }
-.crawl-control-heading h2 { margin-top: 0; }
+.crawl-control-heading h2 { margin: 0 0 .4rem; }
+.crawl-control-heading p { margin: 0; }
 .crawl-control-heading .button { flex: none; }
-.crawl-control-status { margin-top: .8rem; }
+.crawl-control-status { margin-top: 1rem; }
 .crawl-control-status p { margin-block: .35rem; }
 .crawl-control-source { font-weight: 600; color: #19375a; }
 .crawl-control-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-block: .8rem; }
@@ -19,8 +20,22 @@
 .crawl-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .75rem; margin-top: 1rem; }
 @media (max-width: 600px) { .crawl-control-heading { align-items: stretch; flex-direction: column; } .crawl-control-modes { grid-template-columns: minmax(0, 1fr); } }
 .crawl > nav { margin-block: 1.5rem; }
-.crawl .crawl-list > li { display: block; }
+.crawl .crawl-list > li { display: block; padding: .9rem 1rem; margin-bottom: .7rem; border: 1px solid #d7dfed; border-radius: 10px; background: #f9fbfe; }
 .crawl .crawl-list > li > div, .crawl .crawl-list > li > article { width: 100%; min-width: 0; }
+.crawl-publication-heading { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .4rem 1rem; }
+.crawl .crawl-publication-heading h3 { margin: 0; }
+.crawl-publication-heading h3 { min-width: 0; overflow-wrap: anywhere; }
+.crawl-publication-heading .status-pill { flex: none; }
+.crawl-publication :is(.crawl-publication-source, .crawl-publication-url) { margin: .35rem 0; }
+.crawl-publication-source { font-weight: 600; color: #19375a; }
+.crawl-publication-url a, .crawl-publication-url span { overflow-wrap: anywhere; word-break: break-word; }
+.crawl-publication-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem 1rem; margin: .65rem 0; }
+.crawl-publication-dates div { min-width: 0; }
+.crawl-publication-dates dt { color: #526780; font-size: .8rem; }
+.crawl-publication-dates dd { margin: .1rem 0 0; overflow-wrap: anywhere; }
+.crawl-publication-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem 1rem; padding-top: .55rem; border-top: 1px solid #e4eaf3; }
+.crawl-publication .profile-note { margin: 0; }
+.crawl .crawl-publication .secondary-link { margin: 0; }
 .crawl-list h3 { margin-top: 0; }
 .crawl-data { margin-block: 1rem; }
 .crawl-data > div { border-left: 2px solid #d6e3ed; padding-left: 1rem; margin-block: .8rem; }
@@ -30,8 +45,10 @@
 .crawl details { margin-block: 1rem; }
 .crawl summary { cursor: pointer; font-weight: 600; }
 .crawl a:focus-visible, .crawl summary:focus-visible { outline: 3px solid #167b88; outline-offset: 4px; }
-@media (max-width: 600px) { .crawl .pagination { flex-wrap: wrap; } .crawl-data > div { padding-left: .6rem; } }
+@media (max-width: 600px) { .crawl .pagination { flex-wrap: wrap; } .crawl-data > div { padding-left: .6rem; } .crawl-publication-dates { grid-template-columns: minmax(0, 1fr); } }
 .crawl .crawl-filters { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) auto; align-items: end; gap: 1rem; }
+.crawl-filter-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-self: end; }
+.crawl-filter-actions .button { width: auto; min-width: 0; }
 .crawl-filters label, .crawl-source { display: grid; gap: .5rem; min-width: 0; font-weight: 600; color: #19375a; }
 .crawl-filters input, .crawl-filters select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 46px; padding: .7rem; border: 1px solid #8097b5; border-radius: 8px; background: #fff; color: #19375a; font: inherit; }
 .crawl-filters input:focus-visible, .crawl-filters select:focus-visible { outline: 3px solid #167b88; outline-offset: 2px; }
