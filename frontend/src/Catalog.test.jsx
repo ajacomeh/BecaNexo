@@ -5,7 +5,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { offersApi } from './api/client'
 import PublicCatalog from './pages/PublicCatalog'
 import CatalogCard from './components/CatalogCard'
-import OfferDetail, { BenefitList, RequirementList } from './pages/OfferDetail'
+import OfferDetail, { BenefitList, RequirementList, Documentation } from './pages/OfferDetail'
+import DemoApplication from './pages/DemoApplication'
 import { benefitSummary } from './pages/catalogPresentation'
 
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: null }) }))
@@ -148,11 +149,40 @@ it('identifica una beca ficticia sin presentar sus enlaces de ejemplo como ofici
   const detail = { ...offer, titulo: 'Beca de demostración (Ficticia)', descripcion: 'DEMOSTRACIÓN',
     url_oficial: 'https://example.org/demo', url_bases: 'https://example.org/demo/bases', requisitos: [] }
   vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? catalogs : detail)
-  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /><Route path="/becas/:id/postulacion-demo" element={<DemoApplication />} /></Routes></MemoryRouter>)
   expect(await screen.findByText(/Convocatoria ficticia para demostración/)).toBeVisible()
   expect(screen.getByText(/No existen bases ni postulación reales/)).toBeVisible()
+  const demoLink = screen.getByRole('link', { name: 'Ir a postulación (demostración)' })
+  expect(demoLink).toHaveAttribute('href', '/becas/1/postulacion-demo')
   expect(screen.queryByRole('link', { name: 'Ver convocatoria oficial' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Consultar bases oficiales' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /example\.org/ })).not.toBeInTheDocument()
+  await userEvent.click(demoLink)
+  expect(await screen.findByRole('heading', { name: 'Postulación de demostración' })).toBeVisible()
+  expect(screen.getByText('Beca de demostración (Ficticia)')).toBeVisible()
+  expect(screen.getByText('Entidad')).toBeVisible()
+  expect(screen.getByText(/no recibe solicitudes ni datos personales/)).toBeVisible()
+  expect(screen.queryByRole('form')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Volver a la convocatoria ficticia' })).toHaveAttribute('href', '/becas/1')
+})
+
+it('no presenta una postulación de demostración para becas reales', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ ...offer, titulo: 'Beca real' })
+  render(<MemoryRouter initialEntries={['/becas/1/postulacion-demo']}><Routes><Route path="/becas/:id/postulacion-demo" element={<DemoApplication />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText('Esta página de demostración solo corresponde a convocatorias ficticias.')).toBeVisible()
+  expect(screen.queryByRole('heading', { name: 'Postulación de demostración' })).not.toBeInTheDocument()
+})
+
+it('no atribuye enlaces de documentos de ejemplo a bases oficiales de una beca ficticia', () => {
+  const document = { id: 11, opcion_estudio: null, tipo_requisito: 7, obligatorio: true,
+    valor_estructurado: { documento: 'Documento de muestra', url_documento: 'https://example.org/archivo.pdf' } }
+  const documentCatalogs = { ...catalogs, tipos_requisito: [{ id: 7, codigo: 'DOCUMENTO' }] }
+  const example = { ...offer, titulo: 'Beca de muestra (Ficticia)', requisitos: [document], opciones: [] }
+  const { rerender } = render(<Documentation offer={example} catalogs={documentCatalogs} scopeId={null} />)
+  expect(screen.getByText('Documento de muestra')).toBeVisible()
+  expect(screen.queryByRole('link', { name: /Consultar documento o formulario oficial/ })).not.toBeInTheDocument()
+  rerender(<Documentation offer={{ ...example, titulo: 'Beca real' }} catalogs={documentCatalogs} scopeId={null} />)
+  expect(screen.getByRole('link', { name: /Consultar documento o formulario oficial/ })).toHaveAttribute('href', 'https://example.org/archivo.pdf')
 })
 
 it('mantiene separados los datos de dos opciones y permite consultar paneles y referencias', async () => {

@@ -1,5 +1,9 @@
 # Avance de BecaNexo
 
+## Ajuste de demostración — acceso informativo a postulación ficticia (11/11/2026)
+
+El detalle de una convocatoria marcada `(Ficticia)` ofrece un enlace interno a `/becas/:id/postulacion-demo`. La página consulta el detalle público, muestra título y entidad y advierte que no recibe solicitudes ni datos personales; una convocatoria real no obtiene una postulación simulada. Los enlaces de ejemplo no se presentan como oficiales, incluidos los documentales, y el botón oficial de convocatorias reales conserva su destino. Aprobaron 20 pruebas frontend focalizadas, lint, build; no se modificaron API, PostgreSQL ni enlaces almacenados. El usuario confirmó satisfactoriamente los cinco puntos de validación visual y funcional del ajuste.
+
 ## Bloque 21 — presentación de recomendaciones y notificaciones (11/11/2026)
 
 En «Para ti · IA», cada tarjeta reúne el estado de la convocatoria, el resultado de requisitos declarados, la explicación de afinidad y las coincidencias de preferencias junto con los datos y acciones existentes. El orden y el contenido siguen llegando del backend; el catálogo general conserva su tarjeta sin explicaciones de IA. La bandeja de notificaciones muestra estado, fecha, motivo y acciones en tarjetas más compactas, manteniendo lectura individual, navegación y estado vacío. Aprobaron 30 pruebas frontend focalizadas, lint, build y una comprobación de navegador con API simulada a 1440, 390 y 320 px sin desbordamiento ni escrituras. No se modificaron datos reales, API, ONNX ni reglas de elegibilidad.

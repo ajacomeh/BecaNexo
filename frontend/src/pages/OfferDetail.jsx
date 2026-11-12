@@ -59,6 +59,7 @@ function documentLink(value) {
 }
 
 export function Documentation({ offer, catalogs, scopeId, showWarning = true }) {
+  const fictitious = offer.titulo?.endsWith('(Ficticia)')
   const documents = offer.requisitos.filter(r => isDocument(r, catalogs) && (scopeId === undefined || (r.opcion_estudio ?? null) === scopeId))
   const groups = [{ id: null, title: 'Documentos comunes a la convocatoria' }, ...offer.opciones.map(o => ({ id: o.id, title: `Documentos de la opción: ${o.programa || `${o.nivel} / ${o.modalidad}`} (#${o.id})` }))]
     .filter(group => scopeId === undefined || group.id === scopeId)
@@ -95,7 +96,7 @@ export function Documentation({ offer, catalogs, scopeId, showWarning = true }) 
           {r.destino && <p>Aplicable al destino: {catalogs.paises.find(p => p.id === r.destino)?.nombre || 'Consultar las bases'}</p>}
           {r.modo_comprobacion && r.modo_comprobacion !== 'entidad_oferente' && <p>Modo de comprobación registrado: {r.modo_comprobacion}</p>}
           {r.referencia_bases && <details className="detail-reference"><summary>Referencia y evidencia en las bases</summary><p className="preserve-text">{r.referencia_bases}</p></details>}
-          {link && <a href={link} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar documento o formulario oficial: {title}</span></a>}
+          {link && !fictitious && <a href={link} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar documento o formulario oficial: {title}</span></a>}
         </li>
       })}</ul></div> : null
     })}
@@ -144,7 +145,7 @@ export default function OfferDetail() {
     {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
     {!data && !error && <p role="status"><Icon name="loading" />Cargando convocatoria…</p>}
     {offer && <><header className="offer-detail-hero"><div className="offer-hero-top"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div>
-      <div className="offer-hero-actions">{demonstration ? <p className="small-note">Convocatoria ficticia para demostración; no admite postulaciones.</p> : officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
+      <div className="offer-hero-actions">{demonstration ? <><Link className="button offer-official-link" to={`/becas/${offer.id}/postulacion-demo`}><Icon name="external" /><span>Ir a postulación (demostración)</span></Link><p className="small-note">Convocatoria ficticia para demostración; no admite postulaciones.</p></> : officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
         <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div></div>
       <dl className="offer-hero-facts"><div><dt>Cierre</dt><dd>{closingText(offer)}</dd></div>
         {options.length > 0 && <><div><dt>{options.length === 1 ? 'Nivel y modalidad' : 'Niveles y modalidades'}</dt><dd>{unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</dd></div>

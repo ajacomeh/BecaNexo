@@ -10,6 +10,7 @@ import Home from './pages/Home'
 import Profile from './pages/Profile'
 import Offers from './pages/Offers'
 import OfferDetail from './pages/OfferDetail'
+import DemoApplication from './pages/DemoApplication'
 import OfferEditor from './pages/OfferEditor'
 import Institutions from './pages/Institutions'
 import Favorites from './pages/Favorites'
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/favoritos" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Favorites /> : <Navigate to="/inicio" replace />} />
       <Route path="/notificaciones" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Notifications /> : <Navigate to="/inicio" replace />} />
       <Route path="/becas" element={<Offers />} />
+      <Route path="/becas/:id/postulacion-demo" element={<DemoApplication />} />
       <Route path="/becas/:id" element={<OfferDetail />} />
       <Route path="/gestion/convocatorias" element={admin(<Offers admin />)} />
       <Route path="/gestion/convocatorias/nueva" element={admin(<OfferEditor key="new" />)} />
