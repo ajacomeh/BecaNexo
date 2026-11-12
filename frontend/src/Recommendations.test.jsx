@@ -37,9 +37,16 @@ it('sustituye el catálogo por recomendaciones sin duplicar tarjetas y conserva 
   expect(screen.getAllByRole('article')).toHaveLength(1)
   expect(screen.queryByLabelText('Buscar título, institución o área')).not.toBeInTheDocument()
   expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument()
-  expect(screen.getByText(/Los filtros, el orden y la paginación/)).toBeVisible()
+  expect(screen.getByText('Becas ordenadas según tus requisitos y afinidad académica.')).toBeVisible()
+  expect(screen.getByText('La afinidad temática no garantiza elegibilidad ni adjudicación.')).toBeVisible()
+  expect(screen.queryByText(/Los filtros, el orden y la paginación/)).not.toBeInTheDocument()
+  expect(screen.queryByText('Comparación orientativa')).not.toBeInTheDocument()
   expect(screen.getByText(/Hay un incumplimiento obligatorio declarado/)).toBeVisible()
   expect(screen.getByText(/Calculada con el modelo local/)).toBeVisible()
+  const recommendationCard = screen.getByRole('article')
+  expect(recommendationCard).toHaveTextContent('Requisitos: no cumple')
+  expect(recommendationCard).toHaveTextContent('Coinciden nivel de estudio.')
+  expect(recommendationCard.querySelector('.recommendation-explanation')).toHaveTextContent('Se compararon áreas declaradas.')
   expect(screen.getByRole('link', { name: 'Ver detalle' })).toHaveAttribute('href', '/becas/8')
   expect(screen.getByTestId('url').textContent).toContain('page=2')
   await user.click(screen.getByRole('button', { name: 'Todas las becas' }))
@@ -82,9 +89,31 @@ it('respeta el orden recibido y distingue afinidad pendiente de elegibilidad des
   await userEvent.click(screen.getByRole('button', { name: 'Para ti · IA' }))
   await screen.findByText('Primera recomendación')
   expect(screen.getAllByRole('article').map(row => row.querySelector('h2').textContent)).toEqual(['Primera recomendación', 'Segunda recomendación'])
+  expect(screen.getAllByRole('article')[0]).toHaveTextContent('Requisitos: información pendiente')
+  expect(screen.getAllByRole('article')[1]).toHaveTextContent('Requisitos: no cumple')
+  expect(screen.getAllByRole('article')[0].querySelector('.recommendation-explanation')).toHaveTextContent('Se conserva el orden por requisitos.')
+  expect(screen.getAllByRole('article')[1].querySelector('.recommendation-explanation')).toHaveTextContent('Se compararon áreas.')
   expect(screen.getByText(/Falta información para confirmar los requisitos/)).toBeVisible()
   expect(screen.getByText(/Hay un incumplimiento obligatorio declarado/)).toBeVisible()
   expect(screen.getByText(/Pendiente. Se conserva el orden por requisitos/)).toBeVisible()
+})
+
+it('muestra coincidencia declarada sin confundirla con afinidad y conserva el orden de la API', async () => {
+  const rows = [
+    { convocatoria: offer(2, 'Beca compatible'), elegibilidad: 'cumple', afinidad: { estado: 'calculada', explicacion: 'Afinidad con ingeniería.' }, preferencias: { declaradas: true, coincidencias: ['destino'] } },
+    { convocatoria: offer(1, 'Beca pendiente'), elegibilidad: 'desconocido', afinidad: { estado: 'calculada', explicacion: 'Afinidad con educación.' }, preferencias: { declaradas: false, coincidencias: [] } },
+  ]
+  mount(path => path === 'becas/catalogos' ? Promise.resolve(catalogs) : path === 'becas/recomendaciones'
+    ? Promise.resolve({ results: rows }) : Promise.resolve(catalog))
+  await screen.findByText('Beca del catálogo')
+  await userEvent.click(screen.getByRole('button', { name: 'Para ti · IA' }))
+  await screen.findByText('Beca compatible')
+  const cards = screen.getAllByRole('article')
+  expect(cards.map(card => card.querySelector('h2').textContent)).toEqual(['Beca compatible', 'Beca pendiente'])
+  expect(cards[0]).toHaveTextContent('Requisitos declarados: coinciden')
+  expect(cards[0]).toHaveTextContent('Afinidad con ingeniería.')
+  expect(cards[1]).toHaveTextContent('Requisitos: información pendiente')
+  expect(cards[1]).toHaveTextContent('Afinidad con educación.')
 })
 
 it('mantiene el catálogo público sin selector de IA para administradores', async () => {

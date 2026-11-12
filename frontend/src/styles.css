@@ -270,9 +270,13 @@
 .page-heading p { color: #53647e; line-height: 1.7; }
 .eyebrow { font-size: .75rem; font-weight: 700; letter-spacing: .1em; margin-bottom: 12px; }
 .offer-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
-.recommendation-item { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.recommendation-item .catalog-card { flex: 1; }
-.recommendation-item > p { margin: 0; line-height: 1.5; }
+.offer-card-statuses { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.recommendation-status-cumple { background: #e4f5ef; color: #086e50; }
+.recommendation-status-no_cumple { background: #f4ecea; color: #9b3b24; }
+.recommendation-status-desconocido { background: #fff4dd; color: #765016; }
+.recommendation-explanation { display: grid; gap: 8px; width: 100%; padding: 12px 14px; border: 1px solid #e4eaf3; border-radius: 8px; background: #f7f9fc; min-width: 0; }
+.recommendation-explanation p { display: grid; gap: 2px; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.recommendation-explanation strong { color: #17345c; font-size: .85rem; }
 .offer-card { background: white; border: 1px solid #d7dfed; border-radius: 12px; padding: 26px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; overflow-wrap: anywhere; }
 .offer-card .secondary-link { margin-top: auto; }
 .offer-card h2 { font-size: 1.25rem; }
@@ -310,13 +314,16 @@
 .profile-sidebar nav a:hover { background: #26466d; }
 .notification-nav-count { margin-left: auto; border-radius: 999px; background: #edf3ff; color: #17345c; padding: 0 .4rem; font-weight: 700; }
 .notification-list { list-style: none; padding: 0; margin: 0; }
-.notification-item { display: flex; gap: 1.5rem; justify-content: space-between; align-items: flex-start; overflow-wrap: anywhere; }
-.notification-item h2 { margin: .5rem 0; font-size: 1.15rem; }
-.notification-item p { margin: .5rem 0; }
+.notification-item { display: flex; flex-direction: column; gap: 12px; align-items: stretch; padding: 18px 20px; overflow-wrap: anywhere; }
+.notification-content { min-width: 0; width: 100%; }
+.notification-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.notification-state { display: inline-block; border-radius: 999px; padding: 3px 9px; background: #e4f5ef; color: #086e50; font-size: .8rem; font-weight: 700; }
+.notification-state-read { background: #edf1f7; color: #53647e; }
+.notification-item h2 { margin: 8px 0 4px; font-size: 1.08rem; line-height: 1.35; }
+.notification-item .notification-reason { margin: 0; line-height: 1.5; }
 .notification-read { background: #f7f9fc; }
-.notification-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; flex-shrink: 0; }
-.notification-actions .button { width: auto; }
-@media (max-width: 700px) { .notification-item { flex-direction: column; } .notification-actions { width: 100%; } }
+.notification-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: flex-end; width: 100%; }
+.notification-actions .button, .notification-actions .secondary-link { width: auto; min-width: 0; margin: 0; }
 .sidebar-account { margin-top: auto; display: grid; gap: 14px; padding: 20px 12px 0; font-size: .85rem; overflow-wrap: anywhere; }
 @media (min-width: 951px) {
   .profile-sidebar { position: sticky; top: 0; height: 100dvh; align-self: start; }
