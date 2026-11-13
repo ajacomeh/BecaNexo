@@ -4,8 +4,11 @@ import Button from './Button'
 import Message from './Message'
 import Field from './Field'
 import CrawlingDraft from './CrawlingDraft'
+import { proposalPrefill } from './proposalPrefill'
 
 const prefix = 'gestion/rastreo'
+const applyFieldLabels = { titulo: 'Título', descripcion: 'Descripción', institucion: 'Entidad oferente',
+  url_oficial: 'Enlace oficial', cierre_original: 'Cierre literal', cierre_dia: 'Día de cierre' }
 const groups = { opciones: 'Opciones de estudio', beneficios: 'Beneficios', requisitos: 'Requisitos' }
 const fields = { opciones: { texto: 'Programa o mención original', nivel: 'Nivel candidato (sin equivalencias inferidas)', modalidad: 'Modalidad mencionada', destinos: 'Destinos mencionados' }, beneficios: { texto: 'Descripción', concepto: 'Concepto financiado', porcentaje: 'Porcentaje literal', monto: 'Importe fijo literal', moneda: 'Moneda explícita', tope: 'Tope literal', condiciones: 'Condiciones' }, requisitos: { texto: 'Texto original', tipo: 'Tipo candidato', condiciones: 'Condiciones según las bases' } }
 
@@ -39,6 +42,9 @@ export default function CrawlingProposal({ publication }) {
   const [countries, setCountries] = useState([])
   const [types, setTypes] = useState([])
   const [applied, setApplied] = useState(null)
+  const [linkedOffer, setLinkedOffer] = useState(null)
+  const [selectedFields, setSelectedFields] = useState([])
+  const [applyReason, setApplyReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -48,6 +54,9 @@ export default function CrawlingProposal({ publication }) {
   const sending = useRef(false)
   const heading = useRef(null)
   const path = `${prefix}/publicaciones/${publication}/propuesta`
+  const entityMention = source?.datos_extraidos?.entidad_html?.texto_original?.trim() || ''
+  const normalizeEntity = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').replace(/\s+/g, ' ').trim()
+  const entityMatches = entityMention ? institutions.filter((item) => normalizeEntity(item.nombre) === normalizeEntity(entityMention)) : []
   useEffect(() => {
     let live = true
     offersApi.get(path, { page }).then((data) => { if (live) { setList(data); setApplied(data.aplicacion || null); setError('') } }).catch((e) => { if (live) setError(e.message) })
@@ -62,6 +71,7 @@ export default function CrawlingProposal({ publication }) {
       docs.push(...response.results); p += 1
     } while ((p - 1) * response.page_size < response.count)
     setSource(version); setDocuments(docs)
+    return { version, docs }
   }
 
   async function open() {
@@ -78,11 +88,15 @@ export default function CrawlingProposal({ publication }) {
       setCountries(catalogs.paises || [])
       setTypes(catalogs.tipos_requisito || [])
       setList(latest)
+      setLinkedOffer(latest.borrador_automatico_id
+        ? await offersApi.get(`gestion/convocatorias/${latest.borrador_automatico_id}`) : null)
       if (!latest.contexto) throw new Error('No hay observación exitosa para preparar una propuesta.')
       const old = latest.results[0]
       const next = old ? { id: old.id, hash_propuesta: old.hash_propuesta, version_id: old.version_id, observacion_base_id: old.observacion_base_id, revisiones: old.revisiones, datos: old.datos, procedencia: old.procedencia } : { ...latest.contexto, datos: {}, procedencia: [] }
-      await evidence(next)
-      key.current = null; setDraft(next); setResult(old?.pendientes || null); setHistorical(null)
+      const { version, docs } = await evidence(next)
+      const prefill = proposalPrefill(version, docs, next.datos)
+      const referenced = new Set(next.procedencia.map((ref) => ref.campo))
+      key.current = null; setDraft({ ...next, datos: prefill.data, procedencia: [...next.procedencia, ...prefill.references.filter((ref) => !referenced.has(ref.campo))] }); setResult(old?.pendientes || null); setHistorical(null)
       setTimeout(() => heading.current?.focus(), 0)
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
@@ -93,11 +107,15 @@ export default function CrawlingProposal({ publication }) {
     try {
       const current = await offersApi.get(path)
       if (!current.contexto) throw new Error('Sin observación exitosa.')
-      await evidence(current.contexto)
+      const { version, docs } = await evidence(current.contexto)
       setList(current)
       // No remapear referencias documentales entre versiones ni perder los valores pendientes.
-      edit({ ...draft, ...current.contexto, id: current.results[0]?.id, hash_propuesta: current.results[0]?.hash_propuesta, procedencia: draft.version_id === current.contexto.version_id ? draft.procedencia : draft.procedencia.map((ref) => ({ ...ref, evidencia_id: '' })) })
-      setSuccess('Contexto actualizado. Se conservaron los valores; revisa y vuelve a indicar la procedencia si cambió la versión.')
+      const references = draft.version_id === current.contexto.version_id ? draft.procedencia : draft.procedencia.map((ref) => ({ ...ref, evidencia_id: '' }))
+      const prefill = proposalPrefill(version, docs, draft.datos)
+      const referenced = new Set(references.map((ref) => ref.campo))
+      edit({ ...draft, ...current.contexto, id: current.results[0]?.id, hash_propuesta: current.results[0]?.hash_propuesta,
+        datos: prefill.data, procedencia: [...references, ...prefill.references.filter((ref) => !referenced.has(ref.campo))] })
+      setSuccess('Contexto actualizado sin sobrescribir valores. Revisa la procedencia de esta versión antes de guardar.')
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
@@ -111,7 +129,9 @@ export default function CrawlingProposal({ publication }) {
       delete body.id; delete body.hash_propuesta
       const saved = await offersApi.write(draft.id ? `${prefix}/propuestas/${draft.id}` : path, draft.id ? 'PATCH' : 'POST', { ...body, clave_accion: key.current })
       setDraft({ id: saved.id, hash_propuesta: saved.hash_propuesta, version_id: saved.version_id, observacion_base_id: saved.observacion_base_id, revisiones: saved.revisiones, datos: saved.datos, procedencia: saved.procedencia })
-      key.current = null; setResult(saved.pendientes); setSuccess('Propuesta guardada fuera del catálogo. No se creó una convocatoria.'); setRetry((n) => n + 1)
+      key.current = null; setResult(saved.pendientes); setSuccess(linkedOffer
+        ? 'Propuesta guardada. El borrador vinculado no se modificó.'
+        : 'Propuesta guardada fuera del catálogo. No se creó una convocatoria.'); setRetry((n) => n + 1)
     } catch (e) { setError(`${[...new Set([e.message, ...validationMessages(e.fields)])].join(' ')} Tus valores se conservan. ${e.status === 409 ? 'Consulta el historial y actualiza el contexto antes de volver a guardar.' : 'Corrige los datos o reintenta.'}`) } finally { sending.current = false; setBusy(false) }
   }
 
@@ -123,20 +143,43 @@ export default function CrawlingProposal({ publication }) {
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
 
+  async function applyToLinked(event) {
+    event.preventDefault()
+    if (busy || !draft?.id || !linkedOffer) return
+    setBusy(true); setError(''); setSuccess('')
+    try {
+      const updated = await offersApi.write(`${prefix}/propuestas/${draft.id}/aplicar-borrador`, 'POST', {
+        version_convocatoria: linkedOffer.version, hash_propuesta: draft.hash_propuesta,
+        campos: selectedFields, motivo: applyReason,
+      })
+      setLinkedOffer(updated); setSelectedFields([]); setApplyReason('')
+      setSuccess('Campos seleccionados incorporados con auditoría. Revisa el borrador antes de publicar.')
+    } catch (e) { setError(`${e.message} Ningún valor de la propuesta se descarta.`) }
+    finally { setBusy(false) }
+  }
+
   return <section className="profile-card crawl-proposal"><h2 ref={heading} tabIndex={-1}>Propuesta de integración</h2><p>Trabajo administrativo fuera del catálogo. Guardar no crea ni publica una convocatoria.</p>
     {error && <Message>{error}</Message>}{success && <p role="status">{success}</p>}
     {!list && !error && <p role="status">Cargando propuestas…</p>}
     {error && !list && <Button onClick={() => setRetry((n) => n + 1)}>Reintentar</Button>}
     {applied && <p role="status">La publicación ya tiene un borrador vinculado. <a href={`/gestion/convocatorias/${applied.convocatoria_id}`}>Abrir convocatoria</a></p>}
+    {list?.borrador_automatico_id && <p role="status">Borrador privado del rastreo vinculado. La propuesta puede revisarse y aplicarse por campos, sin crear otro borrador. <a href={`/gestion/convocatorias/${list.borrador_automatico_id}`}>Abrir convocatoria</a></p>}
     {list && !draft && !applied && <Button busy={busy} disabled={!list.contexto} onClick={open}>{list.count ? 'Continuar propuesta' : 'Crear propuesta'}</Button>}
     {draft && <form onSubmit={save}><fieldset disabled={busy}><legend>Datos de trabajo</legend><p>Publicación {publication} · Versión ID {draft.version_id} · Observación {draft.observacion_base_id}</p>
       <Button type="button" onClick={refreshContext}>Actualizar contexto conservando valores</Button>
-      {source && <details><summary>Evidencia original de esta versión</summary><p>{source.datos_extraidos?.titulo?.texto_original}</p><p>{source.datos_extraidos?.descripcion?.texto_original}</p><p>Los documentos y la evidencia completa siguen disponibles arriba. No constituyen opciones ni requisitos confirmados.</p></details>}
-      <div className="form-grid"><div className="field"><label htmlFor="propuesta-institucion">Entidad oferente</label><select id="propuesta-institucion" value={draft.datos.institucion || ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, institucion: e.target.value ? Number(e.target.value) : null } })}><option value="">Pendiente de identificar</option>{institutions.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></div>{Object.entries({ titulo: 'Título propuesto', descripcion: 'Descripción propuesta', url_oficial: 'Enlace oficial', apertura_original: 'Apertura literal (sin inventar hora)', cierre_original: 'Cierre literal (sin inventar hora)' }).map(([name, label]) => <Field key={name} name={`propuesta-${name}`} label={label} value={draft.datos[name] ?? ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, [name]: e.target.value } })} />)}<div className="field"><label htmlFor="propuesta-cierre-dia">Día de cierre revisado, sin hora</label><input id="propuesta-cierre-dia" type="date" value={draft.datos.cierre_dia || ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, cierre_dia: e.target.value } })} /><small>Indica la evidencia exacta de este día. La fecha literal permanece separada y la publicación requiere resolución administrativa.</small></div></div>
+      {entityMatches.length > 0 && <p className="small-note">Posible coincidencia de oferente por nombre: {entityMatches.map((item) => item.nombre).join(', ')}. Verifica antes de seleccionar.</p>}
+      <div className="form-grid"><div className="field"><label htmlFor="propuesta-institucion">Entidad oferente</label><select id="propuesta-institucion" value={draft.datos.institucion || ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, institucion: e.target.value ? Number(e.target.value) : null } })}><option value="">Pendiente de identificar</option>{institutions.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select><small>Selecciona una entidad solo después de verificarla; la mención del portal no la confirma.</small></div>{Object.entries({ titulo: 'Título propuesto', descripcion: 'Descripción propuesta', url_oficial: 'Enlace oficial', apertura_original: 'Apertura literal (sin inventar hora)', cierre_original: 'Cierre literal (sin inventar hora)' }).map(([name, label]) => <Field key={name} name={`propuesta-${name}`} label={label} hint={{ titulo: 'Texto literal de la ficha HTML; revisa la referencia.', descripcion: 'Texto literal de la ficha HTML; revisa las bases.', url_oficial: 'Debe ser el enlace de postulación verificado, no la URL de publicación ni la de las bases.', cierre_original: 'Fecha literal de la ficha, sin hora inferida.' }[name]} value={draft.datos[name] ?? ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, [name]: e.target.value } })} />)}<div className="field"><label htmlFor="propuesta-cierre-dia">Día de cierre revisado, sin hora</label><input id="propuesta-cierre-dia" type="date" value={draft.datos.cierre_dia || ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, cierre_dia: e.target.value } })} /><small>Día interpretado por el extractor a partir del texto literal; verifica la fecha y su referencia.</small></div></div>
       {Object.entries(groups).map(([kind, label]) => <section key={kind}><h3>{label}</h3><p>Candidatos pendientes de interpretación; no se crean registros del catálogo.</p>{(draft.datos[kind] || []).map((item, index) => <fieldset key={item.id}><legend>{label} {index + 1}</legend><div className="form-grid">{Object.entries(fields[kind]).map(([name, title]) => <Field key={name} name={`${item.id}-${name}`} label={title} value={item[name] || ''} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, [kind]: draft.datos[kind].map((v) => v.id === item.id ? { ...v, [name]: e.target.value } : v) } })} />)}</div>{kind === 'opciones' && <div className="field"><label htmlFor={`${item.id}-countries`}>Países candidatos de esta opción</label><select multiple id={`${item.id}-countries`} value={item.paises || []} onChange={(e) => edit({ ...draft, datos: { ...draft.datos, opciones: draft.datos.opciones.map((v) => v.id === item.id ? { ...v, paises: Array.from(e.target.selectedOptions, (o) => o.value) } : v) } })}>{countries.map((country) => <option key={country.codigo} value={country.codigo}>{country.nombre}</option>)}</select><p>Selección explícita; no convierte las menciones originales en destinos confirmados.</p></div>}{kind !== 'opciones' && <Scope item={item} countries={countries} options={draft.datos.opciones || []} onChange={(next) => edit({ ...draft, datos: { ...draft.datos, [kind]: draft.datos[kind].map((v) => v.id === item.id ? next : v) } })} />}<Button type="button" onClick={() => edit({ ...draft, datos: { ...draft.datos, [kind]: draft.datos[kind].filter((v) => v.id !== item.id) } })}>Retirar candidato</Button></fieldset>)}<Button type="button" onClick={() => edit({ ...draft, datos: { ...draft.datos, [kind]: [...(draft.datos[kind] || []), { id: crypto.randomUUID(), texto: '', ambito: 'pendiente' }] } })}>Añadir {label.toLowerCase()}</Button></section>)}
-      <h3>Procedencia y motivos</h3>{draft.procedencia.map((ref, i) => <fieldset key={i}><legend>Referencia {i + 1}</legend><label htmlFor={`evidence-${i}`}>Documento exacto</label><select id={`evidence-${i}`} required value={ref.evidencia_id || ''} onChange={(e) => edit({ ...draft, procedencia: draft.procedencia.map((v, j) => i === j ? { ...v, evidencia_id: Number(e.target.value) } : v) })}><option value="">Selecciona evidencia</option>{documents.map((doc) => <option key={doc.evidencia_id} value={doc.evidencia_id}>{doc.rol} · Relación {doc.id}</option>)}</select>{Object.entries({ campo: 'Campo o identificador del elemento', localizador: 'Página o sección', original: 'Texto original', motivo: 'Motivo de la transcripción o corrección' }).map(([name, title]) => <Field key={name} name={`ref-${i}-${name}`} label={title} value={ref[name] || ''} onChange={(e) => edit({ ...draft, procedencia: draft.procedencia.map((v, j) => i === j ? { ...v, [name]: e.target.value } : v) })} />)}<Button type="button" onClick={() => edit({ ...draft, procedencia: draft.procedencia.filter((_v, j) => i !== j) })}>Retirar referencia</Button></fieldset>)}<Button type="button" onClick={() => edit({ ...draft, procedencia: [...draft.procedencia, { campo: '', localizador: '', motivo: '' }] })}>Añadir referencia</Button>
+      <h3>Procedencia y motivos</h3><div className="crawl-reference-list">{draft.procedencia.map((ref, i) => {
+        const document = documents.find((item) => item.evidencia_id === ref.evidencia_id)
+        return <details key={i} className="crawl-reference"><summary>Referencia {i + 1} · {ref.campo || 'Campo pendiente'} · {document ? `${document.rol}, relación ${document.id}` : 'Documento pendiente'} · Versión {draft.version_id}</summary><fieldset><legend>Datos de la referencia {i + 1}</legend><label htmlFor={`evidence-${i}`}>Documento exacto</label><select id={`evidence-${i}`} required value={ref.evidencia_id || ''} onInvalid={(e) => { e.currentTarget.closest('details').open = true }} onChange={(e) => edit({ ...draft, procedencia: draft.procedencia.map((v, j) => i === j ? { ...v, evidencia_id: Number(e.target.value) } : v) })}><option value="">Selecciona evidencia</option>{documents.map((doc) => <option key={doc.evidencia_id} value={doc.evidencia_id}>{doc.rol} · Relación {doc.id}</option>)}</select>{Object.entries({ campo: 'Campo o identificador del elemento', localizador: 'Página o sección', original: 'Texto original', motivo: 'Motivo de la transcripción o corrección' }).map(([name, title]) => <Field key={name} name={`ref-${i}-${name}`} label={title} value={ref[name] || ''} onChange={(e) => edit({ ...draft, procedencia: draft.procedencia.map((v, j) => i === j ? { ...v, [name]: e.target.value } : v) })} />)}<Button type="button" onClick={() => edit({ ...draft, procedencia: draft.procedencia.filter((_v, j) => i !== j) })}>Retirar referencia</Button></fieldset></details>
+      })}</div><Button type="button" onClick={() => edit({ ...draft, procedencia: [...draft.procedencia, { campo: '', localizador: '', motivo: '' }] })}>Añadir referencia</Button>
       <div className="heading-actions"><Button type="submit" busy={busy}>Guardar propuesta</Button><Button type="button" disabled={!draft.id} onClick={validate}>Validar propuesta</Button></div></fieldset></form>}
-    {draft?.id && !applied && result && <CrawlingDraft key={draft.id} proposal={draft} result={result} countries={countries} types={types} documents={documents} onCreated={(value) => { setApplied(value); setSuccess('Borrador creado y vinculado. Abriendo el editor administrativo.') }} />}
+    {draft?.id && linkedOffer && result && <form onSubmit={applyToLinked}><h3>Aplicar cambios al borrador vinculado</h3><p>Selecciona únicamente los campos revisados. Los demás valores y opciones existentes permanecerán intactos.</p>
+      {Object.entries(applyFieldLabels).filter(([name]) => draft.datos[name] != null && draft.datos[name] !== '').map(([name, label]) => <label key={name} className="field"><input type="checkbox" checked={selectedFields.includes(name)} onChange={(e) => setSelectedFields((old) => e.target.checked ? [...old, name] : old.filter((item) => item !== name))} />{label}: {String(linkedOffer[name]?.id ?? linkedOffer[name] ?? 'Pendiente')} → {String(draft.datos[name])}</label>)}
+      <label className="field" htmlFor="proposal-apply-reason">Motivo de la aplicación</label><textarea id="proposal-apply-reason" required maxLength={1000} value={applyReason} onChange={(e) => setApplyReason(e.target.value)} />
+      <Button type="submit" busy={busy} disabled={busy || !selectedFields.length}>Aplicar campos seleccionados</Button></form>}
+    {draft?.id && !applied && !list?.borrador_automatico_id && result && <CrawlingDraft key={draft.id} proposal={draft} result={result} countries={countries} types={types} documents={documents} onCreated={(value) => { setApplied(value); setSuccess('Borrador creado y vinculado. Abriendo el editor administrativo.') }} />}
     {result && <Results data={result} />}
     {list?.count > 0 && <><h3>Historial inmutable</h3><ul>{list.results.map((row) => <li key={row.id}><Button onClick={() => setHistorical(row)}>Consultar revisión de propuesta {row.id}</Button> · {row.autor.nombre}</li>)}</ul>{list.count > list.page_size && <nav aria-label="Historial de propuestas"><Button disabled={page === 1} onClick={() => setPage(page - 1)}>Anterior</Button><span>Página {page}</span><Button disabled={page * list.page_size >= list.count} onClick={() => setPage(page + 1)}>Siguiente</Button></nav>}</>}
     {historical && <section><h3>Snapshot histórico {historical.id}</h3><p>{historical.datos.titulo || 'Sin título'}</p><p>{historical.datos.descripcion}</p><Results data={historical.pendientes} /><details><summary>Todos los valores históricos (solo lectura)</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(historical.datos, null, 2)}</pre></details></section>}

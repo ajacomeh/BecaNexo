@@ -50,7 +50,12 @@ class ConvocatoriaSerializer(StrictModelSerializer):
 
     def validate(self, attrs):
         v = lambda k: attrs.get(k, getattr(self.instance, k, None))
-        if v("institucion").pais.codigo != "EC": raise serializers.ValidationError({"institucion": "Oferente fuera del alcance ecuatoriano."})
+        institution = v("institucion")
+        if institution is None:
+            if not self.instance or not m.BorradorRastreo.objects.filter(convocatoria=self.instance).exists():
+                raise serializers.ValidationError({"institucion": "Selecciona una entidad oferente ecuatoriana."})
+        elif institution.pais.codigo != "EC":
+            raise serializers.ValidationError({"institucion": "Oferente fuera del alcance ecuatoriano."})
         if v("apertura") and v("cierre") and v("apertura") > v("cierre"):
             raise serializers.ValidationError({"cierre": "No puede ser anterior a la apertura."})
         if v("cierre") and v("cierre_dia"):
@@ -60,8 +65,13 @@ class ConvocatoriaSerializer(StrictModelSerializer):
         if v("apertura") and v("cierre_dia") and timezone.localtime(v("apertura")).date() > v("cierre_dia"):
             raise serializers.ValidationError({"cierre_dia": "El día de cierre no puede preceder al de apertura."})
         if "areas" in attrs and len(set(attrs["areas"])) != len(attrs["areas"]): raise serializers.ValidationError({"areas": "No repitas áreas."})
-        identity = [v("institucion").pk, " ".join(v("titulo").casefold().split()), v("url_oficial") or ""]
-        attrs["clave_deduplicacion"] = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
+        if self.instance and m.BorradorRastreo.objects.filter(convocatoria=self.instance).exists():
+            attrs["clave_deduplicacion"] = self.instance.clave_deduplicacion
+        elif institution:
+            identity = [institution.pk, " ".join(v("titulo").casefold().split()), v("url_oficial") or ""]
+            attrs["clave_deduplicacion"] = hashlib.sha256(json.dumps(identity, ensure_ascii=False).encode()).hexdigest()
+        else:
+            attrs["clave_deduplicacion"] = self.instance.clave_deduplicacion
         return attrs
 
     def create(self, data):

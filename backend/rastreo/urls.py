@@ -9,6 +9,7 @@ urlpatterns = [
     path('propuestas/<int:pk>/', api_propuestas.Propuestas.as_view()),
     path('propuestas/<int:pk>/validar/', api_propuestas.ValidarPropuesta.as_view()),
     path('propuestas/<int:pk>/crear-borrador/', api_propuestas.CrearBorrador.as_view()),
+    path('propuestas/<int:pk>/aplicar-borrador/', api_propuestas.AplicarPropuestaBorrador.as_view()),
     path('convocatorias/<int:pk>/origen/', api_propuestas.OrigenBorrador.as_view()),
     path('publicaciones/<int:pk>/versiones/<int:version_id>/revisiones/', api.Revisiones.as_view()),
     path('fuentes/', api.Fuentes.as_view()),

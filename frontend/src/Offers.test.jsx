@@ -16,6 +16,15 @@ const filterCatalogs = { ...catalogs, niveles: [{ valor: 'maestria', nombre: 'Ma
 const adminListing = { count: 1, page: 1, page_size: 12, results: [{ id: 4, estado: 'borrador', titulo: 'Convocatoria sintética', institucion: { nombre: 'Entidad ficticia' }, beneficios: [], opciones: [], cierre: null }] }
 
 describe('convocatorias', () => {
+  it('identifica un borrador del rastreo sin oferente confirmado en administración', async () => {
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs :
+      { count: 1, page: 1, page_size: 12, results: [{ id: 19, estado: 'borrador', titulo: 'Beca nacional sintética',
+        institucion: null, origen_automatico: { publicacion_id: 8 }, beneficios: [], opciones: [], cierre: null }] })
+    render(<MemoryRouter><Offers admin /></MemoryRouter>)
+    expect(await screen.findByText('Oferente pendiente de confirmar')).toBeVisible()
+    expect(screen.getByText(/Borrador del rastreo · Publicación 8/)).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Editar y revisar' })).toHaveAttribute('href', '/gestion/convocatorias/19')
+  })
   it('aplica y limpia filtros administrativos, conserva los valores al contraer Más filtros y señala los activos', async () => {
     const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs : adminListing)
     render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)

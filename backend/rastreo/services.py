@@ -7,28 +7,36 @@ from datetime import datetime, timedelta
 from urllib.robotparser import RobotFileParser
 
 from django.contrib.auth import get_user_model
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import connection, transaction, DatabaseError
 from django.utils import timezone
 
-from convocatorias.siau_red import Downloader, AccessError, SourceBackoff, retry_after_at, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT
+from convocatorias.siau_red import Downloader, AccessError, SourceBackoff, retry_after_at, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT, HOST
 from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
 from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion
 from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
-from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, candidate_url, index_pages, national_index_pages, national_ficha_content
+from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, NationalIndexLinks, candidate_url, index_pages, national_index_pages, national_ficha_content
+from .siau_ajax import AJAX_INDEX, MAX_INDEX_PAGES, ajax_request, grid_config, robots_allowed, robots_allow_ajax
+from .portal_fuentes import PORTALES, POLITICA_VERSION, GENERIC_POLICY_VERSION, generic_portal, portal_for_source, links as portal_links, extract_portal
 
 
 BASE_POLICY = {'urls': sorted(ALLOWED), 'bytes_html': 2097152, 'bytes_pdf': 8388608, 'reintentos': 1}
 DISCOVERY_POLICY = {**BASE_POLICY, 'descubrimiento': {'indice': INDEX, 'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES}}
 NATIONAL_POLICY = {**BASE_POLICY, 'descubrimiento': {'indice': INDEX, 'indice_nacionales': NATIONAL_INDEX,
     'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES, 'max_paginas_nacionales': 1}}
+PAGINATED_POLICY = {**BASE_POLICY, 'urls': sorted([*ALLOWED, NATIONAL_INDEX, AJAX_INDEX]),
+    'descubrimiento': {'indice': INDEX, 'indice_nacionales': NATIONAL_INDEX,
+    'ajax_nacionales': AJAX_INDEX, 'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES,
+    'max_paginas_nacionales': MAX_INDEX_PAGES, 'paginas_adicionales_por_ciclo': 1}}
 
 
 def supported_policy(source):
     return ((source.politica_version == 'siau-cerrada/1' and source.politica_acceso == BASE_POLICY)
             or (source.politica_version == 'siau-indice/2' and source.politica_acceso == DISCOVERY_POLICY)
-            or (source.politica_version == 'siau-nacionales/3' and source.politica_acceso == NATIONAL_POLICY))
+            or (source.politica_version == 'siau-nacionales/3' and source.politica_acceso == NATIONAL_POLICY)
+            or (source.politica_version == 'siau-nacionales/4' and source.politica_acceso == PAGINATED_POLICY))
 
 
 def actor_admin(actor_id):
@@ -36,6 +44,125 @@ def actor_admin(actor_id):
     if actor is None:
         raise ValidationError('Se requiere ID de administrador activo real.')
     return actor
+
+
+@transaction.atomic
+def register_portal(actor_id, portal_key, reason, key=None):
+    """Registra una fuente auditada inactiva; habilitarla exige decisión posterior."""
+    actor = actor_admin(actor_id)
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValidationError('Motivo obligatorio.')
+    portal = PORTALES.get(portal_key)
+    if portal is None:
+        raise ValidationError('Portal fuera de los conectores revisados.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if previous.actor_id != actor.pk or previous.motivo != reason.strip() or previous.fuente.url_base != portal.indice:
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    if Fuente.objects.filter(url_base=portal.indice).exists():
+        raise ValidationError('Fuente ya registrada: no sobrescribir configuración.')
+    source = Fuente.objects.create(nombre=portal.nombre, adaptador='portal_ec:' + portal.clave,
+        url_base=portal.indice, politica_version=POLITICA_VERSION, politica_acceso=portal.politica,
+        frecuencia_min=1440, activa=False, aprobada_publicacion_automatica=False)
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+        motivo=reason.strip(), detalle={'antes': None, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
+def register_generic_portal(actor_id, name, seed, host, reason, *, max_pages=8,
+                            max_depth=2, max_cards=8, access_verified=False, key=None):
+    """Alta auditada e inactiva; la verificación de acceso requiere decisión humana."""
+    actor = actor_admin(actor_id)
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValidationError('Motivo obligatorio.')
+    try:
+        portal = generic_portal(name, seed, host, max_pages, max_depth, max_cards, access_verified)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    if access_verified and len(reason.strip()) < 20:
+        raise ValidationError('Describe la verificación de acceso antes de declararla aprobada.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if (previous.actor_id != actor.pk or previous.motivo != reason.strip()
+                or previous.fuente.url_base != portal.indice or previous.fuente.politica_acceso != portal.politica):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    if Fuente.objects.filter(url_base=seed).exists():
+        raise ValidationError('Fuente ya registrada.')
+    source = Fuente.objects.create(nombre=portal.nombre, adaptador='portal_ec:generico',
+        url_base=seed, politica_version=GENERIC_POLICY_VERSION, politica_acceso=portal.politica,
+        frecuencia_min=1440, activa=False, aprobada_publicacion_automatica=False)
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+        motivo=reason.strip(), detalle={'antes': None, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
+def verify_generic_access(source_id, actor_id, reason, key=None):
+    """Confirma condiciones de acceso revisadas por un administrador; no activa la fuente."""
+    actor = actor_admin(actor_id)
+    if not isinstance(reason, str) or len(reason.strip()) < 20:
+        raise ValidationError('Describa la verificación de condiciones públicas y robots.txt.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if (previous.actor_id != actor.pk or previous.fuente_id != source_id or previous.motivo != reason.strip()):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    source = Fuente.objects.select_for_update().get(pk=source_id)
+    portal = portal_for_source(source)
+    if not portal.generico:
+        raise ValidationError('Se requiere una fuente genérica.')
+    if source.activa:
+        raise ValidationError('No verificar acceso mientras la fuente esté activa.')
+    if portal.acceso_verificado:
+        return source, False
+    before = snapshot(source.pk)
+    source.politica_acceso = {**source.politica_acceso, 'acceso_verificado': True}
+    source.save(update_fields=['politica_acceso'])
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+        motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
+def set_portal_active(source_id, actor_id, reason, active, key=None):
+    actor = actor_admin(actor_id)
+    if not isinstance(reason, str) or not reason.strip() or type(active) is not bool:
+        raise ValidationError('Motivo y estado explícitos obligatorios.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if (previous.actor_id != actor.pk or previous.fuente_id != source_id or previous.motivo != reason.strip()
+                or previous.detalle.get('despues', {}).get('activa') != active):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    source = Fuente.objects.select_for_update().get(pk=source_id)
+    portal = portal_for_source(source)
+    if active and portal.generico and not portal.acceso_verificado:
+        raise ValidationError('Condiciones de acceso sin verificar; fuente inactiva.')
+    if source.activa == active:
+        return source, False
+    if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
+        raise ValidationError('No cambiar fuente durante una ejecución activa.')
+    before = snapshot(source.pk)
+    source.activa = active
+    source.save(update_fields=['activa'])
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+        motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
 
 
 def snapshot(source_id):
@@ -181,6 +308,44 @@ def revert_national_discovery(actor_id, reason, key=None):
 
 
 @transaction.atomic
+def set_paginated_discovery(actor_id, reason, enable, key=None):
+    """Transición auditada /3 ↔ /4; no toca ejecuciones ni evidencias."""
+    actor = actor_admin(actor_id)
+    if not reason or not reason.strip():
+        raise ValidationError('Motivo obligatorio.')
+    key = uuid.UUID(str(key)) if key else uuid.uuid4()
+    before_version, after_version = (('siau-nacionales/3', 'siau-nacionales/4') if enable
+                                     else ('siau-nacionales/4', 'siau-nacionales/3'))
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        old = previous.detalle.get('antes') or {}
+        new = previous.detalle.get('despues') or {}
+        if (previous.actor_id != actor.pk or previous.motivo != reason.strip()
+                or old.get('politica_version') != before_version
+                or new.get('politica_version') != after_version):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous.fuente, False
+    source = Fuente.objects.select_for_update().get(url_base=INDEX)
+    if source.adaptador != 'siau' or not supported_policy(source) or source.aprobada_publicacion_automatica:
+        raise ValidationError('Fuente fuera del contrato SIAU.')
+    if source.politica_version == after_version:
+        return source, False
+    if source.politica_version != before_version:
+        raise ValidationError('La política actual no admite esta transición.')
+    if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
+        raise ValidationError('No cambiar la política durante una ejecución activa.')
+    before = snapshot(source.pk)
+    source.politica_acceso = PAGINATED_POLICY if enable else NATIONAL_POLICY
+    source.politica_version = after_version
+    source.save(update_fields=['politica_acceso', 'politica_version'])
+    Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+                            motivo=reason.strip(), detalle={'antes': before, 'despues': snapshot(source.pk)}, clave_accion=key)
+    return source, True
+
+
+@transaction.atomic
 def set_frequency(source_id, actor_id, reason, minutes, key=None):
     actor = actor_admin(actor_id)
     if not reason or not reason.strip() or not isinstance(minutes, int) or not 60 <= minutes <= 10080:
@@ -210,13 +375,13 @@ def set_frequency(source_id, actor_id, reason, minutes, key=None):
 
 
 @contextmanager
-def exclusion(source_id):
+def exclusion(source_id, global_lock=True):
     """Sesión PostgreSQL, sin transacción durante HTTP. Orden origen → fuente."""
     if connection.in_atomic_block:
         raise ValidationError('Rastreo requiere autocommit, sin transacción externa.')
     acquired = []
     try:
-        for lock in ((742601, 1), (742602, source_id)):
+        for lock in (((742601, 1), (742602, source_id)) if global_lock else ((742602, source_id),)):
             with connection.cursor() as cursor:
                 cursor.execute('SELECT pg_try_advisory_lock(%s,%s)', lock)
                 success = cursor.fetchone()[0]
@@ -239,21 +404,28 @@ def incident(execution, code, detail, access=None, severity='error', publication
 
 class PersistentDownloader(Downloader):
     def __init__(self, execution, source):
-        super().__init__(pause=max(2, source.espera_seg), timeout=min(15, source.timeout_seg))
+        self.portal = portal_for_source(source) if source.adaptador.startswith('portal_ec:') else None
+        self.robots_url = self.portal.robots if self.portal else ROBOTS
+        self.index_urls = {self.portal.indice} if self.portal else {INDEX, NATIONAL_INDEX, AJAX_INDEX}
+        initial_urls = {self.robots_url, *self.index_urls} if self.portal else None
+        super().__init__(pause=max(2, source.espera_seg), timeout=min(15, source.timeout_seg),
+                         allowed_urls=initial_urls, allowed_host=self.portal.host if self.portal else HOST)
         self.execution = execution
         self.sequence = 0
         self.publication = None
         self.page_url = None
-        self.pages = set(PAGES)
-        self.pdfs = set(PDFS)
+        self.pages = set() if self.portal else set(PAGES)
+        self.pdfs = set() if self.portal else set(PDFS)
 
-    def record(self, url, record, status, result, document=None, error=None, headers=None):
+    def record(self, url, record, status, result, document=None, error=None, headers=None,
+               method='GET', public_parameters=None):
         self.sequence += 1
         admitted = datetime.fromisoformat(record['consulta_utc'])
         started = datetime.fromisoformat(record['inicio_peticion_utc']) if record.get('inicio_peticion_utc') else None
         finished = timezone.now()
         return Acceso.objects.create(ejecucion=self.execution, secuencia=self.sequence, publicacion=self.publication,
-            rol='robots' if url == ROBOTS else 'indice' if url in (INDEX, NATIONAL_INDEX) else 'bases' if url in self.pdfs else 'ficha',
+            rol='robots' if url == self.robots_url else 'indice' if url in self.index_urls else 'bases' if url in self.pdfs else 'ficha',
+            metodo=method, parametros_publicos=public_parameters,
             url_original=url, url_normalizada=url, url_final=url, admitido_en=admitted,
             inicio_peticion_en=started, fin=max(finished, started or admitted, admitted),
             espera_ms=record.get('espera_ms', 0),
@@ -271,12 +443,21 @@ class PersistentDownloader(Downloader):
             incident(self.execution, 'RED', type(exc).__name__, access)
             raise
         if status == 200:
-            if (self.page_url == url and url not in PAGES and self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/3'
+            if (not self.portal and url == NATIONAL_INDEX
+                    and self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/4'):
+                try:
+                    grid_config(content)
+                except AccessError:
+                    access = self.record(url, entry, status, 'bloqueado', error='AJAX_CONTRATO')
+                    incident(self.execution, 'INDICE_ESTRUCTURA',
+                             'Contrato AJAX público fuera de los límites admitidos.', access)
+                    raise AccessError('Índice nacional fuera del contrato AJAX.') from None
+            if (not self.portal and self.page_url == url and url not in PAGES and self.execution.configuracion_snapshot['politica_version'] in ('siau-nacionales/3', 'siau-nacionales/4')
                     and not national_ficha_content(content)):
                 access = self.record(url, entry, status, 'bloqueado', error='FICHA_FUERA_ALCANCE')
                 incident(self.execution, 'FICHA_FUERA_ALCANCE', 'La ficha no conserva la estructura nacional anunciada en el índice.', access, 'aviso')
                 raise AccessError('Ficha fuera del alcance nacional verificado.')
-            expected = 'application/pdf' if url in self.pdfs else 'text/plain' if url == ROBOTS else 'text/html'
+            expected = 'application/pdf' if url in self.pdfs else 'text/plain' if url == self.robots_url else 'text/html'
             mime = headers.get('content-type', '').split(';')[0].strip().lower()
             try:
                 if mime != expected:
@@ -310,6 +491,48 @@ class PersistentDownloader(Downloader):
         Ejecucion.objects.filter(pk=self.execution.pk).update(latido_en=timezone.now())
         return status, headers, content
 
+    def fetch_ajax(self, body, public_parameters):
+        """Una sola solicitud POST; éxito solo con HTML interpretable y evidencia íntegra."""
+        entry = {'consulta_utc': timezone.now().isoformat()}
+        self.history.append(entry)
+        self.current_record = entry
+        try:
+            status, headers, content = self.post_once(AJAX_INDEX, body)
+        except (AccessError, OSError, ValueError, http.client.HTTPException) as exc:
+            access = self.record(AJAX_INDEX, entry, None, 'error', error=type(exc).__name__,
+                                 method='POST', public_parameters=public_parameters)
+            incident(self.execution, 'RED', type(exc).__name__, access)
+            raise AccessError('Fallo de acceso AJAX.') from exc
+        if status != 200:
+            access = self.record(AJAX_INDEX, entry, status, 'error', error=f'HTTP_{status}',
+                                 method='POST', public_parameters=public_parameters)
+            incident(self.execution, 'HTTP', f'HTTP {status}; sin avanzar la paginación.', access)
+            if status in (429, 503):
+                due = retry_after_at(headers)
+                if due:
+                    incident(self.execution, 'REINTENTO_FUENTE', due.isoformat(), access, 'aviso')
+                raise SourceBackoff(f'HTTP {status}; reducir accesos a la fuente.')
+            raise AccessError(f'HTTP {status}; sin avanzar la paginación.')
+        try:
+            if headers.get('content-type', '').split(';')[0].strip().lower() != 'text/html':
+                raise AccessError('MIME AJAX inesperado.')
+            parser = NationalIndexLinks()
+            parser.feed(content.decode('utf-8-sig'))
+            if not parser.article_count:
+                raise AccessError('Respuesta AJAX sin tarjetas de convocatorias.')
+            prepared = prepare_document(content, 'text/html')
+            with transaction.atomic():
+                document, created = register_document(prepared)
+                self.record(AJAX_INDEX, entry, status, 'descargado' if created else 'reutilizado',
+                            document, headers=headers, method='POST', public_parameters=public_parameters)
+            Ejecucion.objects.filter(pk=self.execution.pk).update(latido_en=timezone.now())
+            return parser.urls
+        except (AccessError, StorageError, OSError, DatabaseError, UnicodeError, ValueError) as exc:
+            access = self.record(AJAX_INDEX, entry, status, 'error', error=type(exc).__name__,
+                                 method='POST', public_parameters=public_parameters)
+            incident(self.execution, 'INDICE_ESTRUCTURA', type(exc).__name__, access)
+            raise AccessError('Página AJAX no verificable.') from exc
+
 
 def summary(execution):
     execution.refresh_from_db()
@@ -338,7 +561,7 @@ def next_due(source):
     scheduled = last.inicio + timedelta(minutes=source.frecuencia_min) if last else None
     from .web_frequency import extraordinary_enabled, global_due, source_retry_due
     retry_limit = source_retry_due(source)
-    if extraordinary_enabled():
+    if source.adaptador == 'siau' and extraordinary_enabled():
         global_limit = global_due(source)
         return max(filter(None, (scheduled, global_limit, retry_limit)), default=None)
     return max(filter(None, (scheduled, retry_limit)), default=None)
@@ -351,7 +574,8 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
         if existing.fuente_id != source_id or existing.solicitado_por_id != actor_id or existing.origen != origin:
             raise ValidationError('Clave idempotente pertenece a otra operación.')
         return existing
-    with exclusion(source_id) as locked:
+    adapter = Fuente.objects.only('adaptador').get(pk=source_id).adaptador
+    with exclusion(source_id, global_lock=not adapter.startswith('portal_ec:')) as locked:
         with transaction.atomic():
             source = Fuente.objects.select_for_update().get(pk=source_id)
             # Serializa creación incluso para invocaciones omitidas.
@@ -365,13 +589,23 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                 if due and due > timezone.now():
                     return Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio').first()
             reason = None
+            if origin == 'manual' and source.adaptador.startswith('portal_ec:'):
+                due = next_due(source)
+                if due and due > timezone.now():
+                    reason = 'La frecuencia de esta fuente aún no permite otra captura.'
             if not locked:
                 reason = 'Origen o fuente ocupados por otra ejecución.'
             elif not source.activa:
                 reason = 'Fuente desactivada.'
             elif Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
                 reason = 'Existe una ejecución pendiente de recuperación explícita.'
-            if source.adaptador != 'siau' or source.url_base != INDEX or not supported_policy(source):
+            portal = None
+            if source.adaptador.startswith('portal_ec:'):
+                try:
+                    portal = portal_for_source(source)
+                except AccessError:
+                    reason = 'Configuración fuera del contrato institucional cerrado.'
+            elif source.adaptador != 'siau' or source.url_base != INDEX or not supported_policy(source):
                 reason = 'Configuración fuera del contrato SIAU cerrado.'
             now = timezone.now()
             configuration = snapshot(source.pk)
@@ -380,11 +614,14 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                         else 'solicitud_manual')
                 configuration[kind] = manual_context
             execution = Ejecucion.objects.create(fuente=source, solicitado_por_id=actor_id, origen=origin, clave_idempotencia=key,
-                configuracion_snapshot=configuration, version_extractor=EXTRACTOR_VERSION,
+                configuracion_snapshot=configuration, version_extractor=(GENERIC_POLICY_VERSION if portal and portal.generico else POLITICA_VERSION) if portal else EXTRACTOR_VERSION,
                 inicio=now, estado='omitida' if reason else 'en_curso', fin=now if reason else None, error_resumen=reason)
             if reason:
                 incident(execution, 'OMITIDA', reason, severity='aviso')
                 return execution
+        if portal:
+            from .portal_runner import capture
+            return capture(execution, source, portal)
         try:
             root_path()
             downloader = PersistentDownloader(execution, source)
@@ -396,7 +633,8 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                 raise AccessError('crawl-delay requiere ejecución con otro presupuesto; detener.')
             downloader.pause = max(downloader.pause, delay)
             def allowed(url):
-                return policy.can_fetch(AGENT, url)
+                return (robots_allowed(robots['contenido'], url) if source.politica_version == 'siau-nacionales/4'
+                        else policy.can_fetch(AGENT, url))
             def download(url):
                 if not allowed(url):
                     entry = {'consulta_utc': timezone.now().isoformat()}
@@ -407,7 +645,7 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
             pages = list(PAGES)
             try:
                 index = download(INDEX)
-                if source.politica_version in ('siau-indice/2', 'siau-nacionales/3'):
+                if source.politica_version in ('siau-indice/2', 'siau-nacionales/3', 'siau-nacionales/4'):
                     discovered, truncated = index_pages(index['contenido'])
                     if truncated:
                         incident(execution, 'INDICE_LIMITE', 'El índice supera el máximo de fichas; se requiere revisión.')
@@ -420,14 +658,55 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                 pass  # Fichas autorizadas se investigan aunque falle el índice.
             except (UnicodeError, ValueError):
                 incident(execution, 'INDICE_ESTRUCTURA', 'Índice no interpretable; se conservan las fichas conocidas.')
-            if source.politica_version == 'siau-nacionales/3':
+            if source.politica_version in ('siau-nacionales/3', 'siau-nacionales/4'):
                 downloader.allowed_urls.add(NATIONAL_INDEX)
                 try:
                     national = download(NATIONAL_INDEX)
                     discovered, truncated = national_index_pages(national['contenido'])
-                    if truncated or len(pages) + len([url for url in discovered if url not in pages]) > MAX_FICHAS:
+                    if source.politica_version == 'siau-nacionales/4':
+                        first_parser = NationalIndexLinks()
+                        first_parser.feed(national['contenido'].decode('utf-8-sig'))
+                        discovered = first_parser.urls
+                        truncated = truncated or len(discovered) > MAX_FICHAS
+                        pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
+                        downloader.pages.update(pages)
+                        downloader.allowed_urls.update(pages)
+                        try:
+                            config = grid_config(national['contenido'])
+                        except AccessError:
+                            incident(execution, 'INDICE_ESTRUCTURA', 'Contrato AJAX público fuera de los límites admitidos.')
+                            raise
+                        extra = []
+                        if config['max_num_pages'] > 1:
+                            if not robots_allow_ajax(robots['contenido']):
+                                incident(execution, 'ROBOTS', 'No se confirmó autorización del endpoint AJAX.')
+                            else:
+                                previous = (Acceso.objects.filter(ejecucion__fuente=source, url_normalizada=AJAX_INDEX,
+                                                                  metodo='POST').order_by('-id').first())
+                                last_page = ((previous.parametros_publicos or {}).get('pagina') if previous else None)
+                                maximum = min(config['max_num_pages'], MAX_INDEX_PAGES)
+                                page_number = (last_page + 1 if previous and previous.documento_id and
+                                               type(last_page) is int and 2 <= last_page < maximum else
+                                               last_page if previous and not previous.documento_id and
+                                               type(last_page) is int and 2 <= last_page <= maximum else 2)
+                                body, parameters = ajax_request(config, page_number)
+                                downloader.allowed_urls.add(AJAX_INDEX)
+                                try:
+                                    extra = downloader.fetch_ajax(body, parameters)
+                                except SourceBackoff:
+                                    raise
+                                except AccessError:
+                                    pass  # Se conserva la posición anterior para el próximo ciclo.
+                        candidates = list(dict.fromkeys([*discovered, *extra, *pages]))
+                        known = {url: seen for url, seen in Publicacion.objects.filter(
+                            fuente=source, url_normalizada__in=candidates).values_list('url_normalizada', 'ultima_deteccion')}
+                        pages = sorted(candidates, key=lambda url: (url in known, known.get(url) or timezone.now()))[:MAX_FICHAS]
+                        truncated = truncated or config['max_num_pages'] > 2 or len(candidates) > MAX_FICHAS
+                    else:
+                        truncated = truncated or len(pages) + len([url for url in discovered if url not in pages]) > MAX_FICHAS
+                        pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
+                    if truncated:
                         incident(execution, 'INDICE_LIMITE', 'Índice nacional con cobertura parcial; existen más páginas o fichas que el límite.')
-                    pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
                     downloader.pages.update(pages)
                     downloader.allowed_urls.update(pages)
                 except SourceBackoff:
@@ -452,7 +731,7 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                     if not item['seccion_completa']:
                         incident(execution, 'ESTRUCTURA', 'HTML fuera de contrato; no estructurar automáticamente.', publication=publication)
                     for link in item['enlaces_bases']:
-                        candidate = candidate_url(link['url'], BASE) if source.politica_version in ('siau-indice/2', 'siau-nacionales/3') else None
+                        candidate = candidate_url(link['url'], BASE) if source.politica_version in ('siau-indice/2', 'siau-nacionales/3', 'siau-nacionales/4') else None
                         if link['url'] not in downloader.pdfs and (not candidate or candidate != link['url'] or len(downloader.pdfs) >= MAX_BASES):
                             pending.append({'url': link['url'], 'estado': 'fuera_de_lista'})
                             incident(execution, 'BASE_NO_PERMITIDA', 'Enlace de bases fuera de lista cerrada.', publication=publication)
@@ -474,7 +753,17 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                             incident(execution, 'BASE_INACCESIBLE', 'Evidencia parcial; no se sustituye por un PDF histórico.', publication=publication)
                         else:
                             evidence.append({'rol': 'bases_pdf', 'url': link['url'], 'url_original': link['url_original'], 'documento': document})
-                    observe(execution, publication, item, evidence, pending)
+                    observed = observe(execution, publication, item, evidence, pending)
+                    if observed.version_id and getattr(settings, 'RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS', False):
+                        try:
+                            from .auto_borradores import prepare_automatic_draft
+                            _origin, _created, review_reason = prepare_automatic_draft(publication.pk, observed.version_id)
+                            if review_reason and observed.resultado != 'sin_cambios':
+                                incident(execution, 'BORRADOR_REVISION_PENDIENTE', review_reason,
+                                         severity='aviso', publication=publication)
+                        except Exception as exc:
+                            # Una incidencia editorial no elimina la versión ni sus documentos.
+                            incident(execution, 'BORRADOR_AUTO_FALLIDO', type(exc).__name__, publication=publication)
                 except SourceBackoff:
                     raise
                 except (AccessError, ValueError, ValidationError) as exc:

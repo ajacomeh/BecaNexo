@@ -25,7 +25,8 @@ it('muestra carga, error, reintento y vacío sin acciones editoriales', async ()
   expect(await screen.findByText('Error simulado')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
   expect(await screen.findByText('No hay registros para esta consulta.')).toBeVisible()
-  expect(get).toHaveBeenCalledTimes(4)
+  expect(get).toHaveBeenCalledTimes(5)
+  expect(screen.getByRole('heading', { name: 'Fuentes configuradas' })).toBeVisible()
   expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
   expect(screen.queryByRole('button', { name: /aprobar|publicar|ejecutar/i })).not.toBeInTheDocument()
 })
@@ -42,6 +43,17 @@ it('envía búsqueda, fuente y paginación bajo los resultados', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Buscar' }))
   await screen.findByText('Página 1 de 3 · 25 registros')
   expect(get).toHaveBeenLastCalledWith('gestion/rastreo/publicaciones', { q: 'beca', fuente: '1', page: 1 })
+})
+
+it('identifica fuente, estado, última ejecución y borradores en el panel', async () => {
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes')
+    ? list([{ id: 2, nombre: 'Becas UTPL', activa: false, politica_version: 'portal-ec/1',
+      publicaciones: 3, borradores: 1, ultima_ejecucion: { inicio: '2026-11-12T10:00:00Z', estado: 'parcial' } }])
+    : list())
+  open()
+  expect(await screen.findByText(/3 publicaciones · 1 borradores/)).toBeVisible()
+  expect(screen.getByText(/Inactiva · portal-ec\/1/)).toBeVisible()
+  expect(screen.getByText(/Descarga parcial/)).toBeVisible()
 })
 
 it('limpia los filtros de publicaciones y mantiene el acceso al detalle', async () => {
@@ -70,11 +82,16 @@ it('consulta la versión observada A aunque exista B y renderiza texto sin HTML'
   })
   open('/gestion/rastreo/publicaciones/1')
   expect((await screen.findAllByText('<img src=x onerror=alert(1)>'))[0]).toBeVisible()
+  expect(screen.getByRole('heading', { name: 'Publicación sintética' }).closest('.crawl-detail-hero')).toHaveTextContent('Esta publicación todavía no es una convocatoria aprobada del catálogo.')
+  expect(screen.getByRole('link', { name: publication.url_original })).toHaveAttribute('href', publication.url_original)
+  expect(document.querySelectorAll('.crawl-detail-facts dt')).toHaveLength(3)
+  expect(document.querySelector('.crawl-version-current')).toHaveTextContent('Versión 1')
   expect(document.querySelector('img')).toBeNull()
   expect(get).toHaveBeenCalledWith('gestion/rastreo/publicaciones/1/versiones/1', {})
   await userEvent.click(screen.getByRole('button', { name: 'Consultar versión 2' }))
   expect((await screen.findAllByText('Versión B'))[0]).toBeVisible()
   expect(screen.getByRole('heading', {name: 'Información de la versión 2'})).toHaveFocus()
+  expect(document.querySelector('.crawl-version-current')).toHaveTextContent('Versión 2')
   expect(get).toHaveBeenCalledWith('gestion/rastreo/publicaciones/1/versiones/2/documentos', { page: 1 })
 })
 
@@ -88,6 +105,8 @@ it('presenta el error de descarga sin éxito ficticio', async () => {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 409 })
   open('/gestion/rastreo/publicaciones/1')
   await userEvent.click(await screen.findByRole('button', { name: 'Descargar evidencia' }))
+  expect(screen.getByText('Evidencia 4 · ficha html').closest('.crawl-document')).toHaveTextContent('text/html')
+  expect(screen.getByText('Evidencia 4 · ficha html').closest('.crawl-document')).toHaveTextContent('Revisiones administrativas')
   expect(await screen.findByText('Evidencia no disponible o inconsistente.')).toBeVisible()
 })
 

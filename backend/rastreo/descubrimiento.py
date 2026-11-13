@@ -61,6 +61,7 @@ class NationalIndexLinks(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.urls = []
         self.article = False
+        self.article_count = 0
         self.title = False
         self.href = None
         self.words = []
@@ -70,6 +71,8 @@ class NationalIndexLinks(HTMLParser):
         classes = attrs.get('class', '').split()
         if tag == 'article':
             self.article = 'category-convocatorias' in classes
+            if self.article:
+                self.article_count += 1
         elif self.article and tag == 'h2' and 'entry-title' in classes:
             self.title = True
         elif self.title and tag == 'a':

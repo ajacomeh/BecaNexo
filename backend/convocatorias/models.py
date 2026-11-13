@@ -41,7 +41,7 @@ class TipoBeca(models.Model):
 
 
 class Convocatoria(models.Model):
-    institucion = models.ForeignKey(Institucion, on_delete=models.PROTECT, related_name="convocatorias")
+    institucion = models.ForeignKey(Institucion, null=True, blank=True, on_delete=models.PROTECT, related_name="convocatorias")
     titulo = models.CharField(max_length=250)
     descripcion = models.TextField(blank=True, default="")
     apertura = models.DateTimeField(null=True, blank=True)
@@ -71,6 +71,7 @@ class Convocatoria(models.Model):
             models.CheckConstraint(condition=Q(apertura__isnull=True) | Q(cierre__isnull=True) | Q(cierre__gte=F("apertura")), name="conv_fechas"),
             models.CheckConstraint(condition=Q(cierre__isnull=True) | Q(cierre_dia__isnull=True), name="conv_cierre_precision_unica"),
             models.CheckConstraint(condition=Q(cierre_dia__isnull=True) | Q(cierre_original__isnull=False, cierre_original__regex=r"\S"), name="conv_cierre_dia_original"),
+            models.CheckConstraint(condition=Q(revision="pendiente") | Q(institucion__isnull=False), name="conv_validada_oferente"),
         ]
 
     @property
@@ -203,3 +204,16 @@ class Evento(models.Model):
         constraints = [models.CheckConstraint(
             condition=Q(convocatoria__isnull=False, institucion__isnull=True) | Q(convocatoria__isnull=True, institucion__isnull=False),
             name="evento_un_objeto")]
+
+
+class BorradorRastreo(models.Model):
+    """Registro de creación automática; los cambios humanos siguen en AUD_EVENTO."""
+    publicacion = models.OneToOneField('rastreo.Publicacion', on_delete=models.PROTECT, related_name='borrador_automatico')
+    convocatoria = models.OneToOneField(Convocatoria, on_delete=models.PROTECT, related_name='origen_automatico')
+    version = models.ForeignKey('rastreo.Version', on_delete=models.PROTECT)
+    datos_iniciales = models.JSONField()
+    pendientes_iniciales = models.JSONField()
+    creada_en = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'TRA_BORRADOR_RASTREO'

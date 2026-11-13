@@ -12,7 +12,14 @@ def publicas():
 
 def detalle(obj, publico=False):
     data = dict(s.ConvocatoriaSerializer(obj).data)
-    data["institucion"] = s.InstitucionSerializer(obj.institucion).data
+    data["institucion"] = s.InstitucionSerializer(obj.institucion).data if obj.institucion_id else None
+    if not publico:
+        origin = m.BorradorRastreo.objects.filter(convocatoria=obj).first()
+        if origin:
+            from rastreo.auto_borradores import pending_for_publication
+        data["origen_automatico"] = ({"publicacion_id": origin.publicacion_id, "version_id": origin.version_id,
+                                        "pendientes_iniciales": origin.pendientes_iniciales,
+                                        "bloqueos_actuales": pending_for_publication(obj, origin)} if origin else None)
     data["tipo_beca_nombre"] = obj.tipo_beca.nombre if obj.tipo_beca else None
     opciones = obj.opciones.filter(activa=True) if publico else obj.opciones.all()
     data["opciones"] = s.OpcionSerializer(opciones, many=True).data
@@ -49,13 +56,17 @@ def touch(obj):
 
 @transaction.atomic
 def publicar(obj):
-    era_publica = obj.activa and obj.revision == "validada" and obj.institucion.pais.codigo == "EC"
+    era_publica = obj.activa and obj.revision == "validada" and bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC"
     errors = []
     from rastreo.integracion import estado_publicacion_integrada
     origen = estado_publicacion_integrada(obj)
     if origen and (origen['bloqueos'] or origen['pendientes']):
         errors.append('La convocatoria integrada conserva revisiones de origen o pendientes materiales sin resolver. Consulta su procedencia antes de publicar.')
-    if obj.institucion.pais.codigo != "EC": errors.append("El oferente debe ser ecuatoriano.")
+    auto_origin = m.BorradorRastreo.objects.filter(convocatoria=obj).select_related('publicacion', 'version').first()
+    if auto_origin:
+        from rastreo.auto_borradores import pending_for_publication
+        errors.extend(pending_for_publication(obj, auto_origin))
+    if not obj.institucion_id or obj.institucion.pais.codigo != "EC": errors.append("El oferente debe ser ecuatoriano.")
     if not obj.titulo.strip() or not obj.descripcion.strip() or not obj.url_oficial:
         errors.append("Completa título, descripción y enlace oficial.")
     opciones = list(obj.opciones.filter(activa=True))

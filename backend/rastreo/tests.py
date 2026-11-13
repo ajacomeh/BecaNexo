@@ -23,7 +23,7 @@ from .storage import save_document, integrity_report, StorageError
 
 class RastreoTests(TransactionTestCase):
     def setUp(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         self.actor = get_user_model().objects.create_user(email='rastreo-admin@example.com', nombre='Prueba rastreo', rol='administrador')
         self.user = get_user_model().objects.create_user(email='rastreo-user@example.com', nombre='Prueba postulante')
         self.temp = tempfile.TemporaryDirectory()

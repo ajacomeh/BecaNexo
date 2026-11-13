@@ -31,6 +31,7 @@ DEBUG = env("DJANGO_DEBUG")
 
 # Excepción operativa cerrada hasta verificar condiciones del portal y autorizarla.
 RASTREO_EXTRAORDINARIO_HABILITADO = env.bool("RASTREO_EXTRAORDINARIO_HABILITADO", default=False)
+RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS = env.bool("RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS", default=False)
 
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
 

@@ -273,7 +273,8 @@ class Accion(AuthView):
         if request.data: raise serializers.ValidationError({"detail": "Esta acción no acepta campos."})
         with escritura():
             institution_id = get_object_or_404(m.Convocatoria, pk=pk).institucion_id
-            m.Institucion.objects.select_for_update().get(pk=institution_id)
+            if institution_id is not None:
+                m.Institucion.objects.select_for_update().get(pk=institution_id)
             obj = get_object_or_404(m.Convocatoria.objects.select_for_update(), pk=pk)
             before = detalle(obj)
             if accion == "publicar": publicar(obj)

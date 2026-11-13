@@ -46,11 +46,11 @@ def retry_after_at(headers, now=None):
         return None
 
 
-def validate_url(url, allowed_urls=ALLOWED):
+def validate_url(url, allowed_urls=ALLOWED, allowed_host=HOST):
     if not isinstance(url, str) or url not in allowed_urls:
         raise AccessError('URL fuera de la lista cerrada HTTPS permitida.')
     parts = urlsplit(url)
-    if (parts.scheme != 'https' or parts.hostname != HOST
+    if (parts.scheme != 'https' or parts.hostname != allowed_host
             or parts.username or parts.password or parts.port not in (None, 443)
             or parts.query or parts.fragment):
         raise AccessError('URL fuera de la lista cerrada HTTPS permitida.')
@@ -85,15 +85,16 @@ class PinnedHTTPS(http.client.HTTPSConnection):
 
 
 class Downloader:
-    def __init__(self, pause=2, timeout=15, total_timeout=45, allowed_urls=None):
+    def __init__(self, pause=2, timeout=15, total_timeout=45, allowed_urls=None, allowed_host=HOST):
         self.pause, self.timeout, self.total_timeout = pause, timeout, total_timeout
         self.allowed_urls = set(ALLOWED if allowed_urls is None else allowed_urls)
+        self.allowed_host = allowed_host
         self.last = None
         self.history = []
         self.current_record = None
 
     def once(self, url):
-        parts = validate_url(url, self.allowed_urls)
+        parts = validate_url(url, self.allowed_urls, self.allowed_host)
         address = public_address(parts.hostname)
         conn = PinnedHTTPS(parts.hostname, address, self.timeout)
         waited = 0
@@ -131,10 +132,55 @@ class Downloader:
         finally:
             conn.close()
 
+    def post_once(self, url, body):
+        """POST público acotado; sin redirecciones, cookies ni reintentos."""
+        parts = validate_url(url, self.allowed_urls, self.allowed_host)
+        if not isinstance(body, bytes) or len(body) > 32768:
+            raise AccessError('Cuerpo AJAX fuera del límite.')
+        address = public_address(parts.hostname)
+        conn = PinnedHTTPS(parts.hostname, address, self.timeout)
+        waited = 0
+        if self.last is not None:
+            waiting_since = time.monotonic()
+            time.sleep(max(0, self.pause - (waiting_since - self.last)))
+            waited = time.monotonic() - waiting_since
+        self.last = time.monotonic()
+        if self.current_record is not None:
+            self.current_record['inicio_peticion_utc'] = datetime.now(timezone.utc).isoformat()
+            self.current_record['inicio_peticion_monotonic'] = self.last
+            self.current_record['espera_ms'] = max(0, int(waited * 1000))
+        started = time.monotonic()
+        limit = 2 * 1024 * 1024
+        try:
+            conn.request('POST', parts.path, body=body, headers={
+                'User-Agent': AGENT, 'Accept-Encoding': 'identity',
+                'Accept': 'text/html', 'Content-Type': 'application/x-www-form-urlencoded',
+            })
+            response = conn.getresponse()
+            headers = {key.lower(): value for key, value in response.getheaders()}
+            if headers.get('content-encoding', 'identity') != 'identity':
+                raise AccessError('Codificación comprimida no admitida.')
+            if int(headers.get('content-length', '0')) > limit:
+                raise AccessError('Contenido AJAX excede el límite.')
+            chunks, size = [], 0
+            while True:
+                if time.monotonic() - started > self.total_timeout:
+                    raise AccessError('Tiempo total de lectura excedido.')
+                block = response.read1(min(65536, limit - size + 1))
+                if not block:
+                    break
+                size += len(block)
+                if size > limit:
+                    raise AccessError('Contenido AJAX excede el límite.')
+                chunks.append(block)
+            return response.status, headers, b''.join(chunks)
+        finally:
+            conn.close()
+
     def fetch(self, url, can_fetch=lambda url: True):
         initial = url
         for redirect in range(3):
-            validate_url(url, self.allowed_urls)
+            validate_url(url, self.allowed_urls, self.allowed_host)
             if not can_fetch(url):
                 raise AccessError('robots.txt impide o no permite confirmar este acceso.')
             for attempt in range(2):
@@ -162,7 +208,7 @@ class Downloader:
                     url = urljoin(url, headers.get('location', ''))
                 except ValueError as exc:
                     raise AccessError('Redirección mal formada.') from exc
-                validate_url(url, self.allowed_urls)
+                validate_url(url, self.allowed_urls, self.allowed_host)
                 if redirect == 2:
                     raise AccessError('Demasiadas redirecciones.')
                 continue

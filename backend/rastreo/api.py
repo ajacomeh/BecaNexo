@@ -59,7 +59,15 @@ class ReadOnly(AuthView):
 class Fuentes(ReadOnly):
     def get(self, request):
         parametros(request, {'page', 'page_size'})
-        return paginar(request, Fuente.objects.order_by('nombre', 'id'), lambda f: {'id': f.pk, 'nombre': f.nombre})
+        def data(source):
+            last = source.ejecucion_set.order_by('-inicio', '-id').first()
+            return {'id': source.pk, 'nombre': source.nombre, 'adaptador': source.adaptador,
+                    'activa': source.activa, 'politica_version': source.politica_version,
+                    'frecuencia_min': source.frecuencia_min,
+                    'ultima_ejecucion': {'id': last.pk, 'estado': last.estado, 'inicio': last.inicio} if last else None,
+                    'publicaciones': source.publicacion_set.count(),
+                    'borradores': source.publicacion_set.filter(borrador_automatico__isnull=False).count()}
+        return paginar(request, Fuente.objects.order_by('nombre', 'id'), data)
 
 
 class Publicaciones(ReadOnly):

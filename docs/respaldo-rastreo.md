@@ -1,5 +1,13 @@
 # Respaldo conjunto de PostgreSQL y documentos
 
+## Copia previa a rastreo.0013 y convocatorias.0006/0007 — 12/11/2026
+
+Respaldo nuevo: `D:\Respaldos_BecaNexo\becanexo_pre_migracion_b18_20261113T001611Z_8f098cd9` (marca UTC; 12/11/2026 en Ecuador). Contiene `becanexo_db.backup` (300907 bytes), `documentos/` (35 archivos), `manifiesto.json`, `pg_restore-list.txt` y `SHA256SUMS.txt`. La captura usó snapshot PostgreSQL exportado y exclusión del rastreador. Se cotejaron tamaño y SHA-256 del dump, de los 35 archivos copiados y de las 35 referencias con los originales; `pg_restore --list` terminó con código 0 y coincidió con el listado guardado. El manifiesto identifica el commit `a269fcd3c289b9c87ee25101a1bf2c36ee44d8e3`, migraciones aplicadas, política `/3`, frecuencia y configuración no secreta. No se ensayó una restauración completa.
+
+Al capturar, desarrollo conservaba 8 convocatorias, 8 favoritos, 5 publicaciones, 20 versiones, 35 documentos y 38 relaciones documentales, sin ejecuciones activas. Las versiones 16–20 y los documentos 29–35 proceden de la ejecución programada ID 7 del 12/11/2026 a las 14:46 de Ecuador: dos HTML de índice y cinco fichas. Las observaciones fueron `cambio_bytes`, sin prueba de cambio sustancial. La tarea Windows permanecía deshabilitada y no había servidor Django `runserver`. `rastreo.0013`, `convocatorias.0006` y `0007` seguían sin aplicar.
+
+**Recuperación segura, solo si se autoriza por separado:** conservar intactos este respaldo y el desarrollo actual; preparar una base PostgreSQL nueva y vacía y una raíz documental nueva, ambas aisladas. Verificar primero `SHA256SUMS.txt`, el manifiesto y `pg_restore --list`. Restaurar el dump en la base aislada con `pg_restore --no-owner --no-acl -d <base_aislada> becanexo_db.backup`, sin `--clean` ni restaurar sobre `becanexo_db`; copiar `documentos/` a la raíz documental aislada. Configurar credenciales por un medio privado, `DB_NAME` para esa base y `RASTREO_STORAGE_ROOT` para esa raíz. Usar una copia separada del código del commit indicado, compatible con el esquema anterior a las tres migraciones; el árbol de trabajo integrado actual no debe arrancarse contra el esquema restaurado sin migrarlo. Mantener Programador, rastreo y publicación automática detenidos; comprobar tablas, migraciones, 35 huellas documentales y relaciones mediante consultas de lectura y `rastreo integridad`. Una restauración completa solo podrá declararse probada después de ejecutar y verificar este ensayo aislado.
+
 ## Revisión administrativa — 29/10/2026
 
 Copia nueva previa a rastreo.0006/0007: `D:\Respaldos_BecaNexo\becanexo_pre_revisiones_20261029T103140Z_bd8aa7ea`.

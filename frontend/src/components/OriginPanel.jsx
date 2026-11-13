@@ -47,8 +47,29 @@ export default function OriginPanel({ offer }) {
     } catch (e) { setError(`${e.message} Conservamos la justificación y la evidencia seleccionada para corregir o reintentar.`) }
     finally { setBusy(false) }
   }
+  async function confirmVersion(event) {
+    event.preventDefault()
+    if (busy) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await offersApi.write(path(offer.id), 'POST', {
+        version_id: data.version_actual_id, version_convocatoria: data.version_convocatoria, motivo: motive,
+      })
+      setMotive(''); setNotice('Revisión de la versión registrada. Comprueba los demás campos antes de publicar.'); setRetry((v) => v + 1)
+    } catch (e) { setError(e.message) }
+    finally { setBusy(false) }
+  }
   if (!data && !error) return <section className="profile-card"><h2>Procedencia del rastreo</h2><p role="status">Consultando origen…</p></section>
   if (error && !data) return <section className="profile-card"><h2>Procedencia del rastreo</h2><Message>{error}</Message><Button type="button" onClick={() => setRetry((v) => v + 1)}>Reintentar consulta</Button></section>
+  if (data?.automatico) return <section className="profile-card crawl-origin"><h2>Borrador generado por rastreo</h2>
+    <p>Publicación {data.publicacion_id} · Versión {data.version_id}. Ninguna beca se publica automáticamente.</p>
+    <Link to={`/gestion/rastreo/publicaciones/${data.publicacion_id}`}>Consultar ficha, versiones y documentos originales</Link>
+    {data.cambio_relevante && <p role="status">La versión {data.version_actual_id} contiene cambios posteriores al borrador. Las ediciones administrativas se conservan.</p>}
+    {data.cambio_relevante && !data.revision_confirmada && <form onSubmit={confirmVersion}><label htmlFor="origin-version-motive">Motivo de revisión de la nueva versión</label><textarea id="origin-version-motive" required maxLength={1000} value={motive} onChange={(e) => setMotive(e.target.value)} /><Button type="submit" disabled={busy} busy={busy}>Confirmar versión revisada</Button></form>}
+    {error && <Message>{error}</Message>}{notice && <p role="status">{notice}</p>}
+    <h3>Información por verificar</h3>{data.bloqueos_actuales.length ? <ul>{data.bloqueos_actuales.map((item) => <li key={item}>{item}</li>)}</ul> : <p>Comprueba los datos y publica mediante la acción administrativa.</p>}
+    <details><summary>Datos de origen conservados</summary><dl>{Object.entries(data.datos_iniciales).filter(([, value]) => value).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{typeof value === 'object' ? `${value.nombre} (ID ${value.id}; confirmar antes de asignar)` : value}</dd></div>)}</dl></details>
+  </section>
   if (!data?.aplicacion) return null
   const pending = data.estado?.pendientes || []
   const blockers = data.estado?.bloqueos || []

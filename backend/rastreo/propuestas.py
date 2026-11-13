@@ -230,7 +230,9 @@ def guardar(actor_id, publication_id, payload, previous=None):
     if data['datos'].get('institucion') and not Institucion.objects.filter(pk=data['datos']['institucion']).exists():
         raise serializers.ValidationError({'institucion': 'Entidad inexistente.'})
     publication = Publicacion.objects.select_for_update().get(pk=publication_id)
-    if publication.convocatoria_id is not None:
+    from convocatorias.models import BorradorRastreo
+    automatic_offer = BorradorRastreo.objects.filter(publicacion=publication).first() if publication.convocatoria_id else None
+    if publication.convocatoria_id is not None and (not automatic_offer or automatic_offer.convocatoria_id != publication.convocatoria_id):
         raise ConflictoRevision('La publicación ya está integrada. Su propuesta aplicada permanece inmutable.')
     version = Version.objects.select_for_update().filter(pk=data['version_id'], publicacion=publication).first()
     if not version or not Observacion.objects.filter(pk=data['observacion_base_id'], version=version, publicacion=publication).exists():
@@ -244,7 +246,8 @@ def guardar(actor_id, publication_id, payload, previous=None):
     for reference in data['procedencia']:
         if reference['evidencia_id'] not in evidence_ids:
             raise serializers.ValidationError('Documento ajeno a la versión.')
-    result = evaluar(version, data['observacion_base_id'], data['datos'], data['procedencia'], data['revisiones'])
+    result = evaluar(version, data['observacion_base_id'], data['datos'], data['procedencia'], data['revisiones'],
+                     automatic_offer.convocatoria_id if automatic_offer else None)
     obj = Propuesta.objects.create(publicacion=publication, version=version, observacion_base_id=data['observacion_base_id'],
         sustituye_id=previous, actor=actor, clave_accion=key, datos=data['datos'], procedencia=data['procedencia'],
         pendientes=result, hash_peticion=request_hash, hash_propuesta=digest(dict(data, resultado=result)))

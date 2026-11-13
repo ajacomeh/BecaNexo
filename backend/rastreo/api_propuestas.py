@@ -29,6 +29,9 @@ class Propuestas(AuthView):
         source = identified(Publicacion, publication)
         rows = Propuesta.objects.filter(publicacion=source).select_related('actor').order_by('-id')
         result = paginar(request, rows, representar)
+        from convocatorias.models import BorradorRastreo
+        automatic = BorradorRastreo.objects.filter(publicacion=source).first()
+        result.data['borrador_automatico_id'] = automatic.convocatoria_id if automatic else None
         obs = latest(publication)
         result.data['contexto'] = {'version_id': obs.version_id, 'observacion_base_id': obs.pk,
                               'revisiones': list(vigentes(obs.version_id).values_list('pk', flat=True))} if obs else None
@@ -62,7 +65,11 @@ class ValidarPropuesta(AuthView):
         if request.data != {}:
             raise serializers.ValidationError('La validación utiliza el snapshot guardado; no acepta campos.')
         obj = identified(Propuesta, pk)
-        actual = evaluar(obj.version, obj.observacion_base_id, obj.datos, obj.procedencia, list(obj.revisiones.values_list('revision_id', flat=True)))
+        from convocatorias.models import BorradorRastreo
+        automatic = BorradorRastreo.objects.filter(publicacion=obj.publicacion).first()
+        actual = evaluar(obj.version, obj.observacion_base_id, obj.datos, obj.procedencia,
+                        list(obj.revisiones.values_list('revision_id', flat=True)),
+                        automatic.convocatoria_id if automatic else None)
         return Response({'guardado': obj.pendientes, 'actual': actual, 'contexto_cambio': actual != obj.pendientes})
 
 
@@ -77,6 +84,22 @@ class CrearBorrador(AuthView):
         return Response(representar_aplicacion(applied), status=201 if created else 200)
 
 
+class AplicarPropuestaBorrador(AuthView):
+    permission_classes = [AdministradorActivo]
+    http_method_names = ['post', 'options']
+
+    def post(self, request, pk):
+        parametros(request, set())
+        if set(request.data) != {'version_convocatoria', 'hash_propuesta', 'campos', 'motivo'}:
+            raise serializers.ValidationError('Indica versión, hash, campos seleccionados y motivo.')
+        from .aplicar_propuesta import ALLOWED_FIELDS, apply_proposal
+        version = serializers.IntegerField(min_value=1).run_validation(request.data['version_convocatoria'])
+        proposal_hash = serializers.RegexField(r'^[0-9a-f]{64}$').run_validation(request.data['hash_propuesta'])
+        fields = serializers.ListField(child=serializers.ChoiceField(choices=sorted(ALLOWED_FIELDS)), min_length=1).run_validation(request.data['campos'])
+        reason = serializers.CharField(max_length=1000, trim_whitespace=True).run_validation(request.data['motivo'])
+        return Response(apply_proposal(pk, request.user.pk, version, proposal_hash, fields, reason))
+
+
 class OrigenBorrador(AuthView):
     permission_classes = [AdministradorActivo]
     http_method_names = ['get', 'post', 'options']
@@ -86,6 +109,20 @@ class OrigenBorrador(AuthView):
         offer = identified(Convocatoria, pk)
         applied = Revision.objects.filter(convocatoria=offer, dimension='integracion', decision='aplicada').select_related('propuesta').first()
         if not applied:
+            from convocatorias.models import BorradorRastreo
+            from .auto_borradores import pending_for_publication
+            auto = BorradorRastreo.objects.filter(convocatoria=offer).select_related('publicacion', 'version').first()
+            if auto:
+                from .auto_borradores import latest_version, materially_changed, version_confirmed, review_baseline
+                current = latest_version(auto.publicacion)
+                return Response({'aplicacion': None, 'automatico': True, 'publicacion_id': auto.publicacion_id,
+                    'version_id': auto.version_id, 'datos_iniciales': auto.datos_iniciales,
+                    'version_actual_id': current.pk if current else None,
+                    'cambio_relevante': materially_changed(review_baseline(auto, offer), current),
+                    'revision_confirmada': version_confirmed(offer, current) if current else False,
+                    'version_convocatoria': offer.version,
+                    'bloqueos_actuales': pending_for_publication(offer, auto),
+                    'pendientes_iniciales': auto.pendientes_iniciales})
             return Response({'aplicacion': None})
         source = applied.propuesta
         return Response({'aplicacion': representar_aplicacion(applied), 'publicacion_id': source.publicacion_id,
@@ -101,5 +138,14 @@ class OrigenBorrador(AuthView):
     def post(self, request, pk):
         parametros(request, set())
         identified(Convocatoria, pk)
+        from convocatorias.models import BorradorRastreo
+        if BorradorRastreo.objects.filter(convocatoria_id=pk).exists():
+            if set(request.data) != {'version_id', 'version_convocatoria', 'motivo'}:
+                raise serializers.ValidationError('Confirma únicamente versión, versión del borrador y motivo.')
+            from .auto_borradores import confirm_latest_version
+            version_id = serializers.IntegerField(min_value=1).run_validation(request.data['version_id'])
+            offer_version = serializers.IntegerField(min_value=1).run_validation(request.data['version_convocatoria'])
+            version, created = confirm_latest_version(pk, version_id, offer_version, request.user.pk, request.data['motivo'])
+            return Response({'version_id': version.pk, 'confirmada': True}, status=201 if created else 200)
         row, created = resolver_pendiente(request.user.pk, pk, request.data)
         return Response({'id': row.pk, 'pendiente_id': row.detalle['pendiente_id']}, status=201 if created else 200)

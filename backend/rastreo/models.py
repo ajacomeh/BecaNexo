@@ -76,6 +76,8 @@ class Acceso(models.Model):
     documento = models.ForeignKey(Documento, null=True, on_delete=models.PROTECT)
     secuencia = models.PositiveIntegerField()
     rol = models.CharField(max_length=20)
+    metodo = models.CharField(max_length=4, default='GET')
+    parametros_publicos = models.JSONField(null=True, blank=True)
     url_original = models.TextField()
     url_normalizada = models.CharField(max_length=2048)
     url_final = models.TextField(null=True)
@@ -93,6 +95,7 @@ class Acceso(models.Model):
     class Meta:
         db_table = 'TRA_ACCESO_RASTREO'
         constraints = [models.UniqueConstraint(fields=['ejecucion', 'secuencia'], name='rast_acceso_secuencia'),
+                       check('rast_acceso_metodo', Q(metodo='GET', parametros_publicos__isnull=True) | Q(metodo='POST', parametros_publicos__isnull=False)),
                        check('rast_acceso_seq_positivo', Q(secuencia__gt=0)),
                        check('rast_acceso_rol', Q(rol__in=['robots', 'indice', 'ficha', 'bases'])),
                        check('rast_acceso_http', Q(http_status__isnull=True) | Q(http_status__gte=100, http_status__lte=599)),

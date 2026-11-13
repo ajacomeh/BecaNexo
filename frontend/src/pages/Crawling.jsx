@@ -60,11 +60,20 @@ function SourceFilter({ value, onChange }) {
   </div>
 }
 
+function SourceOverview() {
+  return <section className="profile-card"><h2>Fuentes configuradas</h2><Remote path="fuentes" params={{ page: 1, page_size: 50 }}>
+    {(data) => data.results.length ? <ul className="record-list crawl-list">{data.results.map(source => <li key={source.id}>
+      <strong>{source.nombre}</strong> · {source.activa ? 'Activa' : 'Inactiva'} · {source.politica_version || 'Política no informada'}
+      <p className="profile-note">{source.publicaciones ?? 0} publicaciones · {source.borradores ?? 0} borradores · Última ejecución: {source.ultima_ejecucion ? `${date(source.ultima_ejecucion.inicio)} (${label(source.ultima_ejecucion.estado)})` : 'sin ejecuciones'}</p>
+    </li>)}</ul> : <p>No hay fuentes configuradas.</p>}
+  </Remote></section>
+}
+
 function Publications() {
   const [filters, setFilters] = useState({})
   const [query, setQuery] = useState('')
   const [source, setSource] = useState('')
-  return <><CrawlingControl /><form className="profile-card crawl-filters" onSubmit={(event) => {
+  return <><CrawlingControl /><SourceOverview /><form className="profile-card crawl-filters" onSubmit={(event) => {
     event.preventDefault()
     setFilters({ q: query, ...(source ? { fuente: source } : {}) })
   }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" value={query} onChange={event => setQuery(event.target.value)} /></label><SourceFilter value={source} onChange={setSource} /><div className="crawl-filter-actions"><Button icon="search" type="submit">Buscar</Button>{(query || source || filters.q || filters.fuente) && <Button icon="clear" className="button-light" type="button" onClick={() => { setQuery(''); setSource(''); setFilters({}) }}>Limpiar</Button>}</div></form>
@@ -94,7 +103,7 @@ function Download({ document }) {
       link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (failure) { setError(failure.message) } finally { setBusy(false) }
   }
-  return <div><h3>Evidencia {document.id} · {label(document.rol)}</h3><p>{document.mime} · {document.tamano_bytes} bytes</p><details><summary>Datos técnicos</summary><p>SHA256: {document.sha256}</p><p>{document.url_original}</p></details><Button icon="download" busy={busy} onClick={download}>Descargar evidencia</Button><Message>{error}</Message></div>
+  return <article className="crawl-document"><div className="crawl-document-heading"><h3>Evidencia {document.id} · {label(document.rol)}</h3>{document.mime && <span className="status-pill">{document.mime}</span>}</div><p className="small-note">{document.tamano_bytes} bytes · La revisión documental se consulta en Revisiones administrativas.</p><details><summary>Datos técnicos</summary><p>SHA256: {document.sha256}</p><p>{document.url_original}</p></details><Button icon="download" busy={busy} onClick={download}>Descargar evidencia</Button><Message>{error}</Message></article>
 }
 
 
@@ -107,7 +116,6 @@ function StudyEvidence({ studies }) {
   }
   return <details><summary>Estudios y contextos mencionados</summary>
     <p>Estas menciones no asignan niveles ni crean opciones de estudio.</p>
-    {['destino', 'modalidad'].map(key => studies[key]?.texto_original && <p key={key}>{label(key)}: {studies[key].texto_original}</p>)}
     {[...groups.values()].map((group, index) => <article key={index} className="crawl-evidence"><h4>{label(group.funcion)} · {label(group.seccion)}</h4><p>{[...group.expressions].join(' · ')}</p><p className="crawl-text">{group.contexto_original}</p>{group.url && <Origin url={group.url} />}</article>)}
     {!groups.size && <p>Sin contextos académicos estructurados. Consulte la evidencia completa.</p>}
   </details>
@@ -118,28 +126,34 @@ function VersionContent({ version: v, focus }) {
   useEffect(() => { if (focus) heading.current?.focus() }, [focus])
   const data = v.datos_extraidos || {}
   const original = value => typeof value === 'string' ? value : value?.texto_original || value?.original
-  return <section className="profile-card">
+  const sections = [
+    ['Información general', ['titulo', 'descripcion', 'entidad_html']],
+    ['Fechas', ['cierre', 'fecha_publicacion']],
+    ['Requisitos y cobertura', ['requisitos', 'beneficio']],
+    ['Documentos, postulación y contacto', ['postulacion_y_documentos']],
+  ]
+  return <section className="profile-card crawl-version-content">
     <h2 ref={heading} tabIndex={-1}>Información de la versión {v.numero}</h2>
-    <h3>Resumen</h3><p>{label(v.estado_extraccion)} · Consulte las decisiones documentales de esta versión en Revisiones administrativas.</p>
-    <p>Procedencia: extracción HTML. No acredita documentos ni aprobación de las bases PDF. Las notas manuales documentales conservan su autoría; no son extracción automática.</p>
-    <h3>Información extraída</h3>
+    <div className="crawl-version-section"><h3>Resumen de extracción</h3><p>{label(v.estado_extraccion)} · Consulte las decisiones documentales de esta versión en Revisiones administrativas.</p></div>
+    <div className="crawl-version-section"><h3>Procedencia</h3><p>Extracción HTML. No acredita documentos ni aprobación de las bases PDF. Las notas manuales documentales conservan su autoría; no son extracción automática.</p></div>
+    <div className="crawl-version-section"><h3>Información extraída</h3>
     <p>Son menciones de la fuente, no requisitos u opciones confirmados. Se conserva el significado original de fechas y cantidades.</p>
-    <dl className="crawl-data">{['titulo', 'descripcion', 'entidad_html', 'beneficio', 'cierre', 'fecha_publicacion', 'requisitos', 'postulacion_y_documentos'].map(key => original(data[key]) ? <div key={key}><dt>{label(key)}</dt><dd className="crawl-text">{original(data[key])}{data[key]?.precision && <p>Precisión: {data[key].precision}</p>}</dd></div> : null)}</dl>
-    {data.estudios && <StudyEvidence studies={data.estudios} />}
-    <h3>Advertencias y ambigüedades</h3><TextData value={v.advertencias} />
-    <details><summary>Evidencia estructurada completa</summary><p>Incluye los contextos y referencias originales, también cuando se repiten.</p><TextData value={data} /></details>
-    <details><summary>Texto pertinente y versión del extractor</summary><p>{v.version_extractor} · Contrato {v.version_contrato}</p><p className="crawl-text">{v.texto_extraido}</p></details>
+    <div className="crawl-evidence-groups">{sections.map(([title, keys]) => <section key={title} className="crawl-evidence-group"><h4>{title}</h4><dl className="crawl-data">{keys.map(key => original(data[key]) ? <div key={key}><dt>{label(key)}</dt><dd className="crawl-text">{original(data[key])}{data[key]?.precision && <small>Precisión: {data[key].precision}</small>}</dd></div> : null)}</dl></section>)}
+    {data.estudios && <section className="crawl-evidence-group"><h4>Modalidad y destino mencionados</h4><dl className="crawl-data">{['modalidad', 'destino'].map(key => original(data.estudios[key]) && <div key={key}><dt>{label(key)}</dt><dd>{original(data.estudios[key])}</dd></div>)}</dl><StudyEvidence studies={data.estudios} /></section>}
+    <section className="crawl-evidence-group"><h4>Enlaces de la ficha</h4>{[['Bases', data.enlaces_bases], ['Postulación externa', data.enlaces_postulacion]].map(([title, links]) => <div key={title}><strong>{title}</strong>{links?.length ? <ul>{links.map((link, index) => <li key={index}><Origin url={link.url} /></li>)}</ul> : <p>No consta en la extracción.</p>}</div>)}</section></div></div>
+    <div className="crawl-version-section"><h3>Advertencias y ambigüedades</h3><TextData value={v.advertencias} /></div>
+    <div className="crawl-version-section"><details><summary>Evidencia estructurada completa</summary><p>Incluye los contextos y referencias originales, también cuando se repiten.</p><TextData value={data} /></details>
+    <details><summary>Texto original completo</summary><p>{v.version_extractor} · Contrato {v.version_contrato}</p><p className="crawl-text">{v.texto_extraido}</p></details></div>
   </section>
 }
 
 function Publication() {
   const { id } = useParams()
   const [selected, setSelected] = useState(null)
-  return <><Link to="/gestion/rastreo"><Icon name="back" /><span>Volver a publicaciones</span></Link><Remote key={id} path={`publicaciones/${id}`}>
+  return <><Link className="back-link crawl-publication-back" to="/gestion/rastreo"><Icon name="back" /><span>Volver a publicaciones</span></Link><Remote key={id} path={`publicaciones/${id}`}>
     {(p) => { const version = selected?.publication === id ? selected.version : p.version_observada_id
-      return <><h2>{p.titulo}</h2><p>{p.fuente.nombre} · Publicación detectada, no publicada en el catálogo</p><Origin url={p.url_original} /><p>Primera detección: {date(p.primera_deteccion)} · Última detección: {date(p.ultima_deteccion)}</p>
-        <p>La selección inicial corresponde a la última observación exitosa. Una versión anterior puede haberse observado de nuevo.</p>
-        <PageList key={id} title="Versiones registradas" path={`publicaciones/${id}/versiones`} render={(v) => <div>Versión {v.numero} · Registrada {date(v.creada_en)} <>{Number(version) === v.id ? <span className="crawl-selected">Versión seleccionada</span> : <Button icon="detail" onClick={() => setSelected({ publication: id, version: v.id })}>Consultar versión {v.numero}</Button>}</></div>} />
+      return <><header className="profile-card crawl-detail-hero"><div className="crawl-detail-heading"><h2>{p.titulo}</h2><span className="status-pill">Publicación detectada</span></div><span className="crawl-detail-source">Fuente: {p.fuente.nombre}</span><p className="crawl-detail-warning">Esta publicación todavía no es una convocatoria aprobada del catálogo.</p><dl className="crawl-detail-facts"><div className="crawl-detail-origin"><dt>URL de origen</dt><dd><Origin url={p.url_original} /></dd></div><div><dt>Primera detección</dt><dd>{date(p.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(p.ultima_deteccion)}</dd></div></dl></header>
+        <div className="crawl-detail-versions"><PageList key={id} title="Versiones registradas" path={`publicaciones/${id}/versiones`} render={(v) => <div className={`crawl-version-row${Number(version) === v.id ? ' crawl-version-current' : ''}`}><div><strong>Versión {v.numero}</strong><span className="small-note">Registrada {date(v.creada_en)}</span></div>{Number(version) === v.id ? <span className="crawl-selected">Versión seleccionada</span> : <Button icon="detail" onClick={() => setSelected({ publication: id, version: v.id })}>Consultar versión {v.numero}</Button>}</div>} /><p className="small-note crawl-version-note">La selección inicial corresponde a la última observación exitosa. Una versión anterior puede haberse observado de nuevo.</p></div>
         {version && <Remote key={`${id}:${version}`} path={`publicaciones/${id}/versiones/${version}`}>
           {(v) => <VersionContent version={v} focus={selected?.publication === id} />}
         </Remote>}

@@ -38,6 +38,35 @@ it('no presenta procedencia en una convocatoria manual', async () => {
   expect(screen.queryByText('Registrar resolución comprobada')).not.toBeInTheDocument()
 })
 
+it('muestra origen automático, pendientes y oferente sugerido sin asignarlo', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
+    publicacion_id: 15, version_id: 23,
+    bloqueos_actuales: ['Confirmar oferente ecuatoriano'],
+    datos_iniciales: { titulo: 'Beca nacional sintética', entidad_sugerida: { id: 4, nombre: 'Entidad sintética' } } })
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} /></MemoryRouter>)
+  expect(await screen.findByText('Borrador generado por rastreo')).toBeVisible()
+  expect(screen.getByText('Confirmar oferente ecuatoriano')).toBeVisible()
+  expect(screen.getByRole('link', { name: /Consultar ficha/ })).toHaveAttribute('href', '/gestion/rastreo/publicaciones/15')
+  await userEvent.setup().click(screen.getByText('Datos de origen conservados'))
+  expect(screen.getByText(/Entidad sintética \(ID 4; confirmar antes de asignar\)/)).toBeVisible()
+})
+
+it('avisa de una versión relevante y confirma su revisión sin aplicar datos automáticamente', async () => {
+  const current = { aplicacion: null, automatico: true, publicacion_id: 15,
+    version_id: 23, version_actual_id: 24, version_convocatoria: 3,
+    cambio_relevante: true, revision_confirmada: false,
+    bloqueos_actuales: ['Confirmar versión 24'], datos_iniciales: { titulo: 'Ficha original' } }
+  vi.spyOn(offersApi, 'get').mockResolvedValue(current)
+  const write = vi.spyOn(offersApi, 'write').mockResolvedValue({})
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 3 }} /></MemoryRouter>)
+  expect(await screen.findByText(/versión 24 contiene cambios posteriores/)).toBeVisible()
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText('Motivo de revisión de la nueva versión'), 'Comparé la ficha y conservo el título editado.')
+  await user.click(screen.getByRole('button', { name: 'Confirmar versión revisada' }))
+  await waitFor(() => expect(write).toHaveBeenCalledWith('gestion/rastreo/convocatorias/11/origen', 'POST',
+    { version_id: 24, version_convocatoria: 3, motivo: 'Comparé la ficha y conservo el título editado.' }))
+})
+
 it('muestra la correspondencia estable entre candidato y opción sin confundir alternativas iguales', async () => {
   vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('/documentos')
     ? { count: 0, results: [] } : { ...origin,
