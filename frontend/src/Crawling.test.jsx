@@ -10,7 +10,67 @@ vi.mock('./auth/context', () => ({ useAuth: () => auth }))
 afterEach(() => { cleanup(); vi.restoreAllMocks(); auth.status = 'authenticated'; auth.user = { nombre: 'Admin sintético', rol: 'administrador' } })
 const list = (results = [], count = results.length) => ({ results, count, page: 1, page_size: 12 })
 const publication = { id: 1, titulo: 'Publicación sintética', fuente: { id: 1, nombre: 'SIAU prueba' }, url_original: 'https://example.org/ficha', primera_deteccion: '2026-11-01T10:00:00Z', ultima_deteccion: '2026-11-02T10:00:00Z', version_observada_id: 1 }
+const candidate = { id: 24, titulo: 'Enlace de prueba', fuente: 'SIAU prueba', url: 'https://siau.senescyt.gob.ec/beca/', pagina: 3, primera_deteccion: '2026-11-15T10:00:00Z', ultima_deteccion: '2026-11-16T10:00:00Z', ejecucion_id: 10, estado: 'pendiente' }
 function open(path = '/gestion/rastreo') { render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>) }
+
+it('muestra los candidatos pendientes con total, procedencia y paginación', async () => {
+  const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path, params) => path.endsWith('/candidatos-indice')
+    ? list([{ ...candidate, id: params.page === 2 ? 23 : 24 }], 24) : list())
+  open('/gestion/rastreo/candidatos-indice')
+  expect(await screen.findByRole('heading', { name: 'Candidatos del índice', level: 2 })).toBeVisible()
+  expect(screen.getByText(/Todavía no constituyen convocatorias verificadas ni publicadas/)).toBeVisible()
+  expect(screen.getByText('Página 1 de 2 · 24 registros')).toBeVisible()
+  expect(screen.getByText('Enlace de prueba')).toBeVisible()
+  expect(screen.getByRole('link', { name: candidate.url })).toHaveAttribute('href', candidate.url)
+  expect(screen.getByRole('link', { name: 'Ejecución 10' })).toHaveAttribute('href', '/gestion/rastreo/ejecuciones/10')
+  expect(document.querySelector('.crawl-candidate')).toHaveTextContent('Página de origen3')
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+  expect(get).toHaveBeenCalledWith('gestion/rastreo/candidatos-indice', { page: 2 })
+})
+
+it('permite reintentar una consulta de candidatos fallida', async () => {
+  let attempts = 0
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => {
+    if (!path.endsWith('/candidatos-indice')) return list()
+    if (++attempts === 1) throw new Error('Consulta temporalmente no disponible')
+    return list([candidate])
+  })
+  open('/gestion/rastreo/candidatos-indice')
+  expect(await screen.findByText('Consulta temporalmente no disponible')).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+  expect(await screen.findByText('Enlace de prueba')).toBeVisible()
+})
+
+it('separa descubrimiento de metadatos y muestra candidatos asociados en la ejecución', async () => {
+  const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path) => {
+    if (path.endsWith('/ejecuciones/10')) return { id: 10, fuente: { nombre: 'SIAU' }, estado: 'parcial', tipo: 'metadatos_indice', candidatos_registrados: 12, accesos: 0, documentos_distintos: 0, publicaciones_observadas: 0, versiones_nuevas: 0, observaciones_sin_cambios: 0 }
+    if (path.endsWith('/candidatos-indice')) return list([candidate], 12)
+    return list()
+  })
+  open('/gestion/rastreo/ejecuciones/10')
+  expect(await screen.findByText(/Descubrimiento de metadatos/)).toBeVisible()
+  expect(screen.getByText('SIAU · Estado: parcial')).toBeVisible()
+  expect(screen.getByText('Candidatos registrados').nextSibling).toHaveTextContent('12')
+  expect(screen.getByText('Métricas documentales de esta ejecución')).toBeVisible()
+  await userEvent.click(screen.getByText('Métricas documentales de esta ejecución'))
+  expect(screen.getByText('Publicaciones observadas').nextSibling).toHaveTextContent('0')
+  expect(await screen.findByRole('heading', { name: 'Candidatos registrados en esta ejecución' })).toBeVisible()
+  expect(get).toHaveBeenCalledWith('gestion/rastreo/candidatos-indice', { ejecucion: '10', page: 1 })
+  expect(screen.getByRole('link', { name: candidate.url })).toHaveAttribute('href', candidate.url)
+})
+
+it('presenta las ejecuciones 9 y 10 como descubrimientos parciales con doce candidatos cada una', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue(list([9, 10].map(id => ({
+    id, fuente: { nombre: 'SIAU' }, estado: 'parcial', tipo: 'metadatos_indice',
+    candidatos_registrados: 12, accesos: 0, documentos_distintos: 0,
+    publicaciones_observadas: 0, versiones_nuevas: 0, observaciones_sin_cambios: 0,
+  }))))
+  open('/gestion/rastreo/ejecuciones')
+  await screen.findByRole('link', { name: 'Ejecución 9' })
+  expect(screen.getAllByText('SIAU · Estado: parcial')).toHaveLength(2)
+  expect(screen.getAllByText('Candidatos registrados')).toHaveLength(2)
+  expect(screen.getAllByText('12')).toHaveLength(2)
+})
 
 it('muestra carga, error, reintento y vacío sin acciones editoriales', async () => {
   let failed = false

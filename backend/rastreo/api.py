@@ -44,11 +44,16 @@ def publication_data(p):
 def execution_data(e):
     return {**{f: getattr(e, f) for f in ('id', 'estado', 'inicio', 'fin', 'publicaciones_observadas', 'versiones_nuevas', 'observaciones_sin_cambios')},
             'fuente': {'id': e.fuente_id, 'nombre': e.fuente.nombre},
-            'accesos': e.accesos_total, 'documentos_distintos': e.documentos_total}
+            'accesos': e.accesos_total, 'documentos_distintos': e.documentos_total,
+            'tipo': 'metadatos_indice' if e.version_extractor == 'siau-index-meta/1' else 'documental',
+            'candidatos_registrados': e.candidatos_total}
 
 
 def executions():
-    return Ejecucion.objects.select_related('fuente').annotate(accesos_total=Count('accesos'), documentos_total=Count('accesos__documento', distinct=True))
+    return Ejecucion.objects.select_related('fuente').annotate(
+        accesos_total=Count('accesos', distinct=True),
+        documentos_total=Count('accesos__documento', distinct=True),
+        candidatos_total=Count('candidatoindice', distinct=True))
 
 
 class ReadOnly(AuthView):
@@ -73,12 +78,15 @@ class Fuentes(ReadOnly):
 class CandidatosIndice(ReadOnly):
     """Metadatos del índice: no equivalen a fichas verificadas ni a borradores."""
     def get(self, request):
-        parametros(request, {'page', 'page_size', 'fuente'})
+        parametros(request, {'page', 'page_size', 'fuente', 'ejecucion'})
         rows = CandidatoIndice.objects.select_related('fuente').order_by('-ultima_deteccion', '-id')
         if 'fuente' in request.query_params:
             rows = rows.filter(fuente_id=entero(request.query_params, 'fuente', None))
+        if 'ejecucion' in request.query_params:
+            rows = rows.filter(ultima_ejecucion_id=entero(request.query_params, 'ejecucion', None))
         return paginar(request, rows, lambda row: {
-            'id': row.pk, 'fuente_id': row.fuente_id, 'titulo': row.titulo_publico,
+            'id': row.pk, 'fuente_id': row.fuente_id, 'fuente': row.fuente.nombre,
+            'titulo': row.titulo_publico,
             'url': row.url_normalizada, 'pagina': row.pagina,
             'primera_deteccion': row.primera_deteccion, 'ultima_deteccion': row.ultima_deteccion,
             'ejecucion_id': row.ultima_ejecucion_id, 'respuesta_sha256': row.respuesta_sha256,

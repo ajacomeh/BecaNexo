@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from . import tests as base
 from .models import CandidatoIndice, Documento, Publicacion, Version, Ejecucion, Incidencia
@@ -146,6 +147,34 @@ class MetadataReportTests(SimpleTestCase):
 class MetadataCaptureTests(TransactionTestCase):
     setUp = base.RastreoTests.setUp
     source = base.RastreoTests.source
+
+    def test_admin_lists_candidates_by_execution_and_identifies_metadata_run(self):
+        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        source = self.source()
+        now = timezone.now()
+        run = Ejecucion.objects.create(
+            fuente=source, solicitado_por=self.actor, origen='manual',
+            inicio=now, fin=now, estado='parcial',
+            version_extractor='siau-index-meta/1', configuracion_snapshot={})
+        for number in (1, 2):
+            CandidatoIndice.objects.create(
+                fuente=source, ultima_ejecucion=run,
+                url_normalizada=f'https://siau.senescyt.gob.ec/beca-{number}/',
+                titulo_publico=f'Beca {number}', pagina=number,
+                respuesta_sha256='a' * 64, primera_deteccion=now, ultima_deteccion=now)
+        url = f'/api/gestion/rastreo/candidatos-indice/?ejecucion={run.pk}&page_size=1'
+        self.assertEqual(APIClient().get(url).status_code, 403)
+        client = APIClient()
+        client.force_login(self.actor)
+        first = client.get(url)
+        self.assertEqual((first.status_code, first.data['count'], len(first.data['results'])), (200, 2, 1))
+        self.assertEqual(first.data['results'][0]['ejecucion_id'], run.pk)
+        self.assertEqual(first.data['results'][0]['estado'], 'pendiente')
+        self.assertEqual(first.data['results'][0]['fuente'], source.nombre)
+        self.assertEqual(client.get(url + '&page=2').data['count'], 2)
+        self.assertEqual(client.get('/api/gestion/rastreo/candidatos-indice/?ejecucion=0').status_code, 400)
+        detail = client.get(f'/api/gestion/rastreo/ejecuciones/{run.pk}/')
+        self.assertEqual((detail.data['tipo'], detail.data['candidatos_registrados']), ('metadatos_indice', 2))
 
     def test_429_retry_after_blocks_premature_run_without_candidates(self):
         self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')

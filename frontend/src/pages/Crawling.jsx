@@ -194,14 +194,27 @@ function Publication() {
   </Remote></>
 }
 
+function Candidate({ item }) {
+  return <article className="crawl-publication crawl-candidate"><div className="crawl-publication-heading"><h3>{item.titulo}</h3><span className="status-pill">Pendiente</span></div>
+    <p className="crawl-publication-source">{item.fuente}</p><p className="crawl-publication-url"><Origin url={item.url} /></p>
+    <dl className="crawl-publication-dates"><div><dt>Primera detección</dt><dd>{date(item.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(item.ultima_deteccion)}</dd></div><div><dt>Página de origen</dt><dd>{item.pagina}</dd></div><div><dt>Ejecución de registro</dt><dd><Link to={`/gestion/rastreo/ejecuciones/${item.ejecucion_id}`}>Ejecución {item.ejecucion_id}</Link></dd></div></dl>
+  </article>
+}
+
+function Candidates({ execution }) {
+  return <><p className="crawl-detail-warning">Estos registros son enlaces detectados automáticamente. Todavía no constituyen convocatorias verificadas ni publicadas.</p>
+    <PageList key={execution || 'all'} title={execution ? 'Candidatos registrados en esta ejecución' : 'Candidatos del índice'} path="candidatos-indice" params={execution ? { ejecucion: execution } : {}} render={(item) => <Candidate item={item} />} /></>
+}
+
 function ExecutionInfo({ item }) {
-  return <><p>{item.fuente.nombre} · {label(item.estado)}</p><p>Inicio: {date(item.inicio)} · Fin: {date(item.fin)}</p><dl className="crawl-metrics"><div><dt>Accesos HTTP (incluye intentos)</dt><dd>{item.accesos}</dd></div><div><dt>Documentos distintos de esta ejecución</dt><dd>{item.documentos_distintos}</dd></div><div><dt>Publicaciones observadas</dt><dd>{item.publicaciones_observadas}</dd></div><div><dt>Versiones nuevas</dt><dd>{item.versiones_nuevas}</dd></div><div><dt>Observaciones sin cambios</dt><dd>{item.observaciones_sin_cambios}</dd></div></dl></>
+  const metadata = item.tipo === 'metadatos_indice'
+  const documentaryMetrics = <dl className="crawl-metrics"><div><dt>{metadata ? 'Accesos documentales registrados' : 'Accesos HTTP (incluye intentos)'}</dt><dd>{item.accesos}</dd></div><div><dt>Documentos distintos de esta ejecución</dt><dd>{item.documentos_distintos}</dd></div><div><dt>Publicaciones observadas</dt><dd>{item.publicaciones_observadas}</dd></div><div><dt>Versiones nuevas</dt><dd>{item.versiones_nuevas}</dd></div><div><dt>Observaciones sin cambios</dt><dd>{item.observaciones_sin_cambios}</dd></div></dl>
+  return <><p>{item.fuente.nombre} · {metadata ? `Estado: ${item.estado}` : label(item.estado)}</p>{metadata && <p className="crawl-detail-warning"><strong>Descubrimiento de metadatos.</strong> Se registraron {item.candidatos_registrados} candidatos de índice. No se descargaron fichas ni documentos; las consultas al índice no se detallan como accesos documentales.</p>}<p>Inicio: {date(item.inicio)} · Fin: {date(item.fin)}</p>{metadata ? <><dl className="crawl-metrics"><div><dt>Candidatos registrados</dt><dd>{item.candidatos_registrados}</dd></div></dl><details><summary>Métricas documentales de esta ejecución</summary>{documentaryMetrics}</details></> : documentaryMetrics}</>
 }
 
 function Execution() {
   const { id } = useParams()
-  return <><Link to="/gestion/rastreo/ejecuciones"><Icon name="back" /><span>Volver a ejecuciones</span></Link><h2>Ejecución {id}</h2><Remote key={id} path={`ejecuciones/${id}`}>{(e) => <ExecutionInfo item={e} />}</Remote>
-    <p>Una descarga finalizada no aprueba documentos. Los documentos distintos pueden incluir evidencia almacenada anteriormente.</p>
+  return <><Link to="/gestion/rastreo/ejecuciones"><Icon name="back" /><span>Volver a ejecuciones</span></Link><h2>Ejecución {id}</h2><Remote key={id} path={`ejecuciones/${id}`}>{(e) => <><ExecutionInfo item={e} />{e.tipo === 'metadatos_indice' ? <Candidates execution={id} /> : <p>Una descarga finalizada no aprueba documentos. Los documentos distintos pueden incluir evidencia almacenada anteriormente.</p>}</>}</Remote>
     <PageList key={`access:${id}`} title="Accesos" path={`ejecuciones/${id}/accesos`} render={(a) => <div><p>{label(a.rol)} · HTTP {a.http_status || 'Sin respuesta'} · {label(a.resultado)}</p><Origin url={a.url_original} /><p>Inicio de petición: {date(a.inicio_peticion_en)} · Fin: {date(a.fin)}</p>{a.publicacion_id && <Link to={`/gestion/rastreo/publicaciones/${a.publicacion_id}`}>Publicación {a.publicacion_id}</Link>}</div>} />
     <PageList key={`issues:${id}`} title="Incidencias" path={`ejecuciones/${id}/incidencias`} render={(i) => <div><h3>{label(i.codigo)}</h3><p>{label(i.gravedad)} · {date(i.detectada_en)}</p></div>} />
   </>
@@ -210,7 +223,8 @@ function Execution() {
 export default function Crawling() {
   const { pathname } = useLocation()
   const executions = pathname.includes("/ejecuciones")
-  return <ProfileLayout><div className="crawl"><h1>Rastreo</h1><p>Consulta publicaciones y evidencias detectadas por fuentes autorizadas. La revisión y publicación se completan en Convocatorias.</p><nav className="heading-actions crawl-tabs" aria-label="Secciones de rastreo"><Link aria-current={!executions ? "page" : undefined} to="/gestion/rastreo">Publicaciones detectadas</Link><Link aria-current={executions ? "page" : undefined} to="/gestion/rastreo/ejecuciones">Ejecuciones</Link></nav>
-    <Routes><Route index element={<Publications />} /><Route path="publicaciones/:id" element={<Publication />} /><Route path="ejecuciones" element={<PageList title="Ejecuciones" path="ejecuciones" render={(e) => <div><h3><Link to={`/gestion/rastreo/ejecuciones/${e.id}`}>Ejecución {e.id}</Link></h3><ExecutionInfo item={e} /><Link className="secondary-link" to={`/gestion/rastreo/ejecuciones/${e.id}`}><Icon name="detail" /><span>Ver detalle de ejecución</span></Link></div>} />} /><Route path="ejecuciones/:id" element={<Execution />} /><Route path="*" element={<p>Ruta de rastreo no encontrada.</p>} /></Routes>
+  const candidates = pathname.includes("/candidatos-indice")
+  return <ProfileLayout><div className="crawl"><h1>Rastreo</h1><p>Consulta publicaciones y evidencias detectadas por fuentes autorizadas. La revisión y publicación se completan en Convocatorias.</p><nav className="heading-actions crawl-tabs" aria-label="Secciones de rastreo"><Link aria-current={!executions && !candidates ? "page" : undefined} to="/gestion/rastreo">Publicaciones detectadas</Link><Link aria-current={executions ? "page" : undefined} to="/gestion/rastreo/ejecuciones">Ejecuciones</Link><Link aria-current={candidates ? "page" : undefined} to="/gestion/rastreo/candidatos-indice">Candidatos del índice</Link></nav>
+    <Routes><Route index element={<Publications />} /><Route path="publicaciones/:id" element={<Publication />} /><Route path="candidatos-indice" element={<Candidates />} /><Route path="ejecuciones" element={<PageList title="Ejecuciones" path="ejecuciones" render={(e) => <div><h3><Link to={`/gestion/rastreo/ejecuciones/${e.id}`}>Ejecución {e.id}</Link></h3><ExecutionInfo item={e} /><Link className="secondary-link" to={`/gestion/rastreo/ejecuciones/${e.id}`}><Icon name="detail" /><span>Ver detalle de ejecución</span></Link></div>} />} /><Route path="ejecuciones/:id" element={<Execution />} /><Route path="*" element={<p>Ruta de rastreo no encontrada.</p>} /></Routes>
   </div></ProfileLayout>
 }
