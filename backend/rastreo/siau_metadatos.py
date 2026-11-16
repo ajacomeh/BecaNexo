@@ -5,11 +5,23 @@ oferente, los requisitos ni la aptitud editorial de la beca.
 """
 import hashlib
 import json
+from datetime import timedelta
 from urllib.robotparser import RobotFileParser
 
-from convocatorias.siau_red import AGENT, INDEX, NATIONAL_INDEX, ROBOTS, Downloader, AccessError
+from convocatorias.siau_red import (AGENT, INDEX, NATIONAL_INDEX, ROBOTS, Downloader,
+                                    AccessError, SourceBackoff, retry_after_at)
 from .descubrimiento import MAX_FICHAS, NationalIndexLinks
 from .siau_ajax import AJAX_INDEX, MAX_INDEX_PAGES, ajax_request, grid_config, robots_allowed, robots_allow_ajax
+
+
+class MetadataBackoff(SourceBackoff):
+    """Respuesta de reducción de frecuencia, sin reintentar ni visitar más rutas."""
+
+    def __init__(self, status, headers):
+        self.status = status
+        self.retry_after = (headers.get('retry-after') or '').strip()[:128]
+        self.retry_at = retry_after_at(headers)
+        super().__init__(f'HTTP {status}; reducir accesos a la fuente.')
 
 
 def _cards(content, page, origin, method):
@@ -54,6 +66,8 @@ def consultar_una_vez(previous_page=None, known_urls=(), limit=MAX_FICHAS):
     """Consulta pública explícita, sin escribir base de datos ni archivos."""
     client = Downloader(allowed_urls={ROBOTS, INDEX, NATIONAL_INDEX, AJAX_INDEX})
     status, headers, robots = client.once(ROBOTS)
+    if status in (429, 503):
+        raise MetadataBackoff(status, headers)
     if status != 200 or headers.get('content-type', '').split(';')[0].lower() != 'text/plain':
         raise AccessError('robots.txt no verificable.')
     if not all(robots_allowed(robots, url) for url in (INDEX, NATIONAL_INDEX)) or not robots_allow_ajax(robots):
@@ -65,6 +79,8 @@ def consultar_una_vez(previous_page=None, known_urls=(), limit=MAX_FICHAS):
         raise AccessError('crawl-delay excede el presupuesto admitido.')
     client.pause = max(client.pause, delay)
     status, headers, first = client.once(NATIONAL_INDEX)
+    if status in (429, 503):
+        raise MetadataBackoff(status, headers)
     if status != 200 or headers.get('content-type', '').split(';')[0].lower() != 'text/html':
         raise AccessError('Índice nacional no verificable; no continuar.')
     config = grid_config(first)
@@ -75,6 +91,8 @@ def consultar_una_vez(previous_page=None, known_urls=(), limit=MAX_FICHAS):
         page = previous_page + 1 if previous_page and 2 <= previous_page < maximum else 2
         body, _public_parameters = ajax_request(config, page)
         status, headers, second = client.post_once(AJAX_INDEX, body)
+        if status in (429, 503):
+            raise MetadataBackoff(status, headers)
         if status != 200 or headers.get('content-type', '').split(';')[0].lower() != 'text/html':
             raise AccessError('Página AJAX no verificable; no conservar resultados parciales.')
     return report(first, second, ajax_page=page, known_urls=known_urls,
@@ -163,9 +181,19 @@ def capturar_metadatos(source_id, actor_id, key, reason):
                     estado='parcial' if result['cobertura_parcial'] else 'finalizada', fin=now)
         except Exception as exc:
             with transaction.atomic():
+                detail = {'error': type(exc).__name__}
+                summary = type(exc).__name__
+                if isinstance(exc, MetadataBackoff):
+                    retry_due = max(execution.inicio + timedelta(minutes=source.frecuencia_min),
+                                    exc.retry_at or execution.inicio)
+                    detail.update(http_status=exc.status, retry_after=exc.retry_after or None,
+                                  proximo_intento=retry_due.isoformat())
+                    summary = f'HTTP {exc.status}'
+                    Incidencia.objects.create(fuente=source, ejecucion=execution, codigo='REINTENTO_FUENTE',
+                                              gravedad='aviso', detalle=retry_due.isoformat())
                 Incidencia.objects.create(fuente=source, ejecucion=execution, codigo='METADATOS_FALLIDOS',
-                    gravedad='error', detalle=type(exc).__name__)
+                    gravedad='error', detalle=json.dumps(detail, sort_keys=True))
                 Ejecucion.objects.filter(pk=execution.pk).update(
-                    estado='fallida', fin=timezone.now(), error_resumen=type(exc).__name__)
+                    estado='fallida', fin=timezone.now(), error_resumen=summary)
             raise
         return execution

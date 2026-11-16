@@ -1,5 +1,9 @@
 # Avance de BecaNexo
 
+## Consulta limitada SIAU: espera HTTP 429/503 (16/11/2026)
+
+`siau_metadatos` registra el código HTTP y `Retry-After` en la incidencia de fallo y reutiliza `REINTENTO_FUENTE` para bloquear el siguiente intento hasta el mayor plazo entre la frecuencia de la fuente y la espera indicada. Sin cabecera válida conserva el intervalo configurado. No reintenta, no avanza el cursor ni guarda candidatos tras ese fallo. Aprobaron 11 pruebas focalizadas con HTTP simulado en `test_becanexo_fusion_db`, una repetición de la prueba ajustada, Django check y `git diff --check`. No se consultó SIAU ni se modificó `becanexo_db`.
+
 ## Migración controlada de publicación sin oferente identificado (13/11/2026)
 
 Se creó y verificó el respaldo privado `D:\Respaldos_BecaNexo\becanexo_pre_convocatorias_0008_20261114T004048Z_30692541` antes de aplicar `convocatorias.0008_publicacion_sin_oferente` exclusivamente en `becanexo_db`. La operación retiró solo la restricción `conv_validada_oferente`; permanecen las demás restricciones, y `migrate --check`, Django check y el plan sin migraciones pendientes aprobaron. Las huellas de las filas de convocatorias, favoritos, publicaciones, versiones, documentos, relaciones documentales y borradores coincidieron antes y después.

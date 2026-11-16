@@ -1,6 +1,7 @@
 """Metadatos de tarjetas SIAU: respuestas simuladas y base aislada."""
 import uuid
 from datetime import timedelta
+from email.utils import format_datetime
 from unittest.mock import patch
 from urllib.parse import parse_qs
 import json
@@ -13,8 +14,10 @@ from django.utils import timezone
 from . import tests as base
 from .models import CandidatoIndice, Documento, Publicacion, Version, Ejecucion, Incidencia
 from .services import enable_discovery, enable_national_discovery
-from .siau_metadatos import report, consultar_una_vez, capturar_metadatos, last_completed_page
+from .siau_metadatos import (MetadataBackoff, report, consultar_una_vez,
+                            capturar_metadatos, last_completed_page)
 from .siau_ajax import AJAX_INDEX
+from .web_frequency import source_retry_due
 from convocatorias.siau_red import ROBOTS, NATIONAL_INDEX, AccessError
 from convocatorias.models import Convocatoria
 
@@ -26,6 +29,33 @@ def cards(*pairs):
 
 
 class MetadataReportTests(SimpleTestCase):
+    def test_http_429_stops_before_index_without_retry(self):
+        with patch('rastreo.siau_metadatos.Downloader.once', return_value=(
+                429, {'retry-after': '90'}, b'')) as get, patch(
+                'rastreo.siau_metadatos.Downloader.post_once') as post:
+            with self.assertRaises(MetadataBackoff) as caught:
+                consultar_una_vez()
+        self.assertEqual(caught.exception.status, 429)
+        self.assertEqual(caught.exception.retry_after, '90')
+        self.assertEqual(get.call_count, 1)
+        post.assert_not_called()
+
+    def test_http_503_date_stops_after_one_ajax_request(self):
+        from .test_ajax_pagination import index
+        retry_at = timezone.now() + timedelta(hours=26)
+        responses = [(200, {'content-type': 'text/plain'},
+                      b'User-agent: *\nDisallow: /wp-admin/\nAllow: /wp-admin/admin-ajax.php\n'),
+                     (200, {'content-type': 'text/html'}, index())]
+        with patch('rastreo.siau_metadatos.Downloader.once', side_effect=responses) as get, patch(
+                'rastreo.siau_metadatos.Downloader.post_once', return_value=(
+                    503, {'retry-after': format_datetime(retry_at, usegmt=True)}, b'')) as post:
+            with self.assertRaises(MetadataBackoff) as caught:
+                consultar_una_vez()
+        self.assertEqual(caught.exception.status, 503)
+        self.assertGreaterEqual(caught.exception.retry_at, retry_at.replace(microsecond=0))
+        self.assertEqual(get.call_count, 2)
+        self.assertEqual(post.call_count, 1)
+
     def test_live_reader_uses_only_public_index_and_one_ajax_page(self):
         from .test_ajax_pagination import index
         seen = []
@@ -116,6 +146,47 @@ class MetadataReportTests(SimpleTestCase):
 class MetadataCaptureTests(TransactionTestCase):
     setUp = base.RastreoTests.setUp
     source = base.RastreoTests.source
+
+    def test_429_retry_after_blocks_premature_run_without_candidates(self):
+        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        source = self.source()
+        enable_discovery(self.actor.pk, 'Preparar índice de pruebas')
+        enable_national_discovery(self.actor.pk, 'Preparar nacionales de pruebas')
+        with patch('rastreo.siau_metadatos.consultar_una_vez',
+                   side_effect=MetadataBackoff(429, {'retry-after': '90000'})):
+            with self.assertRaises(MetadataBackoff):
+                capturar_metadatos(source.pk, self.actor.pk, uuid.uuid4(), 'Prueba 429')
+        run = Ejecucion.objects.latest('pk')
+        failure = json.loads(run.incidencias.get(codigo='METADATOS_FALLIDOS').detalle)
+        self.assertEqual((failure['http_status'], failure['retry_after']), (429, '90000'))
+        self.assertEqual(run.estado, 'fallida')
+        self.assertGreater(source_retry_due(source), run.inicio + timedelta(hours=24))
+        self.assertEqual(CandidatoIndice.objects.count(), 0)
+        self.assertIsNone(last_completed_page(source))
+        with patch('rastreo.siau_metadatos.consultar_una_vez') as read:
+            with self.assertRaises(ValidationError):
+                capturar_metadatos(source.pk, self.actor.pk, uuid.uuid4(), 'Intento prematuro')
+            read.assert_not_called()
+
+    def test_503_without_retry_after_uses_configured_frequency(self):
+        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        source = self.source()
+        enable_discovery(self.actor.pk, 'Preparar índice de pruebas')
+        enable_national_discovery(self.actor.pk, 'Preparar nacionales de pruebas')
+        with patch('rastreo.siau_metadatos.consultar_una_vez',
+                   side_effect=MetadataBackoff(503, {})):
+            with self.assertRaises(MetadataBackoff):
+                capturar_metadatos(source.pk, self.actor.pk, uuid.uuid4(), 'Prueba 503')
+        run = Ejecucion.objects.latest('pk')
+        failure = json.loads(run.incidencias.get(codigo='METADATOS_FALLIDOS').detalle)
+        self.assertEqual((failure['http_status'], failure['retry_after']), (503, None))
+        self.assertEqual(source_retry_due(source), run.inicio + timedelta(minutes=source.frecuencia_min))
+        self.assertEqual(CandidatoIndice.objects.count(), 0)
+        self.assertIsNone(last_completed_page(source))
+        with patch('rastreo.siau_metadatos.consultar_una_vez') as read:
+            with self.assertRaises(ValidationError):
+                capturar_metadatos(source.pk, self.actor.pk, uuid.uuid4(), 'Intento prematuro')
+            read.assert_not_called()
 
     def test_audited_preview_does_not_create_fiches_documents_or_drafts(self):
         self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
