@@ -2,12 +2,25 @@ import json
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from django.db import transaction
+from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 from . import models as m, serializers as s
 
 
 def publicas():
-    return m.Convocatoria.objects.filter(activa=True, revision="validada", institucion__pais__codigo="EC").select_related("institucion", "tipo_beca")
+    return m.Convocatoria.objects.filter(activa=True, revision="validada").filter(
+        Q(institucion__pais__codigo="EC") |
+        Q(institucion__isnull=True, origen_automatico__isnull=False)
+    ).select_related("institucion", "tipo_beca")
+
+
+def postulables():
+    """Solo oportunidades con plazo confirmado y vigente; el histórico sigue consultable."""
+    now = timezone.now()
+    today = timezone.localdate(now)
+    return publicas().filter(Q(apertura__isnull=True) | Q(apertura__lte=now)).filter(
+        Q(cierre__gt=now) | Q(cierre_dia__gte=today)
+    )
 
 
 def detalle(obj, publico=False):
@@ -16,10 +29,11 @@ def detalle(obj, publico=False):
     if not publico:
         origin = m.BorradorRastreo.objects.filter(convocatoria=obj).first()
         if origin:
-            from rastreo.auto_borradores import pending_for_publication
+            from rastreo.auto_borradores import pending_for_publication, review_notes
         data["origen_automatico"] = ({"publicacion_id": origin.publicacion_id, "version_id": origin.version_id,
                                         "pendientes_iniciales": origin.pendientes_iniciales,
-                                        "bloqueos_actuales": pending_for_publication(obj, origin)} if origin else None)
+                                        "bloqueos_actuales": pending_for_publication(obj, origin),
+                                        "observaciones": review_notes(obj, origin)} if origin else None)
     data["tipo_beca_nombre"] = obj.tipo_beca.nombre if obj.tipo_beca else None
     opciones = obj.opciones.filter(activa=True) if publico else obj.opciones.all()
     data["opciones"] = s.OpcionSerializer(opciones, many=True).data
@@ -56,7 +70,9 @@ def touch(obj):
 
 @transaction.atomic
 def publicar(obj):
-    era_publica = obj.activa and obj.revision == "validada" and bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC"
+    era_publica = obj.activa and obj.revision == "validada" and (
+        (bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC") or
+        m.BorradorRastreo.objects.filter(convocatoria=obj).exists())
     errors = []
     from rastreo.integracion import estado_publicacion_integrada
     origen = estado_publicacion_integrada(obj)
@@ -66,7 +82,10 @@ def publicar(obj):
     if auto_origin:
         from rastreo.auto_borradores import pending_for_publication
         errors.extend(pending_for_publication(obj, auto_origin))
-    if not obj.institucion_id or obj.institucion.pais.codigo != "EC": errors.append("El oferente debe ser ecuatoriano.")
+    if obj.institucion_id and obj.institucion.pais.codigo != "EC":
+        errors.append("El oferente identificado debe ser ecuatoriano.")
+    if not obj.institucion_id and not auto_origin:
+        errors.append("La convocatoria manual requiere un oferente ecuatoriano.")
     if not obj.titulo.strip() or not obj.descripcion.strip() or not obj.url_oficial:
         errors.append("Completa título, descripción y enlace oficial.")
     opciones = list(obj.opciones.filter(activa=True))

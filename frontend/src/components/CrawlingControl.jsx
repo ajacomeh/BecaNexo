@@ -13,12 +13,13 @@ function unavailableReason(state, now) {
   if (state.requiere_revision) return 'Pendiente de recuperación: revisa el proceso y su marcador.'
   if (state.ejecucion_activa) return 'Hay un rastreo en curso.'
   if (state.inicio_pendiente) return 'Hay una solicitud de inicio pendiente.'
+  if (state.fuentes_habilitadas === 0 || state.fuentes_activas === 0) return 'No hay fuentes activas y autorizadas para iniciar.'
   if (state.bloqueo_fuente) return 'La fuente requiere revisión tras una respuesta HTTP 429/503.'
   if (state.registro_invalido) return 'El registro de solicitudes requiere revisión.'
   if (!now && state.proxima_manual) return 'Comprobando tiempo restante.'
   if (waiting(state.proxima_manual, now)) return `Disponible en ${remaining(state.proxima_manual, now)} por frecuencia.`
-  if (!state.rastreo_extraordinario_habilitado) return 'La excepción de cinco minutos no está autorizada; el inicio ordinario respeta las 24 horas.'
-  return 'La fuente o su configuración no permite iniciar ahora.'
+  if (!state.rastreo_extraordinario_habilitado) return 'El inicio ordinario respeta la frecuencia de cada fuente; la excepción de cinco minutos no está autorizada.'
+  return 'Ninguna fuente cumple ahora sus condiciones de inicio.'
 }
 
 export default function CrawlingControl() {
@@ -74,34 +75,30 @@ export default function CrawlingControl() {
   }
 
   return <section className="profile-card crawl-control" aria-labelledby="crawl-control-title">
-    <div className="crawl-control-heading"><div><h2 id="crawl-control-title">Rastreo SIAU</h2>
-      <p>Consulta publicaciones oficiales; los resultados requieren revisión administrativa antes de aparecer en el catálogo.</p></div>
+    <div className="crawl-control-heading"><div><h2 id="crawl-control-title">Rastreo</h2>
+      <p>Descubrimiento de becas en fuentes autorizadas. Cada publicación requiere revisión antes de llegar al catálogo.</p></div>
       <Button type="button" icon="crawling" busy={busy} disabled={!state?.puede_iniciar} aria-describedby="crawl-availability" onClick={() => setConfirming(true)}>Iniciar rastreo</Button>
     </div>
     {!state && !error && <p role="status">Consultando estado del rastreo…</p>}
     <Message>{error}</Message>
     {state && <div className="crawl-control-status">
-      <p className="crawl-control-source">Fuente: SIAU · Política: {state.politica_version}.</p>
-      <div className="crawl-control-modes">
-        <section className="crawl-control-mode" aria-labelledby="crawl-automatic-title">
-          <h3 id="crawl-automatic-title">Rastreo automático</h3>
-          <p>Frecuencia: cada {state.frecuencia_min === 1440 ? '24 horas (1440 minutos)' : `${state.frecuencia_min} minutos`}.</p>
-          <p>Próxima ventana permitida: {date(state.proxima_ejecucion)}.</p>
-          <p>Estado: {state.ejecucion_activa ? 'ocupado por una captura en curso' : !now && state.proxima_ejecucion ? 'calculando espera' : waiting(state.proxima_ejecucion, now) ? `en espera · ${remaining(state.proxima_ejecucion, now)}` : state.proxima_ejecucion ? 'ventana cumplida; pendiente del Programador' : 'sin ejecución previa'}.</p>
-        </section>
-        <section className="crawl-control-mode" aria-labelledby="crawl-manual-title">
-          <h3 id="crawl-manual-title">Rastreo manual</h3>
-          <p>Intervalo extraordinario propuesto: 5 minutos.</p>
-          <p>Estado: {state.rastreo_extraordinario_habilitado ? 'habilitado' : 'pendiente de autorización'}.</p>
-          <p>{state.rastreo_extraordinario_habilitado ? 'Próxima ejecución manual permitida' : 'Próximo inicio manual ordinario'}: {date(state.proxima_manual)}.</p>
-        </section>
-      </div>
+      <dl className="crawl-control-metrics"><div><dt>Fuentes activas</dt><dd>{state.fuentes_activas == null ? '—' : `${state.fuentes_activas} ${state.fuentes_activas === 1 ? 'fuente activa' : 'fuentes activas'}`}</dd></div><div><dt>Publicaciones detectadas</dt><dd>{state.publicaciones_total ?? '—'}</dd></div><div><dt>Borradores automáticos</dt><dd>{state.borradores_total ?? '—'}</dd></div></dl>
+      <p>Última ejecución: {state.ultima_ejecucion ? <><Link to={`/gestion/rastreo/ejecuciones/${state.ultima_ejecucion.id}`}>#{state.ultima_ejecucion.id}</Link> · {state.ultima_ejecucion.fuente && `${state.ultima_ejecucion.fuente} · `}{state.ultima_ejecucion.estado} · {date(state.ultima_ejecucion.inicio)}</> : 'Sin ejecuciones'}.</p>
+      <p>Próxima disponibilidad: {state.puede_iniciar ? `Disponible para ${state.fuente_nombre || 'una fuente autorizada'}` : state.proxima_manual ? `${date(state.proxima_manual)}${waiting(state.proxima_manual, now) ? ` · ${remaining(state.proxima_manual, now)}` : ''}` : 'Sin fecha disponible'}.</p>
       <p id="crawl-availability" className="crawl-control-availability">Inicio desde el panel: {state.puede_iniciar ? 'Disponible' : unavailableReason(state, now)}</p>
       {state.ejecucion_activa && <p>Rastreo en curso · ejecución {state.ejecucion_activa}.</p>}
       {state.inicio_pendiente && !state.ejecucion_activa && <p>Inicio solicitado; esperando confirmación del proceso local.</p>}
       {state.requiere_revision && <p>El inicio lleva más de dos minutos sin cierre. Revisa el proceso y la ejecución antes de solicitar otro.</p>}
       {state.ultimo_inicio_web && <p>Último inicio desde el panel: {state.ultimo_inicio_web.estado === 'omitida_frecuencia' ? 'omitido por frecuencia' : state.ultimo_inicio_web.estado === 'omitida_concurrencia' ? 'omitido por otra ejecución' : state.ultimo_inicio_web.estado === 'fallo_infraestructura' ? 'fallo del proceso local' : state.ultimo_inicio_web.estado}.</p>}
-      {state.ultima_ejecucion && <p>Última ejecución: <Link to={`/gestion/rastreo/ejecuciones/${state.ultima_ejecucion.id}`}>#{state.ultima_ejecucion.id}</Link> · {state.ultima_ejecucion.estado}.</p>}
+      <details className="crawl-control-technical"><summary>Configuración y detalles técnicos</summary>
+        <h3>Fuentes registradas</h3>
+        {(state.fuentes_registradas || []).length ? <ul>{state.fuentes_registradas.map(source => <li key={source.id}>{source.nombre} · {source.activa ? source.utilizable ? 'Activa y autorizada' : 'Activa; configuración por revisar' : 'Inactiva'} · Política: {source.politica_version} · Frecuencia: {source.frecuencia_min} minutos</li>)}</ul> : <p>No hay fuentes registradas.</p>}
+        <h3>Conectores disponibles sin fuente registrada</h3>
+        {(state.conectores_sin_registro || []).length ? <ul>{state.conectores_sin_registro.map(item => <li key={item.adaptador}>{item.nombre} · No registrado ni activo</li>)}</ul> : <p>Todos los conectores específicos tienen una fuente registrada.</p>}
+        <p>El conector genérico requiere registrar y verificar cada portal antes de activarlo.</p>
+        <p>Rastreo manual extraordinario de 5 minutos: {state.rastreo_extraordinario_habilitado ? 'habilitado para SIAU' : 'pendiente de autorización'}.</p>
+        <p>La tarea automática respeta la frecuencia de cada fuente. Las publicaciones no se aprueban automáticamente.</p>
+      </details>
     </div>}
     {confirming && <div className="crawl-confirm" role="dialog" aria-modal="true" aria-labelledby="crawl-confirm-title" onKeyDown={dialogKeys}>
       <form onSubmit={event => { event.preventDefault(); start() }}>

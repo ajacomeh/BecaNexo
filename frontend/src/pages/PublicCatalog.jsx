@@ -29,6 +29,14 @@ function CatalogBody({ user }) {
   const recommendationsCache = useRef(null)
   const userId = user?.rol === 'postulante' ? user.id : null
   const activeMode = userId == null ? 'all' : mode
+  const activeView = params.get('estado') || 'vigentes'
+  const changeView = view => {
+    const next = Object.fromEntries(params)
+    delete next.page
+    if (view === 'vigentes') delete next.estado
+    else next.estado = view
+    setParams(next)
+  }
   useEffect(() => {
     if (activeMode !== 'ia') return
     const cached = recommendationsCache.current
@@ -65,14 +73,17 @@ function CatalogBody({ user }) {
   const clear = () => { setParams({}) }
   const retryCatalogs = () => { setCatalogError(''); setCatalogRetry(value => value + 1) }
   const apply = values => setParams(Object.fromEntries(Object.entries(values).filter(([k, v]) => ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado', 'orden', 'page_size'].includes(k) && v != null && v !== '')))
-  return <OffersLayout><div className="public-catalog"><div className="page-heading"><div><p className="eyebrow">EXPLORA TU PRÓXIMO PASO</p><h1>Catálogo de becas</h1><p>Ofertas de entidades ecuatorianas · Destinos nacionales e internacionales</p></div></div>
+  return <OffersLayout><div className="public-catalog"><div className="page-heading"><div><p className="eyebrow">EXPLORA TU PRÓXIMO PASO</p><h1>Catálogo de becas</h1><p>Oportunidades pertinentes para Ecuador · Consulta la procedencia de cada beca</p></div></div>
     {userId != null && <div className="catalog-modes" role="group" aria-label="Modo de resultados">
       <Button type="button" className={activeMode === 'all' ? 'catalog-mode-active' : 'button-light'} aria-pressed={activeMode === 'all'} onClick={() => setMode('all')}>Todas las becas</Button>
       <Button type="button" className={activeMode === 'ia' ? 'catalog-mode-active' : 'button-light'} aria-pressed={activeMode === 'ia'} onClick={() => setMode('ia')}>Para ti · IA</Button>
     </div>}
     <div className="catalog-results">
     {activeMode === 'all' ? <>
-    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={apply} onClear={clear} />}
+    <div className="catalog-modes" role="group" aria-label="Vigencia de las becas">
+      {[["vigentes", "Vigentes"], ["proxima", "Próximas"], ["cerrada", "Cerradas"], ["todas", "Todas las publicadas"]].map(([value, label]) => <Button key={value} type="button" className={activeView === value ? 'catalog-mode-active' : 'button-light'} aria-pressed={activeView === value} onClick={() => changeView(value)}>{label}</Button>)}
+    </div>
+    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={apply} onClear={clear} stateValues={['vigentes', 'proxima', 'cerrada', 'todas', 'abierta', 'cierre_hoy', 'sin_fecha']} allStateLabel="Vigentes (predeterminado)" />}
     {(!current || (!catalogs && !catalogError)) && !current?.error && <p role="status"><Icon name="loading" />Cargando catálogo…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => { setResult(null); setRetry(retry + 1) }}>Reintentar</Button></>}
     {!catalogs && catalogError && <><Message>{catalogError}</Message><Button icon="refresh" onClick={retryCatalogs}>Reintentar datos del catálogo</Button></>}

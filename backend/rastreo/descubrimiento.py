@@ -57,9 +57,11 @@ def national_title(title):
 
 class NationalIndexLinks(HTMLParser):
     """Solo tarjetas de convocatorias del índice, no menús ni imágenes enlazadas."""
-    def __init__(self):
+    def __init__(self, *, include_all_becas=False):
         super().__init__(convert_charrefs=True)
+        self.include_all_becas = include_all_becas
         self.urls = []
+        self.entries = []
         self.article = False
         self.article_count = 0
         self.title = False
@@ -86,8 +88,11 @@ class NationalIndexLinks(HTMLParser):
     def handle_endtag(self, tag):
         if tag == 'a' and self.href is not None:
             url = candidate_url(self.href, NATIONAL_FICHA)
-            if url and national_title(''.join(self.words)) and url not in self.urls:
+            title = ''.join(self.words)
+            admitted = bool(re.search(r'\bbecas?\b', title.casefold())) if self.include_all_becas else national_title(title)
+            if url and admitted and url not in self.urls:
                 self.urls.append(url)
+                self.entries.append({'url': url, 'titulo': ' '.join(title.split())[:200]})
             self.href = None
         elif tag == 'h2':
             self.title = False
@@ -106,7 +111,7 @@ def national_index_pages(content):
     return parser.urls[:MAX_FICHAS], more_pages or len(parser.urls) > MAX_FICHAS
 
 
-def national_ficha_content(content):
+def national_ficha_content(content, *, include_all_becas=False):
     """Confirma estructura de ficha antes de crear identidad persistente."""
     parser = FichaHTML()
     try:
@@ -115,6 +120,8 @@ def national_ficha_content(content):
         return False
     parser.flush()
     lines = parser.lines
-    return (bool(lines) and national_title(lines[0])
+    title_ok = bool(lines) and (bool(re.search(r'\bbecas?\b', lines[0].casefold())) if include_all_becas
+                                else national_title(lines[0]))
+    return (title_ok
             and any('POSTULA HASTA' in line.upper() for line in lines)
             and any('REQUISITOS GENERALES' in line.upper() for line in lines))

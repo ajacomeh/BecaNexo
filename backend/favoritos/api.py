@@ -24,7 +24,7 @@ def representar(fav, disponibles):
         return {"id": fav.pk, "disponible": False, "convocatoria": None,
                 "aviso": "Esta oportunidad ya no está disponible."}
     return {"id": fav.pk, "creado_en": fav.creado_en, "disponible": True, "convocatoria": {
-        "id": convocatoria.pk, "titulo": convocatoria.titulo, "institucion": convocatoria.institucion.nombre,
+        "id": convocatoria.pk, "titulo": convocatoria.titulo, "institucion": convocatoria.institucion.nombre if convocatoria.institucion_id else "No identificada",
         "tipo_beca": convocatoria.tipo_beca.nombre if convocatoria.tipo_beca else None,
         "estado": convocatoria.estado, "cierre": convocatoria.cierre}}
 

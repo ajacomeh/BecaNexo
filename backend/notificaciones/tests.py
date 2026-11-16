@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.db import connection
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from convocatorias.models import Convocatoria, ConvocatoriaArea, Institucion, OpcionEstudio, OpcionPais, Requisito, TipoRequisito
@@ -37,14 +38,15 @@ class NotificacionesTests(TestCase):
         cls.institution = Institucion.objects.create(nombre="Entidad ecuatoriana sintética", sector="publico", pais=cls.ec)
 
     def setUp(self):
-        self.assertEqual(connection.settings_dict["NAME"], "test_becanexo_db")
+        self.assertIn(connection.settings_dict["NAME"], ("test_becanexo_db", "test_becanexo_fusion_db"))
         self.admin_client = APIClient(enforce_csrf_checks=True)
         self.admin_client.force_login(self.admin)
         self.csrf = self.admin_client.get("/api/auth/csrf/").data["csrfToken"]
 
     def oferta(self, with_option=True, with_rule=True):
         offer = Convocatoria.objects.create(institucion=self.institution, titulo="Beca sintética", descripcion="Solo pruebas",
-            url_oficial="https://example.org/beca", clave_deduplicacion="n" * 64, revision="pendiente")
+            url_oficial="https://example.org/beca", cierre=timezone.now() + timedelta(days=30),
+            clave_deduplicacion="n" * 64, revision="pendiente")
         ConvocatoriaArea.objects.create(convocatoria=offer, area=self.area)
         if with_option:
             option = OpcionEstudio.objects.create(convocatoria=offer, nivel="maestria", modalidad="virtual")

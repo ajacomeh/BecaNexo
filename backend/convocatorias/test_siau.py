@@ -27,6 +27,16 @@ def observation(text=None):
 
 
 class ExtractionTests(SimpleTestCase):
+    def test_different_deadlines_by_modality_do_not_become_shared_open_date(self):
+        raw = FIXTURE.read_text(encoding='utf8').replace(
+            '25 de octubre, 2026',
+            'Programa presencial: 01 de noviembre, 2026</p><p>Programa en linea o hibrida: 30 de noviembre, 2026')
+        item = observation(raw)
+        self.assertIsNone(item['cierre']['fecha'])
+        self.assertEqual([row['fecha'] for row in item['cierres_por_modalidad']], ['2026-11-01', '2026-11-30'])
+        self.assertEqual(item['vigencia_observada'], 'desconocida')
+        self.assertTrue(any('Cierres diferentes por modalidad' in text for text in item['advertencias']))
+
     def test_posgrado_and_technological_masters_keep_context(self):
         mentions = menciones_academicas('Programa de Posgrado: programas de maestrías y especializaciones, y maestrías tecnológicas en institutos superiores tecnológicos universitarios.', 'Contar con un título previo de grado. Contar con tercer nivel técnico tecnológico universitario.', PAGES[1])
         offered = [m['expresion_original'] for m in mentions if m['funcion'] == 'oferta_mencionada']

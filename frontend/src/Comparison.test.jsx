@@ -31,6 +31,16 @@ it('consulta solo al pulsar y presenta evidencia, condición y opción destacada
   expect(screen.queryByText(/%/)).not.toBeInTheDocument()
 })
 
+it('explica la preferencia híbrida sin convertirla en elegibilidad', async () => {
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, modalidad: 'hibrida',
+    resultado: 'desconocido', preferencia_modalidad: 'no_coincide' }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  expect(await screen.findByText(/Híbrida · Ecuador/)).toBeVisible()
+  expect(screen.getByText(/Preferencia de modalidad: no coincide/)).toBeVisible()
+  expect(screen.getByText(/No determina elegibilidad/)).toBeVisible()
+})
+
 it('separa incompatibles, pendientes y acreditación externa aunque el idioma coincida', async () => {
   offersApi.get.mockResolvedValue({ ...response, opciones: [
     { ...option, verificaciones_externas_pendientes: 1, requisitos: [item, { ...item, id: 2, tipo: 'ACREDITACION', resultado: 'desconocido', descripcion: 'Certificado externo', comprobacion_externa: true }] },

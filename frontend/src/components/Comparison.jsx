@@ -24,6 +24,7 @@ function valueText(value, key, catalogs, spec) {
   if (['pais', 'nacionalidad'].includes(key) || ['pais', 'paises'].includes(spec?.kind)) return catalogs.paises.find(p => p.codigo === value)?.nombre || String(value)
   if (key === 'idioma' || spec?.kind === 'idioma') return catalogs.idiomas.find(i => i.codigo === value)?.nombre || String(value)
   if (['area', 'areas'].includes(spec?.kind)) return catalogs.areas.find(a => a.id === value)?.nombre || String(value)
+  if (value === 'hibrida') return 'Híbrida'
   return String(value).replaceAll('_', ' ')
 }
 
@@ -94,6 +95,7 @@ function Option({ option, featured, catalogs, topSummarized = false, summarizedD
     {featured && <p className="eyebrow">OPCIÓN DESTACADA PARA CONSULTA</p>}
     <h3>{option.programa || 'Programa no especificado'}</h3>
     <p>{valueText(option.nivel)} · {valueText(option.modalidad)} · {option.destinos.join(', ') || 'Destino no especificado'}</p>
+    {option.preferencia_modalidad && <p className="small-note">Preferencia de modalidad: {{ coincide: 'coincide con tu nivel y modalidad declarados', no_coincide: 'no coincide con tu nivel y modalidad declarados', desconocido: 'sin preferencia declarada para comparar' }[option.preferencia_modalidad]}. No determina elegibilidad.</p>}
     <p className="comparison-summary"><Icon name={option.resultado === "cumple" ? "success" : option.resultado === "no_cumple" ? "failure" : "pending"} />{option.resumen}</p>
     {option.aviso && <Message kind="info">{option.aviso}</Message>}
     {option.verificaciones_externas_pendientes > 0 && <p className="comparison-external">Hay verificaciones externas pendientes, incluso cuando coinciden los datos declarados.</p>}

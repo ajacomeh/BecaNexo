@@ -41,14 +41,72 @@ it('no presenta procedencia en una convocatoria manual', async () => {
 it('muestra origen automático, pendientes y oferente sugerido sin asignarlo', async () => {
   vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
     publicacion_id: 15, version_id: 23,
-    bloqueos_actuales: ['Confirmar oferente ecuatoriano'],
+    bloqueos_actuales: ['Confirmar elegibilidad ecuatoriana'],
+    observaciones: ['Oferente no identificado; revisar la fuente.'],
     datos_iniciales: { titulo: 'Beca nacional sintética', entidad_sugerida: { id: 4, nombre: 'Entidad sintética' } } })
   render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} /></MemoryRouter>)
   expect(await screen.findByText('Borrador generado por rastreo')).toBeVisible()
-  expect(screen.getByText('Confirmar oferente ecuatoriano')).toBeVisible()
+  expect(screen.getByText('Confirmar elegibilidad ecuatoriana')).toBeVisible()
+  expect(screen.getByText('Oferente no identificado; revisar la fuente.')).toBeVisible()
   expect(screen.getByRole('link', { name: /Consultar ficha/ })).toHaveAttribute('href', '/gestion/rastreo/publicaciones/15')
   await userEvent.setup().click(screen.getByText('Datos de origen conservados'))
   expect(screen.getByText(/Entidad sintética \(ID 4; confirmar antes de asignar\)/)).toBeVisible()
+})
+
+it('separa ficha, bases y postulación y prepara candidatos sin guardar', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
+    publicacion_id: 15, version_id: 23, bloqueos_actuales: ['Revisar requisitos'],
+    datos_iniciales: { titulo: 'Ficha sintética' },
+    enlaces_origen: { publicacion: 'https://siau.example/ficha',
+      bases: [{ url: 'https://siau.example/bases.pdf' }],
+      postulacion: [{ url: 'javascript:alert(1)' }] },
+    candidatos_editables: { requisitos: [{ texto_original: 'Promedio mínimo',
+      procedencia: { version_id: 23 }, validado: false }], opciones: [] } })
+  const onPrepare = vi.fn()
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
+  expect(await screen.findByText('Borrador generado por rastreo')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Abrir ficha de origen' })).toHaveAttribute('href', 'https://siau.example/ficha')
+  expect(screen.getByRole('link', { name: 'Bases 1' })).toHaveAttribute('href', 'https://siau.example/bases.pdf')
+  expect(screen.queryByRole('link', { name: 'Postulación 1' })).not.toBeInTheDocument()
+  await userEvent.setup().click(screen.getByText('Requisitos extraídos para revisar (1)'))
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Preparar en editor' }))
+  expect(onPrepare).toHaveBeenCalledWith('requisitos', expect.objectContaining({ texto_original: 'Promedio mínimo', validado: false }))
+})
+
+it('separa texto, clasificación, procedencia y acción de cada requisito sin cambiar la sugerencia', async () => {
+  const candidate = { texto_original: 'Promedio mínimo de 8,5', tipo_sugerido: 'PROMEDIO', estado: 'identificado',
+    metodo: 'regla', valor_sugerido: { minimo: '8,5' }, procedencia: { version_id: 23, documento_id: 8 } }
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ automatico: true, publicacion_id: 15,
+    version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
+    candidatos_editables: { requisitos: [candidate, { texto_original: 'Condición por comprobar',
+      estado: 'ambiguo', procedencia: { version_id: 23 } }], opciones: [] } })
+  const onPrepare = vi.fn()
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
+  await userEvent.setup().click(await screen.findByText('Requisitos extraídos para revisar (2)'))
+  const cards = document.querySelectorAll('.origin-candidate-list .origin-candidate')
+  expect(cards).toHaveLength(2)
+  expect(cards[0]).toHaveTextContent('Promedio mínimo de 8,5')
+  expect(cards[0]).toHaveTextContent('Tipo: PROMEDIO')
+  expect(cards[0]).toHaveTextContent('Estado: identificado')
+  expect(cards[0]).toHaveTextContent('Versión 23 · Documento 8')
+  expect(cards[0]).toHaveTextContent('Valores propuestos: minimo: 8,5')
+  expect(cards[1]).toHaveTextContent('Estado: ambiguo')
+  await userEvent.setup().click(cards[0].querySelector('button'))
+  expect(onPrepare).toHaveBeenCalledWith('requisitos', candidate)
+})
+
+it('expone un beneficio literal como candidato editable sin atribuirle concepto', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
+    publicacion_id: 15, version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
+    candidatos_editables: { requisitos: [], opciones: [], otros_campos: { beneficios: [
+      { texto_original: 'Cobertura parcial del 25%', porcentaje: 25, monto_literal: null,
+        procedencia: { version_id: 23, documento_id: 8 } }] } } })
+  const onPrepare = vi.fn()
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
+  await userEvent.setup().click(await screen.findByText('Beneficios interpretados para revisar'))
+  expect(screen.getByText(/Porcentaje literal: 25%/)).toBeVisible()
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Preparar en editor' }))
+  expect(onPrepare).toHaveBeenCalledWith('beneficios', expect.objectContaining({ porcentaje: 25 }))
 })
 
 it('avisa de una versión relevante y confirma su revisión sin aplicar datos automáticamente', async () => {

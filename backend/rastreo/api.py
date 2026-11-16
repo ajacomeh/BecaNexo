@@ -9,7 +9,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from usuarios.api import AuthView
 from convocatorias.api import Administrador, parametros, entero, paginar
-from .models import Fuente, Publicacion, Version, VersionDocumento, Observacion, Ejecucion, Acceso, Incidencia, Documento
+from .models import Fuente, Publicacion, Version, VersionDocumento, Observacion, Ejecucion, Acceso, Incidencia, Documento, CandidatoIndice
 from .storage import root_path, key_for, verify_file, StorageError
 from .models import Revision
 from .revisiones import RevisionEntrada, registrar, revision_data, vigentes
@@ -70,11 +70,50 @@ class Fuentes(ReadOnly):
         return paginar(request, Fuente.objects.order_by('nombre', 'id'), data)
 
 
+class CandidatosIndice(ReadOnly):
+    """Metadatos del índice: no equivalen a fichas verificadas ni a borradores."""
+    def get(self, request):
+        parametros(request, {'page', 'page_size', 'fuente'})
+        rows = CandidatoIndice.objects.select_related('fuente').order_by('-ultima_deteccion', '-id')
+        if 'fuente' in request.query_params:
+            rows = rows.filter(fuente_id=entero(request.query_params, 'fuente', None))
+        return paginar(request, rows, lambda row: {
+            'id': row.pk, 'fuente_id': row.fuente_id, 'titulo': row.titulo_publico,
+            'url': row.url_normalizada, 'pagina': row.pagina,
+            'primera_deteccion': row.primera_deteccion, 'ultima_deteccion': row.ultima_deteccion,
+            'ejecucion_id': row.ultima_ejecucion_id, 'respuesta_sha256': row.respuesta_sha256,
+            'estado': 'pendiente', 'motivo': 'Ficha, vigencia, oferente y requisitos sin verificar.'})
+
+
 class Publicaciones(ReadOnly):
     def get(self, request, pk=None):
         if pk is not None:
             parametros(request, set())
-            return Response(publication_data(identified(latest_publications(), pk)))
+            publication = identified(latest_publications(), pk)
+            result = publication_data(publication)
+            if publication.version_observada_id:
+                from .auto_borradores import classify_candidate
+                version = Version.objects.get(pk=publication.version_observada_id)
+                result['clasificacion_borrador'] = classify_candidate(publication, version)
+                result['cierre_extraido'] = (version.datos_extraidos or {}).get('cierre')
+            if publication.convocatoria_id:
+                from convocatorias.models import Convocatoria, BorradorRastreo
+                from .auto_borradores import pending_for_publication, review_notes
+                offer = Convocatoria.objects.get(pk=publication.convocatoria_id)
+                origin = BorradorRastreo.objects.filter(publicacion=publication, convocatoria=offer).select_related('version').first()
+                blockers = pending_for_publication(offer, origin) if origin else ['Vínculo de origen pendiente de revisión.']
+                if not offer.descripcion.strip():
+                    blockers.append('Completar la descripción respaldada por la fuente.')
+                if not offer.url_oficial:
+                    blockers.append('Confirmar el enlace oficial en Convocatorias.')
+                if not offer.opciones.filter(activa=True).exists():
+                    blockers.append('Añadir al menos una opción de estudio revisada.')
+                if offer.requisitos.filter(activo=True, validado=False).exists():
+                    blockers.append('Revisar los requisitos activos antes de publicar.')
+                result['borrador'] = {'id': offer.pk, 'revision': offer.revision, 'activa': offer.activa,
+                    'bloqueos': blockers,
+                    'observaciones': review_notes(offer, origin) if origin else []}
+            return Response(result)
         parametros(request, {'page', 'page_size', 'q', 'fuente'})
         qs = latest_publications()
         query = request.query_params.get('q', '').strip()

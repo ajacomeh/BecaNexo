@@ -11,14 +11,50 @@ import { benefitSummary } from './pages/catalogPresentation'
 
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: null }) }))
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
-const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }], niveles: [{ valor: 'grado', nombre: 'Grado' }], modalidades: [{ valor: 'virtual', nombre: 'Virtual' }], tipos_beca: [{ id: 1, nombre: 'Mérito' }] }
+const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }], niveles: [{ valor: 'grado', nombre: 'Grado' }], modalidades: [{ valor: 'virtual', nombre: 'Virtual' }, { valor: 'hibrida', nombre: 'Híbrida' }], tipos_beca: [{ id: 1, nombre: 'Mérito' }] }
 const offer = { id: 1, titulo: 'DEMOSTRACIÓN · Oferta', institucion: { nombre: 'Entidad' }, estado: 'sin_fecha', beneficios: [], opciones: [] }
+
+it('muestra oferente desconocido y vigencia por verificar sin atribuir la fuente', async () => {
+  render(<MemoryRouter><CatalogCard offer={{ ...offer, institucion: null }} catalogs={catalogs} /></MemoryRouter>)
+  expect(screen.getByText('Entidad oferente: No identificada')).toBeVisible()
+  cleanup()
+  const detail = { ...offer, institucion: null, descripcion: 'Beca nacional de prueba', url_oficial: 'https://siau.senescyt.gob.ec/ficha/', requisitos: [] }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? catalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText(/Entidad oferente: No identificada · Consulta la fuente oficial/)).toBeVisible()
+  expect(screen.getByText(/La vigencia está por verificar/)).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Ver convocatoria oficial' })).toHaveAttribute('href', detail.url_oficial)
+})
 function Location() { return <output data-testid="url">{useLocation().search}</output> }
 function setup(path = '/becas', count = 25) {
   const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path, p) => path === 'becas/catalogos' ? catalogs : { count, page_size: 12, page: Number(p.page || 1), results: count ? [offer] : [] })
   render(<MemoryRouter initialEntries={[path]}><PublicCatalog /><Location /></MemoryRouter>)
   return get
 }
+
+it('permite consultar vigentes, próximas, cerradas y todas las publicadas sin perder los filtros', async () => {
+  const get = setup('/becas?modalidad=hibrida&page=2')
+  const u = userEvent.setup()
+  await u.click(screen.getByRole('button', { name: 'Cerradas' }))
+  expect(get).toHaveBeenCalledWith('becas', expect.objectContaining({ estado: 'cerrada', modalidad: 'hibrida' }))
+  expect(screen.getByTestId('url').textContent).not.toContain('page=')
+  await u.click(screen.getByRole('button', { name: 'Todas las publicadas' }))
+  expect(get).toHaveBeenCalledWith('becas', expect.objectContaining({ estado: 'todas', modalidad: 'hibrida' }))
+  await u.click(screen.getByRole('button', { name: 'Próximas' }))
+  expect(get).toHaveBeenCalledWith('becas', expect.objectContaining({ estado: 'proxima', modalidad: 'hibrida' }))
+  await u.click(screen.getByRole('button', { name: 'Vigentes' }))
+  expect(screen.getByTestId('url').textContent).not.toContain('estado=')
+})
+
+it('filtra y muestra Híbrida como modalidad propia', async () => {
+  const get = setup('/becas', 1)
+  await userEvent.selectOptions(await screen.findByLabelText('Modalidad'), 'hibrida')
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+  expect(get).toHaveBeenCalledWith('becas', expect.objectContaining({ modalidad: 'hibrida' }))
+  cleanup()
+  render(<MemoryRouter><CatalogCard catalogs={catalogs} offer={{ ...offer, opciones: [{ nivel: 'grado', modalidad: 'hibrida', paises: [1] }] }} /></MemoryRouter>)
+  expect(screen.getByText(/Grado · Híbrida/)).toBeVisible()
+})
 
 it('aplica filtros, conserva secundarios al cerrar y limpia filtros, orden y página', async () => {
   setup('/becas?page=2&orden=titulo&estado=abierta')
@@ -27,7 +63,7 @@ it('aplica filtros, conserva secundarios al cerrar y limpia filtros, orden y pá
   await u.click(screen.getByText('Más filtros · 1 aplicados'))
   await u.selectOptions(screen.getByLabelText('Tipo de beca'), '1')
   await u.click(screen.getByText('Más filtros · 1 aplicados'))
-  await u.type(screen.getByLabelText('Buscar título, institución o área'), 'ingeniería')
+  await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'ingeniería')
   await u.selectOptions(screen.getByLabelText('Nivel'), 'grado')
   await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
   expect(screen.getByTestId('url').textContent).toContain('tipo_beca=1')
@@ -62,7 +98,7 @@ it('distingue catálogo vacío de búsqueda sin coincidencias', async () => {
   setup('/becas', 0)
   expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument()
-  await u.type(screen.getByLabelText('Buscar título, institución o área'), 'inexistente')
+  await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'inexistente')
   await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
   expect(await screen.findByText('No encontramos becas que coincidan con los filtros seleccionados')).toBeVisible()
   await u.click(screen.getByRole('button', { name: 'Restablecer filtros' }))
@@ -80,7 +116,9 @@ it('omite datos vacíos, muestra una sola ausencia de cierre y conserva retorno 
 it('distingue porcentajes comunes, apoyo sin porcentaje y alcance por opción', () => {
   expect(benefitSummary([{ concepto: 'Matrícula', porcentaje: '80.00' }])).toEqual(['80 % de matrícula'])
   expect(benefitSummary([{ concepto: 'Matrícula', porcentaje: '80.50' }])).toEqual(['80.5 % de matrícula'])
-  expect(benefitSummary([{ concepto: 'Matrícula', monto: '1000.00' }])).toEqual(['Apoyo para matrícula · Consulta las condiciones'])
+  expect(benefitSummary([{ concepto: 'Matrícula', monto: '1000.00' }])).toEqual(['Apoyo para matrícula · Porcentaje no informado'])
+  expect(benefitSummary([{ concepto: 'Matrícula y aranceles', detalle: 'Cubre del 75 % al 100 % del valor, sujeto a cupos.' }])[0]).toContain('Del 75 % al 100 % de matrícula y aranceles · Rango condicionado')
+  expect(benefitSummary([{ concepto: 'Beca según evaluación socioeconómica', detalle: 'Porcentaje no publicado de antemano.' }])[0]).toContain('Cobertura según condiciones publicadas')
   expect(benefitSummary([{ concepto: 'Matrícula', monto: '1000.00', moneda: 'USD' }])).toEqual(['1000.00 USD para matrícula'])
   expect(benefitSummary([{ concepto: 'Matrícula', porcentaje: '80', opcion_estudio: 1 }])[0]).toContain('Solo para una opción')
   const scoped = benefitSummary([{ concepto: 'Matrícula', porcentaje: '80', opcion_estudio: 1 }, { concepto: 'Matrícula', porcentaje: '20', opcion_estudio: 2 }])
@@ -110,7 +148,7 @@ it('conserva error y reintento sin mostrar resultados obsoletos', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
   expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
   const stateOptions = within(screen.getByLabelText('Estado')).getAllByRole('option', { hidden: true }).map(o => o.value)
-  expect(stateOptions).toEqual(['', 'abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'])
+  expect(stateOptions).toEqual(['', 'vigentes', 'proxima', 'cerrada', 'todas', 'abierta', 'cierre_hoy', 'sin_fecha'])
 })
 
 it('muestra día de cierre sin inventar hora ni estado de apertura', () => {
@@ -182,7 +220,42 @@ it('no atribuye enlaces de documentos de ejemplo a bases oficiales de una beca f
   expect(screen.getByText('Documento de muestra')).toBeVisible()
   expect(screen.queryByRole('link', { name: /Consultar documento o formulario oficial/ })).not.toBeInTheDocument()
   rerender(<Documentation offer={{ ...example, titulo: 'Beca real' }} catalogs={documentCatalogs} scopeId={null} />)
-  expect(screen.getByRole('link', { name: /Consultar documento o formulario oficial/ })).toHaveAttribute('href', 'https://example.org/archivo.pdf')
+  expect(screen.queryByRole('link', { name: /Consultar documento o formulario oficial/ })).not.toBeInTheDocument()
+})
+
+it('agrupa documentos oficiales sin duplicados en una beca histórica y distingue enlaces web', async () => {
+  const documentCatalogs = { ...catalogs, tipos_requisito: [{ id: 7, codigo: 'DOCUMENTO' }] }
+  const pdf = 'https://universidad.example/reglamento.pdf'
+  const detail = { ...offer, titulo: 'Beca histórica', estado: 'cerrada', descripcion: 'Beca cerrada',
+    url_oficial: 'https://universidad.example/beca', url_bases: pdf,
+    requisitos: [
+      { id: 1, tipo_requisito: 7, opcion_estudio: null, obligatorio: true,
+        valor_estructurado: { documento: 'Reglamento', url_documento: pdf } },
+      { id: 2, tipo_requisito: 7, opcion_estudio: null, obligatorio: true,
+        valor_estructurado: { documento: 'Ficha socioeconómica', url_documento: 'https://universidad.example/ficha' } },
+      { id: 3, tipo_requisito: 7, opcion_estudio: null, obligatorio: true,
+        valor_estructurado: { documento: 'Enlace inseguro', url_documento: 'javascript:alert(1)' } },
+    ] }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? documentCatalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  const section = (await screen.findByRole('heading', { name: 'Bases y documentos oficiales' })).closest('section')
+  const links = within(section).getAllByRole('link', { name: 'Ver documento' })
+  expect(links).toHaveLength(2)
+  expect(links[0]).toHaveAttribute('href', pdf)
+  expect(links[1]).toHaveAttribute('href', 'https://universidad.example/ficha')
+  expect(links[1]).not.toHaveAttribute('download')
+  expect(within(section).getAllByText(/Fuente: Entidad/)).toHaveLength(2)
+  expect(screen.getByText(/La fecha de cierre ya pasó/)).toBeVisible()
+})
+
+it('muestra la página informativa cuando no hay archivos enlazados', async () => {
+  const detail = { ...offer, titulo: 'Beca real', descripcion: 'Condiciones publicadas',
+    url_oficial: 'https://universidad.example/informacion', requisitos: [] }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? catalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  const section = (await screen.findByRole('heading', { name: 'Bases y documentos oficiales' })).closest('section')
+  expect(within(section).getByText(/No hay archivos oficiales enlazados/)).toBeVisible()
+  expect(within(section).getByRole('link', { name: 'Consultar información oficial' })).toHaveAttribute('href', detail.url_oficial)
 })
 
 it('mantiene separados los datos de dos opciones y permite consultar paneles y referencias', async () => {
@@ -259,6 +332,51 @@ it('agrupa la verificación común y conserva las condiciones y referencias por 
   expect(screen.queryByText(/Para todos los requisitos de este grupo/)).not.toBeInTheDocument()
   expect(screen.getByText('Presentar certificado firmado', { exact: false })).toBeVisible()
   expect(screen.getByText(/Verificación externa por la entidad oferente/)).toBeVisible()
+})
+
+it('separa apertura y cierre publicados solo por día sin inventar horas', async () => {
+  const detail = { ...offer, estado: 'abierta', descripcion: 'Beca real', url_oficial: 'https://universidad.example/beca',
+    cierre_dia: '2026-11-30', cierre_original: '30 de octubre al 30 de noviembre de 2026',
+    requisitos: [], opciones: [], beneficios: [{ id: 15, concepto: 'Matrícula y aranceles', porcentaje: null,
+      detalle: 'Cubre del 75 % al 100 % del valor de la matrícula y aranceles, sujeto a cupos.' }] }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? catalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText('Período de postulación')).toBeVisible()
+  expect(screen.getByText('Período de postulación').nextElementSibling).toHaveTextContent('Apertura: 30 oct 2026 · Cierre: 30 nov 2026 · Horas no informadas')
+  expect(screen.queryByText('Cierre según fuente')).not.toBeInTheDocument()
+  expect(screen.getByText('Cobertura publicada').nextElementSibling).toHaveTextContent('Del 75 % al 100 % de matrícula y aranceles')
+  expect(screen.queryByText('Cobertura no especificada')).not.toBeInTheDocument()
+})
+
+it('no interpreta un período literal si contradice el cierre estructurado', async () => {
+  const detail = { ...offer, descripcion: 'Beca real', cierre_dia: '2026-11-22',
+    cierre_original: '5 de octubre al 30 de noviembre de 2026', requisitos: [] }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? catalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText('Fecha según fuente')).toBeVisible()
+  expect(screen.queryByText('Período de postulación')).not.toBeInTheDocument()
+})
+
+it('evita repetir la descripción idéntica y aclara las condiciones externas', () => {
+  const externalCatalogs = { ...catalogs, tipos_requisito: [{ id: 1, codigo: 'OTRO', nombre: 'Otra condición externa', esquema_valor: { campos: { descripcion: { label: 'Descripción publicada' } } } }] }
+  const description = 'Necesidad de beca por condición económica y social del hogar.'
+  render(<RequirementList catalogs={externalCatalogs} records={[{ id: 1, tipo_requisito: 1, texto_original: description,
+    valor_estructurado: { descripcion: description }, obligatorio: true, modo_comprobacion: 'entidad_oferente' }]} />)
+  expect(screen.getByText('Condición socioeconómica', { exact: false })).toBeVisible()
+  expect(screen.getAllByText(description)).toHaveLength(1)
+  expect(screen.getByText(/Verificación externa por la entidad oferente/)).toBeVisible()
+})
+
+it('resume las opciones híbridas sin condiciones particulares y conserva las generales', async () => {
+  const detail = { ...offer, descripcion: 'Beca real', requisitos: [], beneficios: [],
+    opciones: [{ id: 11, programa: 'Tecnología Superior en Agroecología', nivel: 'grado', modalidad: 'hibrida', paises: [1] }] }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? catalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  const option = await screen.findByRole('article', { name: 'Opción 1: Tecnología Superior en Agroecología' })
+  expect(within(option).getByText('Grado · Híbrida')).toBeVisible()
+  expect(within(option).getByText(/Esta opción comparte los requisitos, beneficios y documentos generales/)).toBeVisible()
+  expect(within(option).queryByText(/Beneficios específicos de esta opción/)).not.toBeInTheDocument()
+  expect(screen.getByText(/Los requisitos, beneficios y documentos generales se aplican a todas las opciones/)).toBeVisible()
 })
 
 it('no ofrece un enlace oficial falso o inseguro', async () => {

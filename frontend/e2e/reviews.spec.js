@@ -1,79 +1,88 @@
 import { test, expect } from '@playwright/test'
 
-for (const width of [1440, 390, 320]) test(`Revisión administrativa simulada a ${width}px`, async ({ page }, info) => {
-  page.on('pageerror', error => console.error(error.message))
-  const reviews = []
-  let fail = true
-  let phase = 'initial', releaseInitial, releaseRefresh, releaseSave
-  const initialGate = new Promise(resolve => { releaseInitial = resolve })
-  const refreshGate = new Promise(resolve => { releaseRefresh = resolve })
-  const saveGate = new Promise(resolve => { releaseSave = resolve })
-  const list = results => ({ results, count: results.length, page: 1, page_size: 12 })
+const list = (results = []) => ({ results, count: results.length, page: 1, page_size: 12 })
+
+test('detalle de Rastreo compacto y acceso al borrador a tres anchuras', async ({ page }) => {
   await page.route('**/api/**', async route => {
-    const request = route.request(), path = new URL(request.url()).pathname
-    if (!path.startsWith('/api/')) return route.continue()
-    if (path === '/api/auth/me/') return route.fulfill({ json: { id: 9999, nombre: 'Administradora sintética', rol: 'administrador' } })
-    if (path === '/api/auth/csrf/') return route.fulfill({ json: { csrfToken: 'simulado' } })
-    if (path.endsWith('/revisiones/')) {
-      if (request.method() === 'POST') {
-        if (fail) { fail = false; await saveGate; phase = 'fail-read'; return route.fulfill({ status: 409, json: { detail: 'Conflicto sintético: consulte el historial.' } }) }
-        reviews.push({ ...request.postDataJSON(), id: 19, administrador: { nombre: 'Administradora sintética' }, creada_en: '2026-10-28T12:00:00Z' })
-        return route.fulfill({ status: 201, json: reviews.at(-1) })
-      }
-      // StrictMode puede consultar dos veces al montar: el escenario depende
-      // de la acción del usuario, no del número de peticiones de montaje.
-      if (phase === 'initial') await initialGate
-      if (phase === 'fail-read') { phase = 'refresh'; return route.fulfill({ status: 500, json: { detail: 'Fallo sintético de consulta' } }) }
-      if (phase === 'refresh') { await refreshGate; phase = 'ready' }
-      return route.fulfill({ json: { ...list(reviews), vigentes: reviews.slice(-1), numero: 1, ultima_observada: false } })
-    }
-    if (path.endsWith('/publicaciones/1/')) return route.fulfill({ json: { id: 1, titulo: 'Publicación sintética', fuente: { id: 1, nombre: 'Fuente sintética' }, version_observada_id: 7, url_original: 'https://example.org/ficha' } })
-    if (path.endsWith('/versiones/')) return route.fulfill({ json: list([{ id: 7, numero: 1 }]) })
-    if (path.endsWith('/versiones/7/')) return route.fulfill({ json: { id: 7, numero: 1, estado_extraccion: 'completa', datos_extraidos: {}, advertencias: [] } })
-    if (path.endsWith('/documentos/')) return route.fulfill({ json: list([{ id: 31, evidencia_id: 8, rol: 'bases_pdf', mime: 'application/pdf', tamano_bytes: 12, sha256: 'a'.repeat(64) }]) })
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/auth/me/') return route.fulfill({ json: { id: 99, nombre: 'Administradora de prueba', rol: 'administrador' } })
+    if (path === '/api/auth/csrf/') return route.fulfill({ json: { csrfToken: 'solo-prueba' } })
+    if (path === '/api/gestion/rastreo/publicaciones/5/') return route.fulfill({ json: {
+      id: 5, titulo: 'Beca nacional de prueba con título extenso para comprobar la adaptación móvil',
+      fuente: { id: 1, nombre: 'SIAU de prueba' }, url_original: 'https://example.org/publicacion/con/ruta/muy/larga/para/comprobar/desbordamiento',
+      primera_deteccion: '2026-11-11T10:00:00Z', ultima_deteccion: '2026-11-12T10:00:00Z',
+      version_observada_id: 7, convocatoria_id: 9,
+      cierre_extraido: { texto_original: 'Cierra el 12 de noviembre de 2026' },
+      clasificacion_borrador: { estado: 'apta', motivo: 'Ficha individual identificada.' },
+      borrador: { id: 9, revision: 'pendiente', activa: true,
+        bloqueos: ['Confirmar requisitos de la versión vigente'], observaciones: ['Revisar bases documentales'] },
+    } })
+    if (path === '/api/gestion/rastreo/publicaciones/5/versiones/7/') return route.fulfill({ json: {
+      id: 7, numero: 2, estado_extraccion: 'completa', version_extractor: 'extractor/1', version_contrato: 'contrato/1',
+      datos_extraidos: { titulo: { texto_original: 'Beca nacional de prueba' },
+        requisitos: { texto_original: 'Ser ciudadano ecuatoriano' },
+        enlaces_bases: [{ url: 'https://example.org/bases/con/una/ruta/larga.pdf' }] },
+      texto_extraido: 'Texto íntegro de la ficha de prueba', advertencias: ['Documento por revisar'],
+    } })
+    if (path === '/api/gestion/rastreo/publicaciones/5/versiones/') return route.fulfill({ json: list([{ id: 7, numero: 2, creada_en: '2026-11-12T10:00:00Z' }]) })
+    if (path === '/api/gestion/rastreo/publicaciones/5/versiones/7/documentos/') return route.fulfill({ json: list([{ id: 12, rol: 'ficha_html', mime: 'text/html', tamano_bytes: 400, sha256: 'a'.repeat(64), url_original: 'https://example.org/ficha' }]) })
+    if (path === '/api/gestion/rastreo/publicaciones/5/observaciones/') return route.fulfill({ json: list([{ id: 3, observada_en: '2026-11-12T10:00:00Z', resultado: 'nueva', version_id: 7, ejecucion_id: 8, estado_ejecucion: 'finalizada' }]) })
+    return route.fulfill({ json: list() })
+  })
+
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/gestion/rastreo/publicaciones/5')
+    await expect(page.getByRole('link', { name: 'Abrir borrador en Convocatorias' })).toHaveAttribute('href', '/gestion/convocatorias/9')
+    await expect(page.getByText('Confirmar requisitos de la versión vigente')).toBeVisible()
+    await expect(page.getByText('Ser ciudadano ecuatoriano').first()).toBeVisible()
+    const fieldPadding = await page.locator('.crawl-evidence-group .crawl-data > div').first().evaluate(node => getComputedStyle(node).paddingLeft)
+    expect(parseFloat(fieldPadding)).toBeGreaterThanOrEqual(14)
+    await expect(page.getByRole('heading', { name: 'Evidencias y versiones' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Historial' })).toBeVisible()
+    await page.getByText('Evidencia estructurada completa').click()
+    await expect(page.getByRole('heading', { name: 'Requisitos', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Enlaces y documentos' })).toBeVisible()
+    await page.getByText('Referencias de origen (1)').click()
+    await expect(page.getByText('https://example.org/bases/con/una/ruta/larga.pdf').last()).toBeVisible()
+    await expect(page.getByText('Texto íntegro de la ficha de prueba')).toBeHidden()
+    await page.getByText('Texto original completo').click()
+    await expect(page.getByText('Texto íntegro de la ficha de prueba')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Registrar revisión' })).toHaveCount(0)
+    await expect(page.getByText('Propuesta de integración')).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  }
+})
+
+test('candidatos del editor mantienen tarjetas y acciones sin desbordar en móvil', async ({ page }) => {
+  const offer = { id: 7, titulo: 'Beca de prueba', descripcion: 'Ficha sintética', estado: 'borrador',
+    revision: 'pendiente', activa: true, version: 1, institucion: null, origen_automatico: { publicacion_id: 5 },
+    tipo_beca: null, cierre: null, cierre_dia: null, opciones: [], beneficios: [], requisitos: [], areas: [] }
+  await page.route('**/api/**', route => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/auth/me/') return route.fulfill({ json: { id: 99, nombre: 'Admin de prueba', rol: 'administrador' } })
+    if (path === '/api/auth/csrf/') return route.fulfill({ json: { csrfToken: 'solo-prueba' } })
+    if (path === '/api/gestion/convocatorias/7/') return route.fulfill({ json: offer })
+    if (path === '/api/gestion/rastreo/convocatorias/7/origen/') return route.fulfill({ json: {
+      automatico: true, aplicacion: null, publicacion_id: 5, version_id: 2,
+      bloqueos_actuales: [], datos_iniciales: {}, candidatos_editables: { requisitos: [
+        { texto_original: 'Promedio mínimo de 8,5', tipo_sugerido: 'PROMEDIO', estado: 'identificado', metodo: 'regla',
+          valor_sugerido: { minimo: '8,5' }, procedencia: { version_id: 2, documento_id: 8 } },
+        { texto_original: 'Una condición académica extensa por comprobar '.repeat(12), estado: 'ambiguo',
+          procedencia: { version_id: 2 } }], opciones: [] } } })
+    if (path === '/api/gestion/instituciones/') return route.fulfill({ json: list([]) })
+    if (path === '/api/gestion/becas/catalogos/' || path === '/api/becas/catalogos/') return route.fulfill({ json: {
+      paises: [], areas: [], niveles: [], modalidades: [], tipos_beca: [], tipos_requisito: [] } })
     return route.fulfill({ json: list([]) })
   })
-  await page.setViewportSize({ width, height: 900 })
-  await page.goto('/gestion/rastreo/publicaciones/1')
-  await expect(page.getByText('Cargando revisiones…', { exact: true })).toBeVisible()
-  releaseInitial()
-  await expect(page.getByText(/Evidencia histórica/)).toBeVisible()
-  const open = page.getByRole('button', { name: 'Registrar revisión' })
-  await open.focus(); await page.keyboard.press('Enter')
-  await page.getByLabel('Dimensión', { exact: true }).selectOption('documental')
-  await page.getByLabel('Evidencia exacta').selectOption('8')
-  const reason = page.getByLabel('Justificación')
-  await page.getByRole('button', { name: 'Guardar revisión' }).click()
-  expect(await reason.evaluate(input => input.validity.valueMissing)).toBeTruthy()
-  expect(reviews).toHaveLength(0)
-  await reason.fill('Documento sintético examinado, página 1.')
-  await reason.focus(); await page.keyboard.press('Tab')
-  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toBeFocused()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
-  await page.screenshot({ path: info.outputPath(`revision-${width}.png`), fullPage: true })
-  await page.getByRole('button', { name: 'Guardar revisión' }).click()
-  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toHaveAttribute('aria-busy', 'true')
-  await expect(reason).toBeDisabled()
-  releaseSave()
-  await expect(page.getByRole('alert')).toContainText('Conflicto sintético')
-  await expect(reason).toHaveValue('Documento sintético examinado, página 1.')
-  await page.locator('.crawl-reviews').screenshot({ path: info.outputPath(`conflicto-${width}.png`) })
-  await page.getByRole('button', { name: 'Actualizar historial antes de reintentar' }).click()
-  await expect(page.getByRole('alert')).toContainText('BecaNexo no está disponible')
-  await expect(reason).toHaveValue('Documento sintético examinado, página 1.')
-  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toBeDisabled()
-  await page.locator('.crawl-reviews').screenshot({ path: info.outputPath(`error-consulta-${width}.png`) })
-  await page.getByRole('button', { name: 'Actualizar historial antes de reintentar' }).focus()
-  await page.keyboard.press('Enter')
-  await expect(page.getByText('Cargando revisiones…', { exact: true })).toBeVisible()
-  releaseRefresh()
-  await expect(page.getByRole('button', { name: 'Guardar revisión' })).toBeEnabled()
-  await page.getByRole('button', { name: 'Guardar revisión' }).click()
-  await expect(page.getByText(/Revisión guardada/)).toBeVisible()
-  expect(reviews).toHaveLength(1)
-  expect(reviews[0].evidencia_id).toBe(8)
-  await page.getByText('Historial de revisiones', { exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Revisión 19 · Documentación · Pendiente' })).toBeVisible()
-  await expect(page.getByText('Documento 31 · bases_pdf · relación 8 · Primera decisión')).toBeVisible()
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/gestion/convocatorias/7')
+    await page.getByText('Requisitos extraídos para revisar (2)').click()
+    await expect(page.locator('.origin-candidate')).toHaveCount(2)
+    await expect(page.locator('.origin-candidate').first()).toContainText('Tipo: PROMEDIO')
+    await expect(page.locator('.origin-candidate').last()).toContainText('Estado: ambiguo')
+    await expect(page.getByRole('button', { name: 'Preparar en editor' }).first()).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  }
 })

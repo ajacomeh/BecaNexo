@@ -7,7 +7,7 @@ import Message from '../components/Message'
 import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
 import Comparison from '../components/Comparison'
-import { display, date, dayDate, stateLabel, closingText } from './offerDisplay'
+import { display, date, dayDate, stateLabel, closingText, publishedPeriod } from './offerDisplay'
 import { readable, unique, benefitSummary } from './catalogPresentation'
 
 export function BenefitList({ records, nested = false }) {
@@ -41,8 +41,13 @@ export function RequirementList({ records, catalogs, nested = false }) {
     : 'Condición sobre datos declarados. No constituye una verificación documental.'
   return records.length ? <div className="requirement-group">{sharedVerification && <p className="requirement-group-note accent-note">Para todos los requisitos de este grupo: {verificationText(records[0])}</p>}{academicGroups.length > 0 && <p className="requirement-group-note">Los requisitos con el mismo grupo académico deben cumplirse con una misma formación.</p>}<ul className="detail-list">{records.map((r) => {
     const type = catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)
-    const values = Object.entries(r.valor_estructurado || {})
-    return <li key={r.id} className="requirement-item"><Heading>{type?.nombre || 'Requisito'} <span className="requirement-kind">{r.obligatorio ? 'Obligatorio' : 'Preferencia'}</span>{r.grupo_formacion && <span className="requirement-group-label">Grupo académico {groupNumbers.get(r.grupo_formacion)}</span>}</Heading><p className="preserve-text">{r.texto_original}</p>
+    const original = r.texto_original?.trim() || ''
+    const values = Object.entries(r.valor_estructurado || {}).filter(([key, value]) =>
+      !(key === 'descripcion' && String(value).trim() === original))
+    const externalLabel = type?.codigo === 'OTRO' && /econ[oó]mic|socioecon[oó]mic/iu.test(original)
+      ? 'Condición socioeconómica' : type?.codigo === 'OTRO' && /bachiller|t[ií]tulo de tercer nivel/iu.test(original)
+        ? 'Condición de formación previa' : type?.nombre || 'Requisito'
+    return <li key={r.id} className="requirement-item"><Heading>{externalLabel} <span className="requirement-kind">{r.obligatorio ? 'Obligatorio' : 'Preferencia'}</span>{r.grupo_formacion && <span className="requirement-group-label">Grupo académico {groupNumbers.get(r.grupo_formacion)}</span>}</Heading><p className="preserve-text">{r.texto_original}</p>
       {values.length > 0 && <dl className="detail-data requirement-values">{values.map(([key, value]) => <div key={key}><dt>{type?.esquema_valor?.campos?.[key]?.label || key}</dt><dd>{ruleText(value, type?.esquema_valor?.campos?.[key], catalogs)}</dd></div>)}</dl>}
       {r.fecha_referencia && <p>Fecha de referencia: {r.fecha_referencia}</p>}
       {r.destino && <p>Condición del destino: {catalogs.paises.find(p => p.id === r.destino)?.nombre || 'No especificado'}</p>}
@@ -59,7 +64,6 @@ function documentLink(value) {
 }
 
 export function Documentation({ offer, catalogs, scopeId, showWarning = true }) {
-  const fictitious = offer.titulo?.endsWith('(Ficticia)')
   const documents = offer.requisitos.filter(r => isDocument(r, catalogs) && (scopeId === undefined || (r.opcion_estudio ?? null) === scopeId))
   const groups = [{ id: null, title: 'Documentos comunes a la convocatoria' }, ...offer.opciones.map(o => ({ id: o.id, title: `Documentos de la opción: ${o.programa || `${o.nivel} / ${o.modalidad}`} (#${o.id})` }))]
     .filter(group => scopeId === undefined || group.id === scopeId)
@@ -88,7 +92,6 @@ export function Documentation({ offer, catalogs, scopeId, showWarning = true }) 
         add('Certificados admitidos', v.certificados_admitidos)
         add('Vigencia publicada', v.vigencia)
         const extra = Object.entries(v).filter(([key]) => !['documento', 'certificados_admitidos', 'condiciones', 'vigencia', 'url_documento'].includes(key))
-        const link = documentLink(v.url_documento)
         return <li key={r.id} className="document-item"><h4 className="preserve-text">{title}</h4><p className="requirement-kind">{r.obligatorio ? 'Documento exigido según las bases' : 'No obligatorio según lo registrado'}</p>
           {facts.length > 0 && <dl className="document-facts">{facts.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd className="preserve-text">{value}</dd></div>)}</dl>}
           {extra.length > 0 && <dl className="document-facts">{extra.map(([key, value]) => <div key={key}><dt>{type?.esquema_valor?.campos?.[key]?.label || key}</dt><dd className="preserve-text">{value !== null && typeof value === 'object' ? JSON.stringify(value) : ruleText(value, type?.esquema_valor?.campos?.[key], catalogs)}</dd></div>)}</dl>}
@@ -96,11 +99,30 @@ export function Documentation({ offer, catalogs, scopeId, showWarning = true }) 
           {r.destino && <p>Aplicable al destino: {catalogs.paises.find(p => p.id === r.destino)?.nombre || 'Consultar las bases'}</p>}
           {r.modo_comprobacion && r.modo_comprobacion !== 'entidad_oferente' && <p>Modo de comprobación registrado: {r.modo_comprobacion}</p>}
           {r.referencia_bases && <details className="detail-reference"><summary>Referencia y evidencia en las bases</summary><p className="preserve-text">{r.referencia_bases}</p></details>}
-          {link && !fictitious && <a href={link} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar documento o formulario oficial: {title}</span></a>}
         </li>
       })}</ul></div> : null
     })}
   </section>
+}
+
+function officialDocuments(offer, officialUrl, catalogs) {
+  if (offer.titulo?.endsWith('(Ficticia)')) return []
+  const links = []
+  const seen = new Set(officialUrl ? [officialUrl] : [])
+  const add = (url, name, type) => {
+    const safe = documentLink(url)
+    if (!safe || seen.has(safe)) return
+    seen.add(safe)
+    links.push({ url: safe, name, type })
+  }
+  add(offer.url_bases, 'Bases o reglamento enlazado', 'Referencia de bases registrada')
+  for (const requirement of offer.requisitos || []) {
+    if (!isDocument(requirement, catalogs)) continue
+    const values = requirement.valor_estructurado || {}
+    add(values.url_documento, values.documento || values.certificados_admitidos || requirement.documento_exigido || 'Documento oficial',
+      'Documento o formulario indicado en los requisitos')
+  }
+  return links
 }
 
 function OptionStudy({ option, index, offer, catalogs }) {
@@ -116,9 +138,10 @@ function OptionStudy({ option, index, offer, catalogs }) {
       {option.duracion_meses != null && <div><dt>Duración</dt><dd>{option.duracion_meses} meses</dd></div>}
       {option.cupos != null && <div><dt>Cupos</dt><dd>{option.cupos}</dd></div>}</dl>
     <div className="offer-option-disclosures">
-      <details className="offer-disclosure"><summary>Beneficios específicos de esta opción <span>{benefits.length}</span></summary><BenefitList records={benefits} nested /></details>
-      <details className="offer-disclosure" open={requirements.length > 0}><summary>Requisitos académicos y personales <span>{requirements.length}</span></summary><RequirementList records={requirements} catalogs={catalogs} nested /></details>
-      <details className="offer-disclosure"><summary>Referencias, documentos y verificación <span>{documents.length}</span></summary><Documentation offer={offer} catalogs={catalogs} scopeId={option.id} showWarning={false} /></details>
+      {!benefits.length && !requirements.length && !documents.length && <p className="small-note">Esta opción comparte los requisitos, beneficios y documentos generales de la convocatoria. No se han registrado condiciones adicionales específicas.</p>}
+      {benefits.length > 0 && <details className="offer-disclosure"><summary>Beneficios específicos de esta opción <span>{benefits.length}</span></summary><BenefitList records={benefits} nested /></details>}
+      {requirements.length > 0 && <details className="offer-disclosure" open><summary>Requisitos académicos y personales <span>{requirements.length}</span></summary><RequirementList records={requirements} catalogs={catalogs} nested /></details>}
+      {documents.length > 0 && <details className="offer-disclosure"><summary>Referencias, documentos y verificación <span>{documents.length}</span></summary><Documentation offer={offer} catalogs={catalogs} scopeId={option.id} showWarning={false} /></details>}
     </div>
   </article>
 }
@@ -138,13 +161,14 @@ export default function OfferDetail() {
   const options = offer?.opciones || []
   const destinations = offer ? unique(options.flatMap(option => (option.paises || []).map(countryId => data.catalogs.paises.find(country => country.id === countryId)?.nombre))) : []
   const financing = offer ? benefitSummary(offer.beneficios) : []
+  const period = offer ? publishedPeriod(offer) : null
   const officialUrl = offer ? documentLink(offer.url_oficial) : null
-  const basesUrl = offer ? documentLink(offer.url_bases) : null
   const demonstration = offer?.titulo?.endsWith('(Ficticia)')
+  const documents = offer ? officialDocuments(offer, officialUrl, data.catalogs) : []
   return <OffersLayout><Link className="back-link" to="/becas"><Icon name="back" /><span>Volver al catálogo</span></Link>
     {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
     {!data && !error && <p role="status"><Icon name="loading" />Cargando convocatoria…</p>}
-    {offer && <><header className="offer-detail-hero"><div className="offer-hero-top"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{offer.institucion.nombre} · Entidad oferente ecuatoriana</p></div>
+    {offer && <><header className="offer-detail-hero"><div className="offer-hero-top"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{offer.institucion?.nombre ? `${offer.institucion.nombre} · Entidad oferente ecuatoriana` : 'Entidad oferente: No identificada · Consulta la fuente oficial'}</p></div>
       <div className="offer-hero-actions">{demonstration ? <><Link className="button offer-official-link" to={`/becas/${offer.id}/postulacion-demo`}><Icon name="external" /><span>Ir a postulación (demostración)</span></Link><p className="small-note">Convocatoria ficticia para demostración; no admite postulaciones.</p></> : officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
         <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div></div>
       <dl className="offer-hero-facts"><div><dt>Cierre</dt><dd>{closingText(offer)}</dd></div>
@@ -153,17 +177,21 @@ export default function OfferDetail() {
         {financing.length > 0 && <div className="offer-hero-financing"><dt>Financiamiento</dt><dd>{financing.map((line, index) => <span key={index}>{line}</span>)}</dd></div>}</dl>
       {!demonstration && officialUrl && <p className="small-note">El enlace oficial permite consultar la convocatoria; no necesariamente abre un formulario de postulación.</p>}</header>
       {offer.estado === 'cerrada' && <Message kind="info">La fecha de cierre ya pasó. Esta oferta se conserva para consulta.</Message>}
+      {offer.estado === 'sin_fecha' && <Message kind="info">La vigencia está por verificar. Esta beca se conserva para consulta y no se recomienda como postulable.</Message>}
       {offer.estado === 'cierre_hoy' && <Message kind="info">El cierre está indicado solo por día. No se conoce la hora; consulta el sitio oficial antes de postular.</Message>}
       <section className="profile-card offer-detail-section"><h2>Resumen y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
-        <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Cobertura publicada</dt><dd>{display(offer.cobertura_tipo)}</dd></div>
-          <div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div>{offer.cierre_original && <div><dt>Cierre según fuente</dt><dd>{offer.cierre_original}</dd></div>}
+        <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Cobertura publicada</dt><dd>{financing.length ? financing.join(' · ') : display(offer.cobertura_tipo)}</dd></div>
+          {period ? <div><dt>Período de postulación</dt><dd>Apertura: {dayDate(period.start)} · Cierre: {dayDate(period.end)} · Horas no informadas</dd></div>
+            : <><div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div>{offer.cierre_original && <div><dt>Fecha según fuente</dt><dd>{offer.cierre_original}</dd></div>}</>}
           <div><dt>Publicación en la fuente</dt><dd>{display(offer.fecha_publicacion)}</dd></div><div><dt>Gastos no cubiertos</dt><dd>{display(offer.gastos_no_cubiertos)}</dd></div><div><dt>Obligaciones</dt><dd>{display(offer.obligaciones_beneficiario)}</dd></div></dl><p className="small-note">Los instantes se muestran en America/Guayaquil. Un cierre expresado solo como día no tiene hora confirmada.</p></section>
       <Comparison key={offer.id} offerId={offer.id} catalogs={data.catalogs} />
-      <h2 className="section-heading offer-options-heading">Opciones de estudio</h2><p className="small-note offer-options-note">Las condiciones y documentos de cada opción se consultan por separado. La entidad oferente verifica los documentos y certificados; BecaNexo no los recibe.</p>{offer.opciones.map((o, index) => <OptionStudy key={o.id} option={o} index={index} offer={offer} catalogs={data.catalogs} />)}
+      <h2 className="section-heading offer-options-heading">Opciones de estudio</h2><p className="small-note offer-options-note">Los requisitos, beneficios y documentos generales se aplican a todas las opciones salvo que se indique una condición específica. La entidad oferente verifica los documentos y certificados; BecaNexo no los recibe.</p>{offer.opciones.map((o, index) => <OptionStudy key={o.id} option={o} index={index} offer={offer} catalogs={data.catalogs} />)}
       <section className="profile-card offer-detail-section"><h2>Beneficios comunes</h2><BenefitList records={offer.beneficios.filter((b) => !b.opcion_estudio)} /><p className="profile-note">Cada porcentaje corresponde exclusivamente al concepto financiado. No representa el costo total de estudiar.</p></section>
       <section className="profile-card offer-detail-section"><h2>Requisitos comunes</h2><RequirementList records={offer.requisitos.filter((r) => !r.opcion_estudio && !isDocument(r, data.catalogs))} catalogs={data.catalogs} /></section>
       <Documentation offer={offer} catalogs={data.catalogs} scopeId={null} showWarning={false} />
-      <section className="profile-card offer-source offer-detail-section"><h2>{demonstration ? 'Datos de demostración' : 'Bases y postulación externa'}</h2>{demonstration ? <p>Esta convocatoria es ficticia. No existen bases ni postulación reales.</p> : <><p>La postulación se realiza en la plataforma de la entidad oferente.</p><p>BecaNexo no tramita solicitudes ni adjudica becas.</p></>}
-        {!demonstration && basesUrl && basesUrl !== officialUrl && <a className="secondary-link" href={basesUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar bases oficiales</span></a>}{offer.actualizado_en && <p className="small-note">Última actualización: {date(offer.actualizado_en)}</p>}</section></>}
+      <section className="profile-card offer-source offer-detail-section"><h2>{demonstration ? 'Datos de demostración' : 'Bases y documentos oficiales'}</h2>{demonstration ? <p>Esta convocatoria es ficticia. No existen bases ni postulación reales.</p> : <><p>La postulación se realiza fuera de BecaNexo. La entidad oferente confirma los documentos y adjudica la beca.</p>
+        {documents.length ? <ul className="official-document-list">{documents.map(document => <li key={document.url}><Icon name="document" /><div><strong className="preserve-text">{document.name}</strong><span>{document.type} · Fuente: {offer.institucion?.nombre || 'publicación oficial'}</span></div><a className="secondary-link" href={document.url} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver documento</span></a></li>)}</ul> : <p className="small-note">No hay archivos oficiales enlazados en este registro. Consulta la información publicada por la entidad.</p>}
+        {officialUrl && !documents.length && <a className="secondary-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar información oficial</span></a>}</>}
+        {offer.actualizado_en && <p className="small-note">Última actualización: {date(offer.actualizado_en)}</p>}</section></>}
   </OffersLayout>
 }

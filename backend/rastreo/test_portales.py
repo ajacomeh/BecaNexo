@@ -8,8 +8,9 @@ from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 
-from convocatorias.models import BorradorRastreo, Convocatoria
+from convocatorias.models import BorradorRastreo, Convocatoria, Institucion
 from convocatorias.services import publicas
+from perfiles.models import Pais
 from .models import Fuente, Incidencia, Publicacion, Revision, Version
 from .portal_fuentes import PORTALES, admitted_url, extract_portal, extract_section, links, sections, choose_candidates
 from .services import register_portal, run_manual, run_scheduled, set_portal_active
@@ -20,7 +21,7 @@ FICHA = 'https://becas.utpl.edu.ec/tipos-de-becas/beca-sintetica'
 PDF = 'https://becas.utpl.edu.ec/documentos/bases.pdf'
 INDEX_HTML = f'<html><a href="{FICHA}">Conoce más</a><a href="https://otro.example/beca">Otra</a></html>'.encode()
 FICHA_HTML = (f'<html><main><h1>Beca sintética para ciudadanos ecuatorianos</h1>'
-              '<p>La Universidad ofrece esta beca a personas ecuatorianas.</p>'
+              '<p>Universidad ecuatoriana sintetica ofrece esta beca a personas ecuatorianas.</p>'
               '<h2>Requisitos</h2><p>Ser ciudadano ecuatoriano y estudiante activo.</p>'
               '<h2>Beneficio</h2><p>Cobertura parcial de matrícula.</p>'
               '<p>Cierre: 12 de noviembre de 2026</p>'
@@ -80,6 +81,19 @@ class PortalParserTests(SimpleTestCase):
                          ['tipo_de_beca_vigencia_desconocida', 'programa_permanente', 'convocatoria_con_cierre'])
         self.assertEqual(items[-1]['vigencia_al_consultar'], 'abierta')
 
+    def test_ups_literal_benefit_without_coverage_label_remains_pending(self):
+        portal = PORTALES['ups']
+        html = (b'<html><h4>Beca Distincion Academica</h4>'
+                b'<p>Se otorgara el 30% de beneficio para asignaturas academicas.</p>'
+                b'<p>Requisitos: promedio academico de 95/100.</p></html>')
+        found = sections(html, portal)
+        self.assertEqual(len(found), 1)
+        item = extract_section({'url': portal.indice, 'consulta_utc': '2026-11-13T12:00:00Z',
+                                'contenido': html}, portal, found[0])
+        self.assertIn('30% de beneficio', item['beneficio']['texto_original'])
+        self.assertEqual(item['tipo_oportunidad'], 'tipo_de_beca_vigencia_desconocida')
+        self.assertIsNone(item['cierre']['fecha'])
+
 
 @override_settings(RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS=True)
 class PortalRunTests(TransactionTestCase):
@@ -87,6 +101,8 @@ class PortalRunTests(TransactionTestCase):
         self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
         self.actor = get_user_model().objects.create_user(email='portal-admin@example.com', nombre='Administrador prueba', rol='administrador')
         self.user = get_user_model().objects.create_user(email='portal-user@example.com', nombre='Postulante prueba')
+        ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
+        Institucion.objects.create(nombre='Universidad ecuatoriana sintetica', sector='publico', pais=ec)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.storage = override_settings(RASTREO_STORAGE_ROOT=self.temp.name)
@@ -182,7 +198,7 @@ class PortalRunTests(TransactionTestCase):
         detail = portal.indice + '/convocatoria-prueba'
         index = f'<html><a href="{detail}">Beca concreta</a></html>'.encode()
         page = (b'<html><h1>Beca para ciudadanos ecuatorianos</h1>'
-                b'<p>Dirigida a ciudadanos ecuatorianos de la universidad.</p>'
+                b'<p>Universidad ecuatoriana sintetica ofrece esta beca a ciudadanos ecuatorianos.</p>'
                 b'<h2>Requisitos</h2><p>Ser estudiante regular y ciudadano ecuatoriano.</p>'
                 b'<p>Cierre: 12 de noviembre de 2026</p></html>')
         def network(url):
@@ -207,7 +223,7 @@ class PortalRunTests(TransactionTestCase):
                 f'<h4><a href="{pdf}">Beca Equidad Social</a></h4>'
                 '<p>La cobertura depende del quintil socioeconómico.</p>'
                 '<h4>Beca Permanente</h4><p>Programa permanente. Requisitos por revisar.</p>'
-                '<h4>Beca Mérito</h4><p>Dirigida a ciudadanos ecuatorianos.</p>'
+                '<h4>Beca Mérito</h4><p>Universidad ecuatoriana sintetica ofrece esta beca a ciudadanos ecuatorianos.</p>'
                 '<p>Requisitos: ser estudiante regular y ciudadano ecuatoriano.</p>'
                 '<p>Beneficio: cobertura parcial.</p><p>Cierre: 12 de noviembre de 2026</p></html>').encode()
         def network(url):

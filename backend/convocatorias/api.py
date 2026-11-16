@@ -14,7 +14,7 @@ from .comparacion import evaluar_convocatoria
 from .recomendaciones import recomendar
 from . import models as m, serializers as s
 from .reglas import CONTRATOS, esquema
-from .services import detalle, audit, touch, publicar, publicas
+from .services import detalle, audit, touch, publicar, publicas, postulables
 
 
 class Administrador(permissions.BasePermission):
@@ -105,7 +105,6 @@ def filtrar(request, qs, admin=False):
     p = request.query_params
     query = p.get("q", "").strip()
     if len(query) > 200: raise serializers.ValidationError({"q": "Máximo 200 caracteres."})
-    if query: qs = qs.filter(Q(titulo__icontains=query) | Q(institucion__nombre__icontains=query) | Q(areas__area__nombre__icontains=query))
     options = {"activa": True}
     for key, choices in (("nivel", m.NIVELES), ("modalidad", m.MODALIDADES)):
         if key in p:
@@ -114,9 +113,17 @@ def filtrar(request, qs, admin=False):
     if "destino" in p:
         if not m.Pais.objects.filter(codigo=p["destino"]).exists(): raise serializers.ValidationError({"destino": "País desconocido."})
         options["paises__codigo"] = p["destino"]
+    opciones_filtradas = m.OpcionEstudio.objects.filter(**options)
+    if query:
+        # Al buscar por programa, el texto y los filtros académicos deben pertenecer a la misma opción.
+        qs = qs.filter(
+            Q(titulo__icontains=query) | Q(institucion__nombre__icontains=query) |
+            Q(areas__area__nombre__icontains=query) | Q(descripcion__icontains=query) |
+            Q(pk__in=opciones_filtradas.filter(programa__icontains=query).values("convocatoria_id"))
+        )
     if len(options) > 1:
         # Una única subconsulta garantiza que todos los atributos pertenezcan a la misma opción.
-        qs = qs.filter(pk__in=m.OpcionEstudio.objects.filter(**options).values("convocatoria_id"))
+        qs = qs.filter(pk__in=opciones_filtradas.values("convocatoria_id"))
     if "tipo_beca" in p:
         tipo = entero(p, "tipo_beca", 0)
         if not m.TipoBeca.objects.filter(pk=tipo).exists(): raise serializers.ValidationError({"tipo_beca": "Tipo desconocido."})
@@ -125,7 +132,10 @@ def filtrar(request, qs, admin=False):
     today = timezone.localdate(now)
     current = Q(activa=True, revision="validada")
     started = Q(apertura__isnull=True) | Q(apertura__lte=now)
-    states = {"abierta": current & started & (Q(cierre__gt=now) | Q(cierre_dia__gt=today)),
+    ongoing = Q(cierre__gt=now) | Q(cierre_dia__gte=today)
+    states = {"todas": current,
+              "vigentes": current & started & ongoing,
+              "abierta": current & started & (Q(cierre__gt=now) | Q(cierre_dia__gt=today)),
               "cerrada": current & (Q(cierre__lte=now) | Q(cierre_dia__lt=today)),
               "cierre_hoy": current & started & Q(cierre_dia=today),
               "proxima": current & Q(apertura__gt=now) & (Q(cierre__isnull=True) | Q(cierre__gt=now)) & (Q(cierre_dia__isnull=True) | Q(cierre_dia__gte=today)),
@@ -150,7 +160,7 @@ class Consulta(AuthView):
     http_method_names = ["get", "options"]
 
     def get(self, request, pk=None):
-        qs = publicas()
+        qs = publicas() if pk is not None or request.query_params.get('estado') in ('cerrada', 'sin_fecha', 'proxima', 'todas') else postulables()
         postulante = request.user.is_authenticated and request.user.rol == "postulante"
         if postulante:
             from django.db.models import OuterRef, Subquery
@@ -253,7 +263,12 @@ class Hijos(AuthView):
                 serializer = serializer_type(child, data=request.data, partial=pk is not None, context={"convocatoria": obj})
                 serializer.is_valid(raise_exception=True)
                 serializer.save(convocatoria=obj)
-            touch(obj)
+            # Una opción editada en una convocatoria ya pública se valida antes de
+            # confirmar la transacción. Si falla, también se revierte la opción.
+            if self.recurso == "opciones" and obj.activa and obj.revision == "validada":
+                publicar(obj)
+            else:
+                touch(obj)
             audit(request.user, f"{self.recurso}_{'eliminar' if delete else 'editar' if pk else 'crear'}", before, detalle(obj), convocatoria=obj)
             return Response(status=204) if delete else Response(serializer.data, status=200 if pk else 201)
 

@@ -7,7 +7,7 @@ import Message from './Message'
 const kinds = ['opciones', 'beneficios', 'requisitos']
 const label = { opciones: 'Opción', beneficios: 'Beneficio', requisitos: 'Requisito' }
 const levels = ['bachillerato', 'grado', 'especializacion', 'maestria', 'doctorado']
-const modalities = ['presencial', 'virtual', 'semipresencial']
+const modalities = ['presencial', 'virtual', 'semipresencial', 'hibrida']
 
 function catalogData(kind, item, countries, types, extra) {
   const option = item.opcion || null

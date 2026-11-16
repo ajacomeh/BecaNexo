@@ -30,8 +30,8 @@ class ConvocatoriasTests(TestCase):
         self.assertEqual({o["id"] for o in detail["opciones"]}, {first["id"], second["id"]})
         self.assertEqual({b["opcion_estudio"] for b in detail["beneficios"]}, {first["id"], second["id"]})
         self.assertEqual({r["opcion_estudio"] for r in detail["requisitos"]}, {first["id"], second["id"]})
-        self.assertEqual(self.public.get("/api/becas/?nivel=maestria&modalidad=presencial&destino=ES").data["count"], 1)
-        self.assertEqual(self.public.get("/api/becas/?nivel=maestria&modalidad=virtual&destino=ES").data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/?estado=todas&nivel=maestria&modalidad=presencial&destino=ES").data["count"], 1)
+        self.assertEqual(self.public.get("/api/becas/?estado=todas&nivel=maestria&modalidad=virtual&destino=ES").data["count"], 0)
         self.client.force_login(self.student)
         comparison = self.client.get(f"/api/becas/{c}/comparacion/").data
         self.assertEqual({o["id"] for o in comparison["opciones"]}, {first["id"], second["id"]})
@@ -242,6 +242,9 @@ class ConvocatoriasTests(TestCase):
         c = self.oferta()["id"]
         self.opcion(c)
         path = f"/api/gestion/convocatorias/{c}/"
+        termino = f"historial-cierre-{c}"
+        self.write(path, {"titulo": termino}, "patch", 200)
+        catalogo = f"/api/becas/?q={termino}"
         self.write(path, {"cierre_dia": "2026-11-06"}, "patch", 400)
         self.write(path, {"cierre_dia": "2026-11-06", "cierre_original": "6 de noviembre de 2026"}, "patch", 200)
         self.write(path, {"cierre": "2026-11-06T23:59:00-05:00"}, "patch", 400)
@@ -254,13 +257,16 @@ class ConvocatoriasTests(TestCase):
         for moment, expected in cases:
             with self.subTest(moment=moment), patch("django.utils.timezone.now", return_value=datetime.fromisoformat(moment)):
                 self.assertEqual(self.public.get(f"/api/becas/{c}/").data["estado"], expected)
-                self.assertEqual(self.public.get(f"/api/becas/?estado={expected}").data["count"], 1)
-                self.assertEqual(self.public.get("/api/becas/?estado=sin_fecha").data["count"], 0)
+                self.assertEqual(self.public.get(f"{catalogo}&estado={expected}").data["count"], 1)
+                self.assertEqual(self.public.get(f"{catalogo}&estado=todas").data["count"], 1)
+                self.assertEqual(self.public.get(f"{catalogo}&estado=vigentes").data["count"], 0 if expected == "cerrada" else 1)
+                self.assertEqual(self.public.get(catalogo).data["count"], 0 if expected == "cerrada" else 1)
+                self.assertEqual(self.public.get(f"{catalogo}&estado=sin_fecha").data["count"], 0)
         m.Convocatoria.objects.filter(pk=c).update(apertura=datetime.fromisoformat("2026-11-06T12:00:00-05:00"))
         with patch("django.utils.timezone.now", return_value=datetime.fromisoformat("2026-11-06T08:00:00-05:00")):
             self.assertEqual(self.public.get(f"/api/becas/{c}/").data["estado"], "proxima")
-            self.assertEqual(self.public.get("/api/becas/?estado=proxima").data["count"], 1)
-            self.assertEqual(self.public.get("/api/becas/?estado=cierre_hoy").data["count"], 0)
+            self.assertEqual(self.public.get(f"{catalogo}&estado=proxima").data["count"], 1)
+            self.assertEqual(self.public.get(f"{catalogo}&estado=cierre_hoy").data["count"], 0)
         self.assertEqual(self.public.get("/api/becas/?orden=cierre").status_code, 200)
         with self.assertRaises(IntegrityError), transaction.atomic():
             m.Convocatoria.objects.filter(pk=c).update(cierre=timezone.now())
@@ -297,11 +303,41 @@ class ConvocatoriasTests(TestCase):
         self.opcion(c, paises=[self.es.pk])
         self.opcion(c, nivel="grado", modalidad="virtual", paises=[self.ec.pk])
         self.write(f"/api/gestion/convocatorias/{c}/publicar/", expected=200)
-        self.assertEqual(self.public.get("/api/becas/?nivel=maestria&destino=EC").data["count"], 0)
-        self.assertEqual(self.public.get("/api/becas/?nivel=maestria&destino=ES&modalidad=presencial").data["count"], 1)
-        self.assertEqual(self.public.get("/api/becas/?page_size=1&page=2").data["results"], [])
+        self.assertEqual(self.public.get("/api/becas/?estado=todas&nivel=maestria&destino=EC").data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/?estado=todas&nivel=maestria&destino=ES&modalidad=presencial").data["count"], 1)
+        self.assertEqual(self.public.get("/api/becas/?estado=todas&page_size=1&page=2").data["results"], [])
         for query in ("page_size=51", "page=0", "orden=password", "estado=borrador", "nivel=x", "destino=ZZ", "q=a&q=b", "arbitrario=1"):
             self.assertEqual(self.public.get("/api/becas/?" + query).status_code, 400)
+
+    def test_busqueda_publica_descripcion_programa_y_filtros(self):
+        c = self.oferta("Beca Exploración Académica")["id"]
+        self.write(f"/api/gestion/convocatorias/{c}/", {
+            "descripcion": "Apoyo para bioinformática avanzada",
+            "cierre_dia": (timezone.localdate() + timedelta(days=20)).isoformat(),
+            "cierre_original": "Plazo sintético de prueba",
+        }, "patch", 200)
+        self.opcion(c, nivel="grado", modalidad="hibrida", paises=[self.ec.pk],
+                    programa="Tecnología Superior en Turismo Rural")
+        self.opcion(c, nivel="grado", modalidad="presencial", paises=[self.ec.pk],
+                    programa="Arquitectura")
+        self.write(f"/api/gestion/convocatorias/{c}/publicar/", expected=200)
+        privada = self.oferta("Privada Turismo Rural")["id"]
+        self.write(f"/api/gestion/convocatorias/{privada}/", {
+            "descripcion": "bioinformática confidencial"}, "patch", 200)
+        for term in ("Exploración", "DEMO sintética", "bioinformática", "Turismo Rural"):
+            with self.subTest(term=term):
+                result = self.public.get("/api/becas/", {"q": term, "estado": "vigentes"}).data
+                self.assertEqual([item["id"] for item in result["results"]], [c])
+        self.assertEqual(self.public.get("/api/becas/", {
+            "q": "Turismo Rural", "estado": "vigentes", "nivel": "grado",
+            "modalidad": "hibrida", "destino": "EC"}).data["count"], 1)
+        self.assertEqual(self.public.get("/api/becas/", {
+            "q": "Turismo Rural", "estado": "vigentes", "modalidad": "presencial"}).data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/", {
+            "q": "Turismo Rural", "estado": "cerrada"}).data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/", {"q": "Privada"}).data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/", {
+            "q": "Exploración", "estado": "todas", "page_size": 1, "page": 2}).data["results"], [])
 
     def test_campos_urls_metodos_y_atomicidad(self):
         c = self.oferta()["id"]; base = f"/api/gestion/convocatorias/{c}/"

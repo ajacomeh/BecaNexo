@@ -30,6 +30,19 @@ it('confirma todos los candidatos y crea solo la opción seleccionada antes de a
   }))
 })
 
+it('conserva la modalidad híbrida al preparar una opción revisada', async () => {
+  const write = vi.spyOn(offersApi, 'write').mockResolvedValue({ convocatoria_id: 25 })
+  show({ proposal: { ...proposal, datos: { ...proposal.datos,
+    opciones: [{ ...proposal.datos.opciones[0], modalidad: 'hibrida' }] } } })
+  await userEvent.type(screen.getByLabelText('Correspondencia con la entidad oferente revisada'), 'Entidad confirmada')
+  await userEvent.click(screen.getAllByLabelText('Incluir en el borrador')[0])
+  await userEvent.type(screen.getByLabelText('Motivo y respaldo del mapeo'), 'Modalidad de la fuente confirmada')
+  await userEvent.click(screen.getByLabelText(/Confirmo el contenido seleccionado/))
+  await userEvent.click(screen.getByRole('button', { name: 'Crear borrador vinculado' }))
+  expect(await screen.findByText('Editor abierto')).toBeVisible()
+  expect(write.mock.calls[0][2].opciones[0].datos.modalidad).toBe('hibrida')
+})
+
 it('conserva confirmación, motivo y clave ante error recuperable', async () => {
   const write = vi.spyOn(offersApi, 'write').mockRejectedValueOnce(new Error('Conflicto sintético')).mockResolvedValueOnce({ convocatoria_id: 25 })
   show()

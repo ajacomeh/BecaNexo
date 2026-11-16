@@ -27,7 +27,7 @@ export default function DemoApplication() {
     {!current && <p role="status"><Icon name="loading" />Cargando demostración…</p>}
     {current?.error && <Message>{current.error}</Message>}
     {offer && (fictitious ? <section className="offer-detail-hero"><p className="eyebrow">DEMOSTRACIÓN · SIN POSTULACIONES</p><h1>Postulación de demostración</h1>
-      <p className="offer-provider">{offer.titulo}</p><p>{offer.institucion.nombre}</p>
+      <p className="offer-provider">{offer.titulo}</p><p>{offer.institucion?.nombre || 'Oferente no identificado'}</p>
       <p>Esta convocatoria es ficticia. Esta página solo muestra cómo se accedería a una postulación externa; no recibe solicitudes ni datos personales.</p>
       <Link className="secondary-link" to={`/becas/${id}`}>Volver a la convocatoria ficticia</Link>
     </section> : <Message>Esta página de demostración solo corresponde a convocatorias ficticias.</Message>)}

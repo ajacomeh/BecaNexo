@@ -25,8 +25,8 @@ it('muestra carga, error, reintento y vacío sin acciones editoriales', async ()
   expect(await screen.findByText('Error simulado')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
   expect(await screen.findByText('No hay registros para esta consulta.')).toBeVisible()
-  expect(get).toHaveBeenCalledTimes(5)
-  expect(screen.getByRole('heading', { name: 'Fuentes configuradas' })).toBeVisible()
+  expect(get).toHaveBeenCalledTimes(4)
+  expect(screen.getByRole('heading', { name: 'Rastreo', level: 2 })).toBeVisible()
   expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible()
   expect(screen.queryByRole('button', { name: /aprobar|publicar|ejecutar/i })).not.toBeInTheDocument()
 })
@@ -46,14 +46,19 @@ it('envía búsqueda, fuente y paginación bajo los resultados', async () => {
 })
 
 it('identifica fuente, estado, última ejecución y borradores en el panel', async () => {
-  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes')
-    ? list([{ id: 2, nombre: 'Becas UTPL', activa: false, politica_version: 'portal-ec/1',
-      publicaciones: 3, borradores: 1, ultima_ejecucion: { inicio: '2026-11-12T10:00:00Z', estado: 'parcial' } }])
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/control')
+    ? { puede_iniciar: false, fuentes_activas: 1, publicaciones_total: 3, borradores_total: 1,
+      ultima_ejecucion: { id: 8, fuente: 'SIAU prueba', inicio: '2026-11-12T10:00:00Z', estado: 'parcial' },
+      fuentes_registradas: [{ id: 1, nombre: 'SIAU prueba', activa: true, utilizable: true, politica_version: 'siau-nacionales/3', frecuencia_min: 1440 }],
+      fuentes_configuracion: [{ id: 1, nombre: 'SIAU prueba', politica_version: 'siau-nacionales/3', frecuencia_min: 1440 }] }
     : list())
   open()
-  expect(await screen.findByText(/3 publicaciones · 1 borradores/)).toBeVisible()
-  expect(screen.getByText(/Inactiva · portal-ec\/1/)).toBeVisible()
-  expect(screen.getByText(/Descarga parcial/)).toBeVisible()
+  expect((await screen.findByText('Publicaciones detectadas', { selector: 'dt' })).nextSibling).toHaveTextContent('3')
+  expect(screen.getByText('Borradores automáticos').nextSibling).toHaveTextContent('1')
+  expect(screen.getByText(/SIAU prueba · parcial/)).toBeVisible()
+  expect(screen.queryByText(/siau-nacionales\/3/)).not.toBeVisible()
+  await userEvent.click(screen.getByText('Configuración y detalles técnicos'))
+  expect(screen.getByText(/siau-nacionales\/3/)).toBeVisible()
 })
 
 it('limpia los filtros de publicaciones y mantiene el acceso al detalle', async () => {
@@ -82,17 +87,50 @@ it('consulta la versión observada A aunque exista B y renderiza texto sin HTML'
   })
   open('/gestion/rastreo/publicaciones/1')
   expect((await screen.findAllByText('<img src=x onerror=alert(1)>'))[0]).toBeVisible()
-  expect(screen.getByRole('heading', { name: 'Publicación sintética' }).closest('.crawl-detail-hero')).toHaveTextContent('Esta publicación todavía no es una convocatoria aprobada del catálogo.')
+  expect(screen.getByRole('heading', { name: 'Publicación sintética' }).closest('.crawl-detail-hero')).toHaveTextContent('Una publicación detectada no equivale a una beca aprobada del catálogo.')
   expect(screen.getByRole('link', { name: publication.url_original })).toHaveAttribute('href', publication.url_original)
-  expect(document.querySelectorAll('.crawl-detail-facts dt')).toHaveLength(3)
+  expect(document.querySelectorAll('.crawl-detail-facts dt')).toHaveLength(6)
+  await screen.findByText('Versión seleccionada')
   expect(document.querySelector('.crawl-version-current')).toHaveTextContent('Versión 1')
   expect(document.querySelector('img')).toBeNull()
   expect(get).toHaveBeenCalledWith('gestion/rastreo/publicaciones/1/versiones/1', {})
   await userEvent.click(screen.getByRole('button', { name: 'Consultar versión 2' }))
   expect((await screen.findAllByText('Versión B'))[0]).toBeVisible()
-  expect(screen.getByRole('heading', {name: 'Información de la versión 2'})).toHaveFocus()
+  expect(screen.getByRole('heading', {name: 'Información extraída · versión 2'})).toHaveFocus()
   expect(document.querySelector('.crawl-version-current')).toHaveTextContent('Versión 2')
   expect(get).toHaveBeenCalledWith('gestion/rastreo/publicaciones/1/versiones/2/documentos', { page: 1 })
+})
+
+it('centraliza la revisión en Convocatorias y explica publicaciones sin borrador', async () => {
+  const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => {
+    if (path.endsWith('publicaciones/1')) return { ...publication, convocatoria_id: 9,
+      cierre_extraido: { texto_original: '12 de noviembre de 2026' },
+      clasificacion_borrador: { estado: 'apta', motivo: 'Ficha individual verificada.' },
+      borrador: { id: 9, revision: 'pendiente', activa: true, bloqueos: ['Confirmar nacionalidad'], observaciones: ['Revisar bases ZIP'] } }
+    if (path.endsWith('/versiones/1')) return { numero: 1, datos_extraidos: { requisitos: { texto_original: 'Ser ecuatoriano' } }, texto_extraido: 'Texto íntegro', advertencias: [] }
+    return list()
+  })
+  open('/gestion/rastreo/publicaciones/1')
+  expect(await screen.findByRole('link', { name: 'Abrir borrador en Convocatorias' })).toHaveAttribute('href', '/gestion/convocatorias/9')
+  expect(screen.getByText('Confirmar nacionalidad')).toBeVisible()
+  expect(screen.getByText('12 de noviembre de 2026')).toBeVisible()
+  expect((await screen.findAllByText('Ser ecuatoriano'))[0]).toBeVisible()
+  expect(screen.getByText('Evidencias y versiones')).toBeVisible()
+  expect(screen.queryByText('Revisiones administrativas')).not.toBeInTheDocument()
+  expect(screen.queryByText('Propuesta de integración')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Registrar revisión' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Continuar propuesta' })).not.toBeInTheDocument()
+  expect(get.mock.calls.some(([path]) => path.includes('/propuestas') || path.includes('/revisiones'))).toBe(false)
+})
+
+it('explica por qué no existe borrador sin ofrecer una propuesta manual', async () => {
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('publicaciones/1')
+    ? { ...publication, version_observada_id: null, clasificacion_borrador: { estado: 'pendiente', motivo: 'Falta comprobar requisitos.' } }
+    : list())
+  open('/gestion/rastreo/publicaciones/1')
+  expect(await screen.findByText(/Falta comprobar requisitos/)).toBeVisible()
+  expect(screen.queryByRole('link', { name: 'Abrir borrador en Convocatorias' })).not.toBeInTheDocument()
+  expect(screen.getByText('No hay una versión conservada para esta publicación.')).toBeVisible()
 })
 
 it('presenta el error de descarga sin éxito ficticio', async () => {
@@ -104,9 +142,10 @@ it('presenta el error de descarga sin éxito ficticio', async () => {
   })
   vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 409 })
   open('/gestion/rastreo/publicaciones/1')
+  await userEvent.click(await screen.findByText('Documentos asociados'))
   await userEvent.click(await screen.findByRole('button', { name: 'Descargar evidencia' }))
   expect(screen.getByText('Evidencia 4 · ficha html').closest('.crawl-document')).toHaveTextContent('text/html')
-  expect(screen.getByText('Evidencia 4 · ficha html').closest('.crawl-document')).toHaveTextContent('Revisiones administrativas')
+  expect(screen.getByText('Evidencia 4 · ficha html').closest('.crawl-document')).toHaveTextContent('Documento conservado')
   expect(await screen.findByText('Evidencia no disponible o inconsistente.')).toBeVisible()
 })
 
@@ -139,8 +178,8 @@ it('busy conserva el bloqueo aunque disabled sea false', () => {
 
 it.each([
   ['publicaciones', '/gestion/rastreo', 'Publicaciones detectadas'],
-  ['publicaciones/1/versiones', '/gestion/rastreo/publicaciones/1', 'Versiones registradas'],
-  ['publicaciones/1/observaciones', '/gestion/rastreo/publicaciones/1', 'Historial de observaciones'],
+  ['publicaciones/1/versiones', '/gestion/rastreo/publicaciones/1', 'Seleccionar versión'],
+  ['publicaciones/1/observaciones', '/gestion/rastreo/publicaciones/1', 'Historial'],
   ['ejecuciones', '/gestion/rastreo/ejecuciones', 'Ejecuciones'],
   ['ejecuciones/1/accesos', '/gestion/rastreo/ejecuciones/1', 'Accesos'],
   ['ejecuciones/1/incidencias', '/gestion/rastreo/ejecuciones/1', 'Incidencias'],
@@ -197,14 +236,15 @@ it('selecciona por ID global distinto del número, maneja error y agrupa context
     return list()
   })
   open('/gestion/rastreo/publicaciones/1')
-  await screen.findByRole('heading', {name: 'Información de la versión 1'})
+  await screen.findByRole('heading', {name: 'Información extraída · versión 1'})
+  await screen.findByText('Versión seleccionada')
   expect(screen.queryByRole('button', {name: 'Consultar versión 1'})).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', {name: 'Consultar versión 2'}))
   expect(await screen.findByText('Versión temporalmente no disponible')).toBeVisible()
-  expect(screen.queryByRole('heading', {name: 'Información de la versión 1'})).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', {name: 'Información extraída · versión 1'})).not.toBeInTheDocument()
   failure = false
   await userEvent.click(screen.getByRole('button', {name: 'Reintentar'}))
-  expect(await screen.findByRole('heading', {name: 'Información de la versión 2'})).toHaveFocus()
+  expect(await screen.findByRole('heading', {name: 'Información extraída · versión 2'})).toHaveFocus()
   await userEvent.click(screen.getByText('Estudios y contextos mencionados'))
   const group = screen.getByText('Estudios y contextos mencionados').closest('details')
   expect(within(group).getAllByText('Contexto compartido')).toHaveLength(1)

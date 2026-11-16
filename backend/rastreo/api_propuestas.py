@@ -110,18 +110,24 @@ class OrigenBorrador(AuthView):
         applied = Revision.objects.filter(convocatoria=offer, dimension='integracion', decision='aplicada').select_related('propuesta').first()
         if not applied:
             from convocatorias.models import BorradorRastreo
-            from .auto_borradores import pending_for_publication
+            from .auto_borradores import pending_for_publication, review_notes
             auto = BorradorRastreo.objects.filter(convocatoria=offer).select_related('publicacion', 'version').first()
             if auto:
-                from .auto_borradores import latest_version, materially_changed, version_confirmed, review_baseline
+                from .auto_borradores import latest_version, materially_changed, version_confirmed, review_baseline, editable_candidates
                 current = latest_version(auto.publicacion)
+                extracted = auto.version.datos_extraidos or {}
                 return Response({'aplicacion': None, 'automatico': True, 'publicacion_id': auto.publicacion_id,
                     'version_id': auto.version_id, 'datos_iniciales': auto.datos_iniciales,
+                    'candidatos_editables': editable_candidates(auto.version),
+                    'enlaces_origen': {'publicacion': auto.publicacion.url_original,
+                        'bases': extracted.get('enlaces_bases') or [],
+                        'postulacion': extracted.get('enlaces_postulacion') or []},
                     'version_actual_id': current.pk if current else None,
                     'cambio_relevante': materially_changed(review_baseline(auto, offer), current),
                     'revision_confirmada': version_confirmed(offer, current) if current else False,
                     'version_convocatoria': offer.version,
                     'bloqueos_actuales': pending_for_publication(offer, auto),
+                    'observaciones': review_notes(offer, auto),
                     'pendientes_iniciales': auto.pendientes_iniciales})
             return Response({'aplicacion': None})
         source = applied.propuesta

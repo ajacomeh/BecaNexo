@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { offersApi } from './api/client'
@@ -8,6 +8,10 @@ import { remaining } from './components/crawlTime'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const ready = { fuente_id: 1, politica_version: 'siau-nacionales/3', frecuencia_min: 1440,
+  fuente_nombre: 'SIAU', fuentes_activas: 1, publicaciones_total: 5, borradores_total: 1,
+  fuentes_registradas: [{ id: 1, nombre: 'SIAU', activa: true, utilizable: true, politica_version: 'siau-nacionales/3', frecuencia_min: 1440 }],
+  conectores_sin_registro: [{ adaptador: 'portal_ec:utpl', nombre: 'Becas UTPL' }],
+  fuentes_configuracion: [{ id: 1, nombre: 'SIAU', politica_version: 'siau-nacionales/3', frecuencia_min: 1440 }],
   proxima_ejecucion: null, ejecucion_activa: null, inicio_pendiente: false, puede_iniciar: true,
   ultima_ejecucion: { id: 5, estado: 'finalizada', origen: 'programada' } }
 function open() { render(<MemoryRouter><CrawlingControl /></MemoryRouter>) }
@@ -15,10 +19,13 @@ function open() { render(<MemoryRouter><CrawlingControl /></MemoryRouter>) }
 it('muestra frecuencia, historial y deshabilita el botón antes de la próxima ventana', async () => {
   const get = vi.spyOn(offersApi, 'get').mockResolvedValue({ ...ready, proxima_ejecucion: '2026-11-11T19:43:41Z', puede_iniciar: false })
   open()
-  expect(await screen.findByText(/Frecuencia: cada 24 horas \(1440 minutos\)/)).toBeVisible()
-  expect(screen.getByRole('region', { name: 'Rastreo automático' })).toBeVisible()
-  expect(screen.getByRole('region', { name: 'Rastreo manual' })).toBeVisible()
-  expect(within(screen.getByRole('region', { name: 'Rastreo manual' })).getByText(/pendiente de autorización/)).toBeVisible()
+  expect(await screen.findByRole('heading', { name: 'Rastreo' })).toBeVisible()
+  expect(screen.getByText('Publicaciones detectadas').nextSibling).toHaveTextContent('5')
+  expect(screen.getByText('Borradores automáticos').nextSibling).toHaveTextContent('1')
+  await userEvent.click(screen.getByText('Configuración y detalles técnicos'))
+  expect(screen.getByText(/SIAU · Activa y autorizada · Política: siau-nacionales\/3 · Frecuencia: 1440 minutos/)).toBeVisible()
+  expect(screen.getByText(/Becas UTPL · No registrado ni activo/)).toBeVisible()
+  expect(screen.getByText(/pendiente de autorización/)).toBeVisible()
   expect(screen.getByRole('button', { name: 'Iniciar rastreo' })).toBeDisabled()
   expect(screen.getByRole('link', { name: '#5' })).toHaveAttribute('href', '/gestion/rastreo/ejecuciones/5')
   expect(get).toHaveBeenCalledWith('gestion/rastreo/control')
@@ -85,7 +92,7 @@ it('solo presenta Disponible cuando el servidor habilita el inicio', async () =>
   const get = vi.spyOn(offersApi, 'get').mockResolvedValue({ ...ready, proxima_manual: past,
     rastreo_extraordinario_habilitado: false, puede_iniciar: false })
   open()
-  expect(await screen.findByText(/La excepción de cinco minutos no está autorizada/)).toBeVisible()
+  expect(await screen.findByText(/la excepción de cinco minutos no está autorizada/)).toBeVisible()
   expect(screen.queryByText('Inicio desde el panel: Disponible')).not.toBeInTheDocument()
   cleanup()
   get.mockResolvedValue({ ...ready, proxima_manual: past, rastreo_extraordinario_habilitado: true })

@@ -54,6 +54,10 @@ test('borrador automático visible solo en administración y revisable a tres an
       bloqueos_actuales: ['Confirmar entidad oferente ecuatoriana', 'Revisar la versión nueva'],
       datos_iniciales: { titulo: offer.titulo, requisitos_originales: 'Condición sintética larga '.repeat(20),
         entidad_mencionada: 'Entidad ecuatoriana sintética' },
+      candidatos_editables: { requisitos: [], opciones: [], otros_campos: { beneficios: [{
+        texto_original: 'Por una sola vez USD 828.97 para manutención', concepto_sugerido: 'manutención',
+        monto: 828.97, moneda: 'USD', porcentaje: null, tope_original: null,
+        procedencia: { version_id: 2 } }] } },
     } })
     if (path === '/api/gestion/becas/catalogos/' || path === '/api/becas/catalogos/') return route.fulfill({ json: catalogs })
     if (path === '/api/becas/') return route.fulfill({ json: list([]) })
@@ -70,6 +74,10 @@ test('borrador automático visible solo en administración y revisable a tres an
     await expect(page.getByRole('link', { name: /Consultar ficha/ })).toHaveAttribute('href', '/gestion/rastreo/publicaciones/5')
     await page.getByText('Datos de origen conservados').click()
     await expect(page.getByText(/Condición sintética larga/)).toBeVisible()
+    await page.getByText('Beneficios interpretados para revisar').click()
+    await page.getByRole('button', { name: 'Preparar en editor' }).click()
+    await expect(page.getByLabel('Importe fijo (no es tope)')).toHaveValue('828.97')
+    await expect(page.getByLabel('Concepto financiado')).toHaveValue('manutención')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
     await page.getByRole('link', { name: /Consultar ficha/ }).click()
     await page.getByRole('button', { name: 'Continuar propuesta' }).click()

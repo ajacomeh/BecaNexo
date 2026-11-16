@@ -170,6 +170,25 @@ class Publicacion(models.Model):
                        check('rast_publicacion_fechas', Q(ultima_deteccion__gte=F('primera_deteccion')))]
 
 
+class CandidatoIndice(models.Model):
+    """Referencia factual del índice; no es publicación extraída ni borrador."""
+    fuente = models.ForeignKey(Fuente, on_delete=models.PROTECT)
+    ultima_ejecucion = models.ForeignKey(Ejecucion, on_delete=models.PROTECT)
+    url_normalizada = models.CharField(max_length=2048)
+    titulo_publico = models.CharField(max_length=200)
+    pagina = models.PositiveSmallIntegerField()
+    respuesta_sha256 = models.CharField(max_length=64)
+    primera_deteccion = models.DateTimeField(default=timezone.now)
+    ultima_deteccion = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'TRA_CANDIDATO_INDICE'
+        constraints = [models.UniqueConstraint(fields=['fuente', 'url_normalizada'], name='rast_candidato_indice_url'),
+                       check('rast_candidato_indice_fecha', Q(ultima_deteccion__gte=F('primera_deteccion'))),
+                       check('rast_candidato_indice_pagina', Q(pagina__gt=0, pagina__lte=12)),
+                       check('rast_candidato_indice_hash', Q(respuesta_sha256__regex=r'^[0-9a-f]{64}$'))]
+
+
 class Version(models.Model):
     publicacion = models.ForeignKey(Publicacion, on_delete=models.PROTECT, related_name='versiones')
     numero = models.PositiveIntegerField()

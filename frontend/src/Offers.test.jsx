@@ -16,6 +16,47 @@ const filterCatalogs = { ...catalogs, niveles: [{ valor: 'maestria', nombre: 'Ma
 const adminListing = { count: 1, page: 1, page_size: 12, results: [{ id: 4, estado: 'borrador', titulo: 'Convocatoria sintética', institucion: { nombre: 'Entidad ficticia' }, beneficios: [], opciones: [], cierre: null }] }
 
 describe('convocatorias', () => {
+  it('resume las opciones y muestra cierres con día o instante sin inventar horas', async () => {
+    const makeOffer = (id, options, dates = {}) => ({
+      id, titulo: `Convocatoria ${id}`, estado: id === 14 ? 'cerrada' : id === 16 ? 'borrador' : 'abierta',
+      institucion: { nombre: 'Entidad ecuatoriana' }, beneficios: [], opciones: options, cierre: null, ...dates,
+    })
+    const udaOptions = [
+      ...Array.from({ length: 4 }, (_, id) => ({ id, nivel: 'grado', modalidad: 'presencial', activa: true })),
+      ...Array.from({ length: 3 }, (_, id) => ({ id: id + 4, nivel: 'grado', modalidad: 'hibrida', activa: true })),
+    ]
+    const offers = [
+      ...[18, 19, 20].map(id => makeOffer(id, udaOptions, { cierre_dia: '2026-11-22' })),
+      makeOffer(14, [{ nivel: 'grado', modalidad: 'hibrida', activa: true }], { cierre_dia: '2026-10-21' }),
+      makeOffer(16, []),
+      makeOffer(21, [{ nivel: 'grado', modalidad: 'presencial', activa: true },
+        { nivel: 'maestria', modalidad: 'virtual', activa: true },
+        { nivel: 'doctorado', modalidad: 'hibrida', activa: false }], { cierre: '2026-11-22T15:30:00Z' }),
+    ]
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs :
+      { count: offers.length, page: 1, page_size: 12, results: offers })
+    render(<MemoryRouter><Offers admin /></MemoryRouter>)
+    for (const id of [18, 19, 20]) {
+      const card = (await screen.findByRole('heading', { name: `Convocatoria ${id}` })).closest('article')
+      expect(within(card).getByText('Opciones de estudio: 7')).toBeVisible()
+      expect(within(card).getByText('Nivel: Grado')).toBeVisible()
+      expect(within(card).getByText('Modalidades: Presencial, Híbrida')).toBeVisible()
+      expect(within(card).getByText(/Cierre: 22 nov 2026 · hora no informada/)).toBeVisible()
+      expect(within(card).getByRole('link', { name: 'Editar y revisar' })).toHaveAttribute('href', `/gestion/convocatorias/${id}`)
+    }
+    const historic = screen.getByRole('heading', { name: 'Convocatoria 14' }).closest('article')
+    expect(within(historic).getByText(/Cierre: 21 oct 2026/)).toBeVisible()
+    const draft = screen.getByRole('heading', { name: 'Convocatoria 16' }).closest('article')
+    expect(within(draft).getByText('Opciones de estudio: 0')).toBeVisible()
+    expect(within(draft).getByText('Modalidades: No especificadas')).toBeVisible()
+    expect(within(draft).getByText('Cierre: Fecha de cierre no informada')).toBeVisible()
+    const mixed = screen.getByRole('heading', { name: 'Convocatoria 21' }).closest('article')
+    expect(within(mixed).getByText('Opciones de estudio: 2')).toBeVisible()
+    expect(within(mixed).getByText('Niveles: Grado, Maestría')).toBeVisible()
+    expect(within(mixed).getByText('Modalidades: Presencial, Virtual')).toBeVisible()
+    expect(within(mixed).getByText(/Cierre:.*10:30/)).toBeVisible()
+  })
+
   it('identifica un borrador del rastreo sin oferente confirmado en administración', async () => {
     vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs :
       { count: 1, page: 1, page_size: 12, results: [{ id: 19, estado: 'borrador', titulo: 'Beca nacional sintética',
@@ -36,7 +77,7 @@ describe('convocatorias', () => {
     expect(within(filters).getByRole('option', { name: 'Todas las modalidades' })).toBeInTheDocument()
     expect(within(filters).getByRole('option', { name: 'Todos los destinos' })).toBeInTheDocument()
     expect(within(filters).queryByRole('option', { name: 'Sin declarar' })).not.toBeInTheDocument()
-    await user.type(within(filters).getByLabelText('Buscar título, institución o área'), 'Convocatoria')
+    await user.type(within(filters).getByLabelText('Buscar título, institución, área, descripción o programa'), 'Convocatoria')
     await user.selectOptions(within(filters).getByLabelText('Nivel'), 'maestria')
     const more = within(filters).getByText('Más filtros').closest('details')
     expect(more.open).toBe(false)
@@ -209,6 +250,89 @@ describe('convocatorias', () => {
     await userEvent.click(region.getByRole('button', { name: 'Guardar opciones de estudio' }))
     await waitFor(() => expect(write).toHaveBeenCalledWith('gestion/convocatorias/41/opciones/12', 'PATCH', expect.objectContaining({ programa: 'Programa B' })))
     expect(get).toHaveBeenCalledWith('gestion/convocatorias/41')
+  })
+
+  it('precarga un valor estructurado sugerido sin guardarlo ni validarlo', async () => {
+    const offer = { id: 41, titulo: 'Beca sintética', institucion: null, revision: 'pendiente',
+      estado: 'borrador', version: 1, opciones: [], beneficios: [], requisitos: [], origen_automatico: true }
+    const reviewCatalogs = { ...filterCatalogs, tipos_requisito: [
+      { id: 9, codigo: 'OTRO', nombre: 'Otro', esquema_valor: { campos: {} } },
+      { id: 10, codigo: 'PROMEDIO', nombre: 'Promedio', esquema_valor: { campos: {
+        minimo: { label: 'Promedio mínimo', kind: 'number', required: true },
+        escala_min: { label: 'Mínimo de escala', kind: 'number', required: true },
+        escala_max: { label: 'Máximo de escala', kind: 'number', required: true },
+      } } }] }
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? reviewCatalogs
+      : path === 'gestion/convocatorias/41' ? offer
+        : path.endsWith('/origen') ? { aplicacion: null, automatico: true, publicacion_id: 8,
+          version_id: 12, datos_iniciales: {}, bloqueos_actuales: ['Revisar requisitos'],
+          candidatos_editables: { requisitos: [{ texto_original: 'Promedio literal', tipo_sugerido: 'PROMEDIO',
+            valor_sugerido: { minimo: 8.5 }, estado: 'identificada', metodo: 'regla',
+            validado: false, procedencia: { version_id: 12, documento_id: 7 } }], opciones: [] } }
+          : { count: 1, results: [{ id: 1, nombre: 'Entidad sintética' }] })
+    const write = vi.spyOn(offersApi, 'write')
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
+    await userEvent.click(await screen.findByText('Requisitos extraídos para revisar (1)'))
+    await userEvent.click(screen.getByRole('button', { name: 'Preparar en editor' }))
+    const region = within(screen.getByRole('region', { name: 'Requisitos' }))
+    expect(region.getByLabelText(/Texto original del requisito/)).toHaveValue('Promedio literal')
+    expect(region.getByLabelText(/Promedio mínimo/)).toHaveValue(8.5)
+    expect(region.getByLabelText(/Transcripción revisada por administrador/)).toHaveValue('false')
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('prepara un beneficio fijo literal sin convertir un tope en importe fijo', async () => {
+    const offer = { id: 41, titulo: 'Beca sintética', institucion: null, revision: 'pendiente',
+      estado: 'borrador', version: 1, opciones: [], beneficios: [], requisitos: [], origen_automatico: true }
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs
+      : path === 'gestion/convocatorias/41' ? offer
+        : path.endsWith('/origen') ? { aplicacion: null, automatico: true, publicacion_id: 8,
+          version_id: 12, datos_iniciales: {}, bloqueos_actuales: [],
+          candidatos_editables: { requisitos: [], opciones: [], otros_campos: { beneficios: [{
+            texto_original: 'Por una sola vez USD 828.97 para manutención', concepto_sugerido: 'manutención',
+            monto: 828.97, moneda: 'USD', porcentaje: null, tope_original: null,
+            procedencia: { version_id: 12 } }] } } }
+          : { count: 1, results: [{ id: 1, nombre: 'Entidad sintética' }] })
+    const write = vi.spyOn(offersApi, 'write')
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
+    await userEvent.click(await screen.findByText('Beneficios interpretados para revisar'))
+    await userEvent.click(screen.getByRole('button', { name: 'Preparar en editor' }))
+    const region = within(screen.getByRole('region', { name: 'Beneficios' }))
+    expect(region.getByLabelText(/Concepto financiado/)).toHaveValue('manutención')
+    expect(region.getByLabelText('Importe fijo (no es tope)')).toHaveValue(828.97)
+    expect(region.getByLabelText('Moneda del importe fijo')).toHaveValue('USD')
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{}, { cobertura: 'parcial', bases: 'https://fuente.edu.ec/bases.pdf', gastos: 'No cubre transporte', tipo: '6' }],
+    [{ cobertura_tipo: 'mixta', url_bases: 'https://admin.example/bases.pdf',
+      gastos_no_cubiertos: 'Revisado por administración', tipo_beca: 7 },
+    { cobertura: 'mixta', bases: 'https://admin.example/bases.pdf', gastos: 'Revisado por administración', tipo: '7' }],
+  ])('precarga solo campos generales vacíos y conserva ediciones administrativas', async (previous, expected) => {
+    const offer = { id: 41, titulo: 'Beca sintética', institucion: null, revision: 'pendiente',
+      estado: 'borrador', version: 1, opciones: [], beneficios: [], requisitos: [], origen_automatico: true, ...previous }
+    const reviewCatalogs = { ...filterCatalogs, areas: [{ id: 4, nombre: 'Ingeniería' }], tipos_beca: [
+      { id: 6, nombre: 'Excelencia' }, { id: 7, nombre: 'Movilidad' }] }
+    const source = { aplicacion: null, automatico: true, publicacion_id: 8, version_id: 12,
+      datos_iniciales: {}, bloqueos_actuales: [], enlaces_origen: {
+        bases: [{ url: 'https://fuente.edu.ec/bases.pdf' }] },
+      candidatos_editables: { requisitos: [], opciones: [], otros_campos: {
+        tipo_beca_literal: 'excelencia', cobertura_tipo_sugerida: 'parcial',
+        gastos_no_cubiertos_literal: 'No cubre transporte', areas_literales: ['Ingeniería'],
+        fechas: { publicacion: '2026-11-13' } } } }
+    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? reviewCatalogs
+      : path === 'gestion/convocatorias/41' ? offer
+        : path.endsWith('/origen') ? source : { count: 1, results: [{ id: 1, nombre: 'Entidad sintética' }] })
+    const write = vi.spyOn(offersApi, 'write')
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
+    expect(await screen.findByLabelText(/Cobertura según las bases/)).toHaveValue(expected.cobertura)
+    expect(screen.getByLabelText(/Enlace de las bases/)).toHaveValue(expected.bases)
+    expect(screen.getByLabelText(/Gastos no cubiertos/)).toHaveValue(expected.gastos)
+    expect(screen.getByLabelText(/Tipo de beca/)).toHaveValue(expected.tipo)
+    expect(screen.getByLabelText(/Fecha de publicación/)).toHaveValue('2026-11-13')
+    expect(screen.getByRole('group', { name: /Áreas académicas/ }).querySelector('input[type="checkbox"]')).toBeChecked()
+    expect(write).not.toHaveBeenCalled()
   })
 
   it.each([

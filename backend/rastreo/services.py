@@ -453,7 +453,8 @@ class PersistentDownloader(Downloader):
                              'Contrato AJAX público fuera de los límites admitidos.', access)
                     raise AccessError('Índice nacional fuera del contrato AJAX.') from None
             if (not self.portal and self.page_url == url and url not in PAGES and self.execution.configuracion_snapshot['politica_version'] in ('siau-nacionales/3', 'siau-nacionales/4')
-                    and not national_ficha_content(content)):
+                    and not national_ficha_content(content, include_all_becas=
+                        self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/4')):
                 access = self.record(url, entry, status, 'bloqueado', error='FICHA_FUERA_ALCANCE')
                 incident(self.execution, 'FICHA_FUERA_ALCANCE', 'La ficha no conserva la estructura nacional anunciada en el índice.', access, 'aviso')
                 raise AccessError('Ficha fuera del alcance nacional verificado.')
@@ -516,7 +517,7 @@ class PersistentDownloader(Downloader):
         try:
             if headers.get('content-type', '').split(';')[0].strip().lower() != 'text/html':
                 raise AccessError('MIME AJAX inesperado.')
-            parser = NationalIndexLinks()
+            parser = NationalIndexLinks(include_all_becas=True)
             parser.feed(content.decode('utf-8-sig'))
             if not parser.article_count:
                 raise AccessError('Respuesta AJAX sin tarjetas de convocatorias.')
@@ -536,12 +537,18 @@ class PersistentDownloader(Downloader):
 
 def summary(execution):
     execution.refresh_from_db()
+    from convocatorias.models import BorradorRastreo
+    created = BorradorRastreo.objects.filter(
+        version__observacion__ejecucion=execution,
+        creada_en__gte=execution.inicio,
+        creada_en__lte=execution.fin,
+    ).distinct().count() if execution.fin else 0
     return {'id': execution.pk, 'clave': str(execution.clave_idempotencia), 'estado': execution.estado,
             'accesos': execution.accesos.count(), 'documentos_distintos': execution.accesos.exclude(documento=None).values('documento').distinct().count(),
             'incidencias': list(execution.incidencias.values('id', 'codigo', 'gravedad', 'detalle')),
             'publicaciones_observadas': execution.publicaciones_observadas, 'versiones_nuevas': execution.versiones_nuevas,
             'observaciones_sin_cambios': execution.observaciones_sin_cambios,
-            'convocatorias_creadas': 0, 'revision_documental': 'pendiente'}
+            'convocatorias_creadas': created, 'revision_documental': 'pendiente'}
 
 
 def run_manual(source_id, actor_id, key, manual_context=None):
@@ -664,7 +671,7 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                     national = download(NATIONAL_INDEX)
                     discovered, truncated = national_index_pages(national['contenido'])
                     if source.politica_version == 'siau-nacionales/4':
-                        first_parser = NationalIndexLinks()
+                        first_parser = NationalIndexLinks(include_all_becas=True)
                         first_parser.feed(national['contenido'].decode('utf-8-sig'))
                         discovered = first_parser.urls
                         truncated = truncated or len(discovered) > MAX_FICHAS

@@ -22,7 +22,7 @@ from . import tests as base
 from .models import Acceso, Documento, Ejecucion, Publicacion, Revision
 from .web_launch import LaunchBusy, launch_lock, start_worker, spawn_detached
 from .web_worker import main as worker_main
-from .services import enable_discovery, enable_national_discovery
+from .services import configure, enable_discovery, enable_national_discovery, register_portal, set_portal_active
 
 
 ROOT = '/api/gestion/rastreo/control/'
@@ -248,6 +248,44 @@ class WebControlTests(TransactionTestCase):
             self.assertEqual(response.data['estado'], 'iniciando')
             start.assert_called_once_with(source.pk, self.actor.pk, 'Verificacion administrativa', False)
             self.assertEqual(Ejecucion.objects.count(), 0)
+
+    def test_panel_selects_only_due_authorized_source_without_changing_siau(self):
+        siau = self.source()
+        Ejecucion.objects.create(fuente=siau, solicitado_por=self.actor, configuracion_snapshot={},
+            version_extractor='prueba', inicio=timezone.now(), fin=timezone.now(), estado='finalizada')
+        ups, _ = register_portal(self.actor.pk, 'ups', 'Alta sintética auditada')
+        ups, _ = set_portal_active(ups.pk, self.actor.pk, 'Activación sintética auditada', True)
+        with tempfile.TemporaryDirectory() as root, override_settings(RASTREO_WEB_LAUNCH_ROOT=root), \
+                patch('rastreo.api_control.start_worker', return_value=uuid.uuid4()) as start:
+            admin = self._client(self.actor)
+            token = admin.get('/api/auth/csrf/').data['csrfToken']
+            state = admin.get(ROOT).data
+            self.assertEqual(state['fuente_id'], ups.pk)
+            self.assertEqual(state['fuentes_activas'], 2)
+            self.assertEqual({item['nombre'] for item in state['fuentes_registradas']}, {siau.nombre, ups.nombre})
+            self.assertEqual([item['adaptador'] for item in state['conectores_sin_registro']], ['portal_ec:utpl'])
+            self.assertTrue(state['puede_iniciar'])
+            response = admin.post(ROOT, {'motivo': 'Validación de fuente activa'}, format='json', HTTP_X_CSRFTOKEN=token)
+            self.assertEqual(response.status_code, 202)
+            start.assert_called_once_with(ups.pk, self.actor.pk, 'Validación de fuente activa', False)
+            self.assertEqual(Ejecucion.objects.filter(fuente=ups).count(), 0)
+
+    def test_panel_disables_start_without_active_source(self):
+        self.source()
+        configure(self.actor.pk, 'Desactivación sintética auditada', active=False)
+        with tempfile.TemporaryDirectory() as root, override_settings(RASTREO_WEB_LAUNCH_ROOT=root), \
+                patch('rastreo.api_control.start_worker') as start:
+            admin = self._client(self.actor)
+            token = admin.get('/api/auth/csrf/').data['csrfToken']
+            state = admin.get(ROOT).data
+            self.assertEqual(state['fuentes_activas'], 0)
+            self.assertEqual(state['fuentes_registradas'][0]['nombre'], 'SIAU')
+            self.assertFalse(state['fuentes_registradas'][0]['activa'])
+            self.assertIn('portal_ec:utpl', [item['adaptador'] for item in state['conectores_sin_registro']])
+            self.assertFalse(state['puede_iniciar'])
+            self.assertEqual(admin.post(ROOT, {'motivo': 'Validación de ausencia de fuentes'},
+                format='json', HTTP_X_CSRFTOKEN=token).status_code, 409)
+            start.assert_not_called()
 
     def test_frequency_active_execution_and_pending_marker_block_launch(self):
         source = self.source()

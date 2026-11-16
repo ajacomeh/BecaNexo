@@ -1,8 +1,8 @@
-import { House, GraduationCap, UserRound, SlidersHorizontal, Heart, ClipboardList, Building2, Radar, Pencil, LogOut, Search, FilterX, Plus, Save, X, Trash2, Eye, ArrowLeft, Download, ExternalLink, ListChecks, RefreshCw, ChevronLeft, ChevronRight, CircleCheck, CircleX, CircleHelp, TriangleAlert, Info, LoaderCircle, LogIn, UserPlus, Pause, Send, Bell } from 'lucide-react'
+import { House, GraduationCap, UserRound, SlidersHorizontal, Heart, ClipboardList, FileText, Building2, Radar, Pencil, LogOut, Search, FilterX, Plus, Save, X, Trash2, Eye, ArrowLeft, Download, ExternalLink, ListChecks, RefreshCw, ChevronLeft, ChevronRight, CircleCheck, CircleX, CircleHelp, TriangleAlert, Info, LoaderCircle, LogIn, UserPlus, Pause, Send, Bell } from 'lucide-react'
 
 const icons = {
   home: House, explore: GraduationCap, profile: UserRound, preferences: SlidersHorizontal,
-  favorite: Heart, offers: ClipboardList, institutions: Building2, crawling: Radar,
+  favorite: Heart, offers: ClipboardList, document: FileText, institutions: Building2, crawling: Radar,
   edit: Pencil, logout: LogOut, search: Search, clear: FilterX, add: Plus, save: Save,
   cancel: X, delete: Trash2, detail: Eye, back: ArrowLeft, download: Download,
   external: ExternalLink, compare: ListChecks, refresh: RefreshCw, previous: ChevronLeft,

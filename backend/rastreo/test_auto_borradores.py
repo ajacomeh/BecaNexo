@@ -15,10 +15,10 @@ from convocatorias.siau_red import INDEX, NATIONAL_INDEX
 from perfiles.models import Pais
 from notificaciones.models import Notificacion
 from . import tests as base
-from .auto_borradores import _candidate, _institution, pending_for_publication, latest_version
+from .auto_borradores import _candidate, _institution, classify_candidate, editable_candidates, pending_for_publication, latest_version, reevaluate_stored
 from .models import Incidencia, Publicacion, Version
 from .propuestas import guardar
-from .services import enable_discovery, enable_national_discovery, run_manual
+from .services import enable_discovery, enable_national_discovery, run_manual, summary
 from .test_periodico import NATIONAL_PAGE, national_index, national_ficha
 
 
@@ -28,7 +28,22 @@ class AutoDraftTests(TransactionTestCase):
     source = base.RastreoTests.source
     fake = base.RastreoTests.fake
 
-    def capture(self, html=None, citizenship=True):
+    def test_non_national_siau_needs_ecuadorian_offerer_evidence(self):
+        publication = self.capture()
+        version = latest_version(publication)
+        version.datos_extraidos['titulo']['texto_original'] = 'Becas OEA AUWCL'
+        version.datos_extraidos['oferentes'] = [
+            {'nombre': 'Universidad extranjera', 'rol': 'oferente', 'pais_codigo': 'US',
+             'pais_verificado': True, 'evidencia': 'Universidad extranjera ofrece la beca.'}]
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'fuera_alcance')
+        version.datos_extraidos['oferentes'] = []
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'pendiente')
+        version.datos_extraidos['oferentes'] = [
+            {'nombre': 'Entidad ecuatoriana sintética', 'rol': 'cooferente', 'pais_codigo': 'EC',
+             'pais_verificado': True, 'evidencia': 'Entidad ecuatoriana coofrece la beca.'}]
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'apta')
+
+    def capture(self, html=None, citizenship=True, offerer=True, offerers=None):
         source = self.source() if not hasattr(self, 'source_id') else None
         if source:
             enable_discovery(self.actor.pk, 'Índice sintético')
@@ -47,7 +62,19 @@ class AutoDraftTests(TransactionTestCase):
                 return 200, {'content-type': 'text/html'}, ficha
             return self.fake(url)
 
-        with patch('convocatorias.siau_red.Downloader.once', side_effect=network):
+        from . import services as rastreo_services
+        original_extract = rastreo_services.extract_html
+        def synthetic_extract(page):
+            data = original_extract(page)
+            if offerer:
+                data['oferentes'] = offerers if offerers is not None else [
+                    {'nombre': 'Universidad ecuatoriana sintética', 'rol': 'oferente',
+                     'pais_codigo': 'EC', 'pais_verificado': True, 'evidencia': 'La universidad ofrece esta beca.'}]
+            else:
+                data['descripcion']['texto_original'] += '\nUniversidad ecuatoriana sintética ofrece esta beca.'
+            return data
+        with patch('convocatorias.siau_red.Downloader.once', side_effect=network), patch(
+                'rastreo.services.extract_html', side_effect=synthetic_extract):
             run = run_manual(self.source_id, self.actor.pk, uuid.uuid4())
         run.refresh_from_db()
         self.assertIn(run.estado, ('finalizada', 'parcial'))
@@ -68,12 +95,14 @@ class AutoDraftTests(TransactionTestCase):
         self.assertTrue(origin.datos_iniciales['url_publicacion'])
         self.assertFalse(origin.datos_iniciales['entidad_sugerida'])
         self.assertEqual(Convocatoria.objects.count(), 1)
+        self.assertEqual(summary(publication.observaciones.order_by('-id').first().ejecucion)['convocatorias_creadas'], 1)
         original_key = offer.clave_deduplicacion
 
         # Repetir y recibir una versión nueva no sobreescribe ediciones humanas.
         offer.titulo = 'Título revisado por administrador'
         offer.save(update_fields=['titulo'])
         self.capture()
+        self.assertEqual(summary(publication.observaciones.order_by('-id').first().ejecucion)['convocatorias_creadas'], 0)
         # El fixture ya tiene el título nacional, por lo que cambiar descripción crea nueva versión.
         changed_html = national_ficha().replace(b'2026', b'2030')
         self.capture(changed_html)
@@ -159,12 +188,221 @@ class AutoDraftTests(TransactionTestCase):
         self.assertEqual(publicas().filter(pk=offer.pk).count(), 1)
         self.assertTrue(Evento.objects.filter(convocatoria=offer, actor=self.actor, accion='publicar').exists())
 
-    def test_national_page_without_ecuadorian_recipient_evidence_stays_for_review(self):
+    def test_verified_ec_offerer_without_nationality_creates_private_blocked_draft(self):
         publication = self.capture(citizenship=False)
-        self.assertIsNone(publication.convocatoria_id)
-        self.assertFalse(BorradorRastreo.objects.exists())
+        self.assertIsNotNone(publication.convocatoria_id)
+        self.assertEqual(BorradorRastreo.objects.count(), 1)
+        version = latest_version(publication)
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'apta')
+        self.assertEqual(classify_candidate(publication, version)['elegibilidad'], 'no_especificada')
+        self.assertTrue(any('participación ecuatoriana' in x for x in pending_for_publication(publication.convocatoria, BorradorRastreo.objects.get(publicacion=publication))))
+        self.assertFalse(publicas().filter(pk=publication.convocatoria_id).exists())
         self.assertTrue(Incidencia.objects.filter(publicacion=publication,
             codigo='BORRADOR_REVISION_PENDIENTE', gravedad='aviso').exists())
+        admin = APIClient(enforce_csrf_checks=True)
+        admin.force_login(self.actor)
+        detail = admin.get(f'/api/gestion/rastreo/publicaciones/{publication.pk}/')
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data['clasificacion_borrador']['estado'], 'apta')
+        self.assertEqual(detail.data['borrador']['id'], publication.convocatoria_id)
+        self.assertEqual(detail.data['borrador']['revision'], 'pendiente')
+        self.assertTrue(any('participación ecuatoriana' in reason for reason in detail.data['borrador']['bloqueos']))
+        self.assertTrue(detail.data['cierre_extraido'])
+
+    def test_unknown_offerer_with_confirmed_recipients_creates_private_draft(self):
+        publication = self.capture(offerer=False)
+        self.assertIsNotNone(publication.convocatoria_id)
+        self.assertEqual(classify_candidate(publication, latest_version(publication))['estado'], 'apta')
+        self.assertIsNone(publication.convocatoria.institucion_id)
+        self.assertFalse(publicas().filter(pk=publication.convocatoria_id).exists())
+
+    def test_nationality_evidence_without_literal_citizenship_is_distinct_from_offerer(self):
+        publication = self.capture(offerer=False, citizenship=False)
+        version = latest_version(publication)
+        self.assertEqual(classify_candidate(publication, version)['elegibilidad'], 'no_especificada')
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'pendiente')
+        version.datos_extraidos['requisitos']['texto_original'] += '\nNacionalidad ecuatoriana acreditada.'
+        assessment = classify_candidate(publication, version)
+        self.assertEqual(assessment['elegibilidad'], 'confirmada')
+        self.assertEqual(assessment['estado'], 'apta')
+        self.assertNotEqual(assessment['oferente'], 'verificado_ec')
+
+    def test_publish_without_identified_offerer_keeps_source_and_unknown_requirements(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from convocatorias.comparacion import evaluar_convocatoria
+        from .auto_borradores import review_notes
+
+        publication = self.capture(offerer=False)
+        offer = publication.convocatoria
+        origin = BorradorRastreo.objects.get(convocatoria=offer)
+        offer.url_oficial = publication.url_original
+        offer.cierre_dia = None
+        offer.cierre_original = None
+        offer.cierre = timezone.now() + timedelta(days=30)
+        offer.save(update_fields=['url_oficial', 'cierre_dia', 'cierre_original', 'cierre'])
+        ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
+        option = OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='virtual')
+        option.paises.add(ec)
+        self.assertTrue(any('Requisitos extraídos' in note for note in review_notes(offer, origin)))
+        self.assertFalse(pending_for_publication(offer, origin))
+        admin = APIClient(enforce_csrf_checks=True)
+        admin.force_login(self.actor)
+        token = admin.get('/api/auth/csrf/').data['csrfToken']
+        response = admin.post(f'/api/gestion/convocatorias/{offer.pk}/publicar/', {}, format='json', HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 200, response.data)
+        offer.refresh_from_db()
+        self.assertIsNone(offer.institucion_id)
+        self.assertEqual(offer.revision, 'validada')
+        self.assertEqual(publicas().filter(pk=offer.pk).count(), 1)
+        self.assertEqual(evaluar_convocatoria(self.user, offer)['opciones'][0]['resultado'], 'desconocido')
+        public = APIClient()
+        self.assertEqual(public.get('/api/becas/').data['count'], 1)
+        self.assertIsNone(public.get(f'/api/becas/{offer.pk}/').data['institucion'])
+        from favoritos.models import Favorito
+        Favorito.objects.create(usuario=self.user, convocatoria=offer)
+        public.force_login(self.user)
+        favorite = public.get('/api/favoritos/')
+        self.assertEqual(favorite.status_code, 200)
+        self.assertEqual(favorite.data['results'][0]['convocatoria']['institucion'], 'No identificada')
+        self.assertTrue(Evento.objects.filter(convocatoria=offer, actor=self.actor, accion='publicar').exists())
+
+    def test_unknown_and_expired_validity_are_historical_not_recommended(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        publication = self.capture(offerer=False)
+        offer = publication.convocatoria
+        offer.url_oficial = publication.url_original
+        offer.cierre = None
+        offer.cierre_dia = None
+        offer.cierre_original = None
+        offer.save(update_fields=['url_oficial', 'cierre', 'cierre_dia', 'cierre_original'])
+        OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='virtual')
+        publicar(offer)
+        self.assertEqual(offer.estado, 'sin_fecha')
+        public = APIClient()
+        self.assertEqual(public.get('/api/becas/').data['count'], 0)
+        self.assertEqual(public.get('/api/becas/?estado=sin_fecha').data['count'], 1)
+        public.force_login(self.user)
+        recommendations = public.get('/api/becas/recomendaciones/')
+        self.assertEqual(recommendations.status_code, 200)
+        self.assertFalse(recommendations.data['results'])
+        offer.cierre = timezone.now() - timedelta(days=1)
+        offer.save(update_fields=['cierre'])
+        self.assertEqual(offer.estado, 'cerrada')
+        self.assertEqual(public.get('/api/becas/').data['count'], 0)
+        self.assertEqual(public.get('/api/becas/?estado=cerrada').data['count'], 1)
+
+    def test_expired_verified_offer_can_be_published_only_as_history(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        publication = self.capture(offerer=False)
+        offer = publication.convocatoria
+        offer.url_oficial = publication.url_original
+        offer.cierre_dia = None
+        offer.cierre_original = None
+        offer.cierre = timezone.now() - timedelta(days=1)
+        offer.save(update_fields=['url_oficial', 'cierre_dia', 'cierre_original', 'cierre'])
+        OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='virtual')
+        publicar(offer)
+        self.assertEqual(offer.estado, 'cerrada')
+        public = APIClient()
+        self.assertEqual(public.get('/api/becas/').data['count'], 0)
+        self.assertEqual(public.get('/api/becas/?estado=cerrada').data['count'], 1)
+        self.assertFalse(Notificacion.objects.filter(convocatoria=offer).exists())
+
+    def test_stored_reevaluation_is_read_only_by_default_and_idempotent_when_applied(self):
+        publication = self.capture(offerer=False, citizenship=False)
+        self.assertEqual(reevaluate_stored(publication.pk)['estado'], 'pendiente')
+        ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
+        Institucion.objects.create(nombre='Universidad ecuatoriana sintética', sector='publico', pais=ec)
+        preview = reevaluate_stored(publication.pk)
+        self.assertEqual(preview['estado'], 'apta')
+        self.assertIsNone(preview['borrador_id'])
+        first = reevaluate_stored(publication.pk, apply=True)
+        second = reevaluate_stored(publication.pk, apply=True)
+        self.assertTrue(first['creado'])
+        self.assertFalse(second['creado'])
+        self.assertEqual(first['borrador_id'], second['borrador_id'])
+        self.assertEqual(BorradorRastreo.objects.filter(publicacion=publication).count(), 1)
+        offer = Convocatoria.objects.get(pk=first['borrador_id'])
+        self.assertIsNone(offer.institucion_id)
+        offer.titulo = 'Título revisado por administración'
+        offer.save(update_fields=['titulo'])
+        self.assertFalse(reevaluate_stored(publication.pk, apply=True)['creado'])
+        offer.refresh_from_db()
+        self.assertEqual(offer.titulo, 'Título revisado por administración')
+
+    def test_foundation_and_cooffer_allow_private_draft_with_province_only_recipients(self):
+        ec_offerer = {'nombre': 'Fundación ecuatoriana sintética', 'rol': 'cooferente',
+            'pais_codigo': 'EC', 'pais_verificado': True, 'evidencia': 'Cooferente según la ficha.'}
+        foreign = {'nombre': 'Universidad extranjera sintética', 'rol': 'oferente',
+            'pais_codigo': 'US', 'pais_verificado': True, 'evidencia': 'Oferente según la ficha.'}
+        provincial_ficha = national_ficha().replace(
+            b'<ol>', b'<ol><li>Residentes de la provincia de Pichincha.</li>')
+        publication = self.capture(html=provincial_ficha, citizenship=False, offerers=[ec_offerer, foreign])
+        assessment = classify_candidate(publication, latest_version(publication))
+        self.assertEqual(assessment['oferente'], 'verificado_ec')
+        self.assertEqual(assessment['elegibilidad'], 'no_especificada')
+        self.assertEqual(assessment['estado'], 'apta')
+        self.assertEqual(BorradorRastreo.objects.count(), 1)
+        self.assertFalse(publicas().filter(pk=publication.convocatoria_id).exists())
+
+    def test_explicit_exclusion_and_informative_category_never_create_draft(self):
+        publication = self.capture(offerer=False, citizenship=False)
+        version = latest_version(publication)
+        version.datos_extraidos['requisitos']['texto_original'] += '\nNo pueden postular ciudadanos ecuatorianos.'
+        self.assertEqual(classify_candidate(publication, version)['elegibilidad'], 'excluida')
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'fuera_alcance')
+        version.datos_extraidos['tipo_oportunidad'] = 'categoria_general'
+        self.assertEqual(classify_candidate(publication, version)['naturaleza'], 'informativa')
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'fuera_alcance')
+        self.assertFalse(BorradorRastreo.objects.exists())
+
+    def test_international_title_without_offerer_evidence_stays_pending(self):
+        publication = self.capture(citizenship=False, offerer=False)
+        version = latest_version(publication)
+        version.datos_extraidos['titulo']['texto_original'] = 'Programa de becas internacionales'
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'pendiente')
+        self.assertFalse(_candidate(publication, version))
+
+    def test_verified_foreign_offerer_is_out_of_scope_even_with_ecuadorian_recipients(self):
+        foreign = [{'nombre': 'Entidad extranjera sintética', 'rol': 'oferente',
+            'pais_codigo': 'US', 'pais_verificado': True, 'evidencia': 'La entidad ofrece la beca.'},
+            {'nombre': 'Portal ecuatoriano', 'rol': 'difusor', 'pais_codigo': 'EC', 'pais_verificado': True,
+             'evidencia': 'El portal difunde la noticia.'}]
+        publication = self.capture(offerers=foreign)
+        version = latest_version(publication)
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'fuera_alcance')
+        self.assertIsNone(publication.convocatoria_id)
+
+    def test_editable_candidates_keep_literal_source_and_require_complete_option(self):
+        publication = self.capture()
+        version = latest_version(publication)
+        data = version.datos_extraidos
+        data['requisitos']['texto_original'] = '- Promedio mínimo 8.5\n- Certificado de idioma B2'
+        data['estudios'] = {'niveles_mencionados': ['maestría'],
+            'modalidad': {'texto_original': 'Virtual'}, 'destino': {'texto_original': 'Ecuador'}}
+        candidates = editable_candidates(version)
+        self.assertEqual([r['texto_original'] for r in candidates['requisitos']], ['Promedio mínimo 8.5', 'Certificado de idioma B2'])
+        self.assertEqual([r['tipo_sugerido'] for r in candidates['requisitos']], ['PROMEDIO', 'IDIOMA'])
+        self.assertTrue(all(not r['validado'] and r['procedencia']['version_id'] == version.pk for r in candidates['requisitos']))
+        self.assertEqual(candidates['opciones'][0]['nivel'], 'maestria')
+        data['estudios']['destino'] = {'texto_original': ''}
+        self.assertEqual(editable_candidates(version)['opciones'], [])
+
+    def test_origin_shows_distinct_source_links_without_assigning_official_application(self):
+        publication = self.capture()
+        origin = BorradorRastreo.objects.get(publicacion=publication)
+        admin = APIClient(enforce_csrf_checks=True)
+        admin.force_login(self.actor)
+        response = admin.get(f'/api/gestion/rastreo/convocatorias/{origin.convocatoria_id}/origen/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['enlaces_origen']['publicacion'], publication.url_original)
+        self.assertEqual(response.data['candidatos_editables']['requisitos'][0]['procedencia']['version_id'], origin.version_id)
+        self.assertEqual(origin.convocatoria.url_oficial, '')
 
     def test_relevant_new_version_hides_validated_offer_until_admin_confirmation(self):
         publication = self.capture()

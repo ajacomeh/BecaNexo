@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from perfiles.models import Area, Pais, Perfil, PerfilArea, Preferencia, PerfilPais
@@ -42,7 +43,8 @@ class RecomendacionesTests(TestCase):
         call_command("cargar_catalogos_convocatorias", verbosity=0)
         for pk, dedicacion in ((1, "parcial"), (2, "completa")):
             offer = Convocatoria.objects.create(institucion=institucion, titulo=f"Programa {pk}",
-                descripcion="Estudios de ingeniería", revision="validada", clave_deduplicacion=f"recomendar-{pk}")
+                descripcion="Estudios de ingeniería", cierre=timezone.now() + timedelta(days=30),
+                revision="validada", clave_deduplicacion=f"recomendar-{pk}")
             opcion = OpcionEstudio.objects.create(convocatoria=offer, nivel="maestria", modalidad="virtual")
             opcion.paises.add(ec)
             Requisito.objects.create(convocatoria=offer, tipo_requisito=TipoRequisito.objects.get(codigo="DEDICACION"),
@@ -89,6 +91,32 @@ class RecomendacionesTests(TestCase):
         rows = self.client.get(self.path).data["results"]
         self.assertTrue(all(x["afinidad"]["estado"] == "sin_datos_perfil" for x in rows))
 
+    @patch("convocatorias.recomendaciones.vector_convocatoria", return_value=(1.0, 0.0))
+    @patch("convocatorias.recomendaciones.vector", return_value=(1.0, 0.0))
+    def test_cambios_de_perfil_requisito_y_texto_se_reflejan_en_nueva_consulta(self, profile_vector, offer_vector):
+        self.client.force_login(self.user)
+        first = self.client.get(self.path).data["results"]
+        self.assertEqual([row["elegibilidad"] for row in first], ["cumple", "no_cumple"])
+
+        self.perfil.dedicacion_disponible = None
+        self.perfil.descripcion = "Intereses académicos actualizados"
+        self.perfil.save(update_fields=["dedicacion_disponible", "descripcion"])
+        second = self.client.get(self.path).data["results"]
+        self.assertEqual([row["elegibilidad"] for row in second], ["desconocido", "desconocido"])
+        self.assertIn("Intereses académicos actualizados", profile_vector.call_args.args[0])
+
+        self.perfil.dedicacion_disponible = "parcial"
+        self.perfil.save(update_fields=["dedicacion_disponible"])
+        offer = Convocatoria.objects.get(clave_deduplicacion="recomendar-2")
+        offer.titulo = "Programa 2 actualizado"
+        offer.save(update_fields=["titulo"])
+        requirement = offer.requisitos.get(tipo_requisito__codigo="DEDICACION")
+        requirement.valor_estructurado = {"valores_admitidos": ["parcial"]}
+        requirement.save(update_fields=["valor_estructurado"])
+        third = self.client.get(self.path).data["results"]
+        self.assertEqual([row["elegibilidad"] for row in third], ["cumple", "cumple"])
+        self.assertTrue(any("Programa 2 actualizado" in call.args[0] for call in offer_vector.call_args_list))
+
     def test_afinidad_real_ordena_solo_dentro_de_elegibilidad(self):
         if not (Path(settings.SEMANTIC_MODEL_DIR) / "onnx" / "model_quint8_avx2.onnx").is_file():
             self.skipTest("Modelo local opcional no instalado")
@@ -98,7 +126,7 @@ class RecomendacionesTests(TestCase):
         arte.save(update_fields=["titulo", "descripcion"])
         petroleo = Convocatoria.objects.create(institucion=arte.institucion,
             titulo="Ingeniería petrolera e hidrocarburos", descripcion="Producción de energía y petróleo",
-            revision="validada", clave_deduplicacion="recomendar-3")
+            cierre=timezone.now() + timedelta(days=30), revision="validada", clave_deduplicacion="recomendar-3")
         opcion = OpcionEstudio.objects.create(convocatoria=petroleo, nivel="maestria", modalidad="virtual")
         opcion.paises.add(self.perfil.nacionalidad)
         Requisito.objects.create(convocatoria=petroleo, tipo_requisito=TipoRequisito.objects.get(codigo="DEDICACION"),

@@ -1,5 +1,24 @@
 import { test, expect } from '@playwright/test'
 
+test('detalles reales 10 y 11 muestran períodos y condiciones sin desbordar', async ({ page }) => {
+  const writes = []
+  page.on('request', request => {
+    if (request.url().includes('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) writes.push(request.url())
+  })
+  for (const [id, opening, closing] of [[10, '30 oct 2026', '30 nov 2026'], [11, '5 oct 2026', '22 nov 2026']]) {
+    await page.goto(`/becas/${id}`)
+    await expect(page.getByText('Período de postulación')).toBeVisible()
+    await expect(page.getByText('Período de postulación').locator('..')).toContainText(opening)
+    await expect(page.getByText('Período de postulación').locator('..')).toContainText(closing)
+    await expect(page.getByText('Cobertura publicada').locator('..')).not.toContainText('No especificado')
+    for (const width of [1440, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
+    }
+  }
+  expect(writes).toEqual([])
+})
+
 test('bienvenida pública en escritorio y móvil, navegación y teclado', async ({ page }, testInfo) => {
   const mutations = []
   page.on('request', request => { if (request.url().includes('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) mutations.push(request.url()) })

@@ -71,7 +71,6 @@ class Convocatoria(models.Model):
             models.CheckConstraint(condition=Q(apertura__isnull=True) | Q(cierre__isnull=True) | Q(cierre__gte=F("apertura")), name="conv_fechas"),
             models.CheckConstraint(condition=Q(cierre__isnull=True) | Q(cierre_dia__isnull=True), name="conv_cierre_precision_unica"),
             models.CheckConstraint(condition=Q(cierre_dia__isnull=True) | Q(cierre_original__isnull=False, cierre_original__regex=r"\S"), name="conv_cierre_dia_original"),
-            models.CheckConstraint(condition=Q(revision="pendiente") | Q(institucion__isnull=False), name="conv_validada_oferente"),
         ]
 
     @property

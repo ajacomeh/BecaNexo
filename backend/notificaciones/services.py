@@ -7,7 +7,8 @@ from .models import Notificacion
 
 
 def avisar_publicacion(convocatoria):
-    if not (convocatoria.activa and convocatoria.revision == "validada" and convocatoria.institucion.pais.codigo == "EC"):
+    from convocatorias.services import postulables
+    if not postulables().filter(pk=convocatoria.pk).exists():
         return 0
     opciones = list(convocatoria.opciones.filter(activa=True).prefetch_related("paises"))
     if not opciones:

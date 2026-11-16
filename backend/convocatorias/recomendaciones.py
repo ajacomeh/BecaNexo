@@ -5,7 +5,7 @@ from favoritos.models import Favorito
 
 from .comparacion import evaluar_convocatoria
 from .semantica import ModeloNoDisponible, similitud, vector, vector_convocatoria
-from .services import detalle, publicas
+from .services import detalle, postulables
 
 
 PRIORIDAD = {"cumple": 0, "desconocido": 1, "no_cumple": 2}
@@ -25,6 +25,9 @@ def texto_perfil(perfil):
     if formaciones:
         partes.append("Formación: " + "; ".join(formaciones))
         fuentes.append("formación declarada")
+    if perfil.preferencias.filter(modalidad="hibrida").exists():
+        partes.append("Modalidad de estudio preferida: híbrida")
+        fuentes.append("modalidad preferida")
     if perfil.descripcion and perfil.descripcion.strip():
         partes.append("Intereses y objetivos: " + perfil.descripcion.strip())
         fuentes.append("descripción del perfil")
@@ -35,6 +38,8 @@ def texto_convocatoria(convocatoria):
     partes = [convocatoria.titulo]
     partes.extend(item.area.nombre for item in convocatoria.areas.select_related("area"))
     partes.extend(o.programa for o in convocatoria.opciones.filter(activa=True) if o.programa)
+    if convocatoria.opciones.filter(activa=True, modalidad="hibrida").exists():
+        partes.append("Modalidad de estudio: híbrida")
     if convocatoria.descripcion:
         partes.append(convocatoria.descripcion)
     return ". ".join(partes)
@@ -51,7 +56,7 @@ def preferencias_coincidentes(perfil, convocatoria):
     coincidencias = []
     if preferencias and any(o.nivel == p.nivel for o in opciones for p in preferencias):
         coincidencias.append("nivel de estudio")
-    if preferencias and any(o.modalidad == p.modalidad for o in opciones for p in preferencias):
+    if preferencias and any((o.nivel, o.modalidad) == (p.nivel, p.modalidad) for o in opciones for p in preferencias):
         coincidencias.append("modalidad")
     if destinos and any(p.pk in destinos for o in opciones for p in o.paises.all()):
         coincidencias.append("destino")
@@ -70,7 +75,7 @@ def recomendar(usuario):
             modelo_disponible = False
     resultados = []
     areas_declaradas = {item.area.nombre for item in perfil.areas.select_related("area")} if perfil else set()
-    convocatorias = list(publicas().order_by("id"))
+    convocatorias = list(postulables().order_by("id"))
     favoritos = dict(Favorito.objects.filter(usuario=usuario, convocatoria_id__in=[c.pk for c in convocatorias])
                      .values_list("convocatoria_id", "id"))
     for convocatoria in convocatorias:

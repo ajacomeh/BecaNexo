@@ -3,10 +3,33 @@ import { Link } from 'react-router-dom'
 import { offersApi } from '../api/client'
 import Button from './Button'
 import Message from './Message'
+import './OriginPanel.css'
 
 const path = (id) => `gestion/rastreo/convocatorias/${id}/origen`
+const publicUrl = (value) => {
+  try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null } catch { return null }
+}
 
-export default function OriginPanel({ offer }) {
+function CandidateCard({ item, type, onPrepare }) {
+  const origin = item.procedencia || {}
+  const requirements = type === 'requisitos'
+  const benefits = type === 'beneficios'
+  const values = requirements ? Object.entries(item.valor_sugerido || {}).map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`) : []
+  const benefitValues = benefits ? [item.concepto_sugerido ? `Concepto literal: ${item.concepto_sugerido}` : 'Concepto por confirmar',
+    item.porcentaje != null ? `Porcentaje literal: ${item.porcentaje}%` : 'Porcentaje por confirmar',
+    item.monto != null ? `Importe fijo literal: ${item.monto} ${item.moneda}` : null,
+    item.tope_original ? `Tope literal: ${item.tope_original}` : null].filter(Boolean) : []
+  const canPrepare = !benefits || item.porcentaje != null || item.monto != null || item.tope_original
+  return <li className="origin-candidate"><p className="origin-candidate-text">{requirements || benefits ? item.texto_original : `${item.nivel} · ${item.modalidad} · Destino declarado: ${item.destino_original}. Confirma país y agrupación.`}</p>
+    {requirements && <div className="origin-candidate-meta"><span>Tipo: {item.tipo_sugerido || 'OTRO'}</span><span>Estado: {item.estado || 'pendiente'}</span><span>{item.metodo === 'regla' ? 'Condición literal' : item.metodo === 'onnx' ? 'Categoría sugerida por ONNX' : 'Clasificación pendiente'}</span></div>}
+    {origin.version_id && <p className="origin-candidate-source">Versión {origin.version_id}{origin.documento_id && ` · Documento ${origin.documento_id}`}</p>}
+    {requirements && values.length > 0 && <p className="origin-candidate-values"><strong>Valores propuestos:</strong> {values.join(' · ')}. Confirma los campos faltantes en las bases.</p>}
+    {benefits && <p className="origin-candidate-values">{benefitValues.join(' · ')} · confirma concepto, alcance y condiciones</p>}
+    {canPrepare && <div className="origin-candidate-action"><Button type="button" className="button-light" onClick={() => onPrepare(type, item)}>Preparar en editor</Button></div>}
+  </li>
+}
+
+export default function OriginPanel({ offer, onPrepare }) {
   const [data, setData] = useState(null)
   const [documents, setDocuments] = useState([])
   const [error, setError] = useState('')
@@ -67,8 +90,17 @@ export default function OriginPanel({ offer }) {
     {data.cambio_relevante && <p role="status">La versión {data.version_actual_id} contiene cambios posteriores al borrador. Las ediciones administrativas se conservan.</p>}
     {data.cambio_relevante && !data.revision_confirmada && <form onSubmit={confirmVersion}><label htmlFor="origin-version-motive">Motivo de revisión de la nueva versión</label><textarea id="origin-version-motive" required maxLength={1000} value={motive} onChange={(e) => setMotive(e.target.value)} /><Button type="submit" disabled={busy} busy={busy}>Confirmar versión revisada</Button></form>}
     {error && <Message>{error}</Message>}{notice && <p role="status">{notice}</p>}
-    <h3>Información por verificar</h3>{data.bloqueos_actuales.length ? <ul>{data.bloqueos_actuales.map((item) => <li key={item}>{item}</li>)}</ul> : <p>Comprueba los datos y publica mediante la acción administrativa.</p>}
-    <details><summary>Datos de origen conservados</summary><dl>{Object.entries(data.datos_iniciales).filter(([, value]) => value).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{typeof value === 'object' ? `${value.nombre} (ID ${value.id}; confirmar antes de asignar)` : value}</dd></div>)}</dl></details>
+    <h3>Obligatorio antes de publicar</h3>{data.bloqueos_actuales.length ? <ul>{data.bloqueos_actuales.map((item) => <li key={item}>{item}</li>)}</ul> : <p>Los controles obligatorios de origen están completos. La publicación requiere confirmación administrativa.</p>}
+    {!!data.observaciones?.length && <><h3>Datos complementarios por revisar</h3><ul>{data.observaciones.map((item) => <li key={item}>{item}</li>)}</ul></>}
+    <h3>Evidencia y enlaces</h3><ul>
+      <li>Publicación: {publicUrl(data.enlaces_origen?.publicacion) ? <a href={publicUrl(data.enlaces_origen.publicacion)} target="_blank" rel="noopener noreferrer">Abrir ficha de origen</a> : 'Sin enlace verificable'}</li>
+      <li>Bases documentales: {data.enlaces_origen?.bases?.length ? data.enlaces_origen.bases.map((item, index) => <span key={index}>{index > 0 && ' · '}{publicUrl(item.url) ? <a href={publicUrl(item.url)} target="_blank" rel="noopener noreferrer">Bases {index + 1}</a> : 'Enlace pendiente de revisión'}</span>) : 'No identificadas'}</li>
+      <li>Postulación externa: {data.enlaces_origen?.postulacion?.length ? data.enlaces_origen.postulacion.map((item, index) => <span key={index}>{index > 0 && ' · '}{publicUrl(item.url) ? <a href={publicUrl(item.url)} target="_blank" rel="noopener noreferrer">Postulación {index + 1}</a> : 'Enlace pendiente de revisión'}</span>) : 'No identificada; no usar la URL de la ficha como postulación'}</li>
+    </ul>
+    <details><summary>Requisitos extraídos para revisar ({data.candidatos_editables?.requisitos?.length || 0})</summary><ul className="origin-candidate-list">{data.candidatos_editables?.requisitos?.map((item, index) => <CandidateCard key={index} item={item} type="requisitos" onPrepare={onPrepare} />)}</ul></details>
+    {!!data.candidatos_editables?.otros_campos?.beneficios?.length && <details><summary>Beneficios interpretados para revisar</summary><ul className="origin-candidate-list">{data.candidatos_editables.otros_campos.beneficios.map((item, index) => <CandidateCard key={index} item={item} type="beneficios" onPrepare={onPrepare} />)}</ul></details>}
+    <details><summary>Opciones sugeridas para revisar ({data.candidatos_editables?.opciones?.length || 0})</summary><ul className="origin-candidate-list">{data.candidatos_editables?.opciones?.map((item, index) => <CandidateCard key={index} item={item} type="opciones" onPrepare={onPrepare} />)}</ul></details>
+    <details><summary>Datos de origen conservados</summary><dl>{Object.entries(data.datos_iniciales).filter(([key, value]) => key !== 'candidatos_editables' && value).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{typeof value === 'object' ? `${value.nombre} (ID ${value.id}; confirmar antes de asignar)` : value}</dd></div>)}</dl></details>
   </section>
   if (!data?.aplicacion) return null
   const pending = data.estado?.pendientes || []

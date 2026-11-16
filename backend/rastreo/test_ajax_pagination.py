@@ -18,6 +18,7 @@ from . import tests as base
 from .models import Acceso, Ejecucion, Publicacion, Revision
 from .services import enable_discovery, enable_national_discovery, run_manual, set_paginated_discovery, summary
 from .siau_ajax import AJAX_INDEX, ajax_request, grid_config, robots_allow_ajax
+from .descubrimiento import NationalIndexLinks, national_ficha_content
 
 
 PAGE = 'https://siau.senescyt.gob.ec/oferta-de-becas-nacionales-educacion-continua-prueba/'
@@ -42,6 +43,22 @@ def index(max_pages=3):
 
 
 class AjaxContractTests(SimpleTestCase):
+    def test_v4_cards_find_scholarships_without_national_label(self):
+        cases = (
+            ('programa-de-becas-korea-lac-tech-corps-maestria-en-gestion-publica', 'Programa de Becas Korea-LAC Tech Corps'),
+            ('becas-oea-auwcl-4to-nivel', 'Becas OEA – AUWCL 4to nivel'),
+            ('programa-de-becas-universidad-oberta-de-catalunya-segundo-semestre-2026-2027',
+             'Programa de Becas Universidad Oberta de Catalunya'),
+        )
+        cards = b''.join((f'<article class="category-convocatorias"><h2 class="entry-title">'
+                          f'<a href="https://siau.senescyt.gob.ec/{slug}/">{title}</a></h2></article>').encode()
+                         for slug, title in cases)
+        for expanded, count in ((False, 0), (True, 3)):
+            parser = NationalIndexLinks(include_all_becas=expanded)
+            parser.feed(cards.decode())
+            self.assertEqual(len(parser.urls), count)
+        self.assertFalse(national_ficha_content(b'<h1 class="entry-title">Becas OEA</h1>'))
+
     def test_transport_is_bounded_and_does_not_send_credentials(self):
         class Response:
             status = 200
@@ -201,6 +218,42 @@ class AjaxPaginationTests(TransactionTestCase):
         self.assertTrue(changed)
         self.assertEqual(source.politica_version, 'siau-nacionales/3')
         self.assertEqual(Acceso.objects.get(pk=post.pk).parametros_publicos['pagina'], 2)
+
+    def test_v4_discovers_scholarships_from_index_and_ajax_without_preloaded_urls(self):
+        source = self.configured()
+        korea = 'https://siau.senescyt.gob.ec/programa-de-becas-korea-lac-tech-corps-maestria-en-gestion-publica/'
+        oea = 'https://siau.senescyt.gob.ec/becas-oea-auwcl-4to-nivel/'
+        uoc = 'https://siau.senescyt.gob.ec/programa-de-becas-universidad-oberta-de-catalunya-segundo-semestre-2026-2027/'
+        titles = {korea: 'Programa de Becas Korea-LAC Tech Corps', oea: 'Becas OEA – AUWCL 4to nivel',
+                  uoc: 'Programa de Becas Universidad Oberta de Catalunya'}
+
+        def scholarship_card(url):
+            return (f'<article class="category-convocatorias"><h2 class="entry-title">'
+                    f'<a href="{url}">{titles[url]}</a></h2></article>').encode()
+
+        def network(url):
+            if url == NATIONAL_INDEX:
+                return 200, {'content-type': 'text/html'}, index() + scholarship_card(korea)
+            if url in titles:
+                from .test_periodico import national_ficha
+                return 200, {'content-type': 'text/html'}, national_ficha().replace(
+                    'Oferta de Becas Nacionales para Educación Continua'.encode(), titles[url].encode())
+            return self.network(url)
+
+        with patch('convocatorias.siau_red.Downloader.once', side_effect=network), patch(
+                'convocatorias.siau_red.Downloader.post_once') as post:
+            run_manual(source.pk, self.actor.pk, uuid.uuid4())
+            post.assert_not_called()
+        self.assertFalse(Publicacion.objects.filter(url_normalizada__in=titles).exists())
+        source, _ = set_paginated_discovery(self.actor.pk, 'Ampliar en pruebas', True)
+        with patch('convocatorias.siau_red.Downloader.once', side_effect=network), patch(
+                'convocatorias.siau_red.Downloader.post_once', return_value=(
+                    200, {'content-type': 'text/html'}, scholarship_card(oea) + scholarship_card(uoc))):
+            run = run_manual(source.pk, self.actor.pk, uuid.uuid4())
+        self.assertEqual(set(Publicacion.objects.filter(url_normalizada__in=titles).values_list('url_normalizada', flat=True)),
+                         set(titles))
+        self.assertEqual(run.accesos.get(metodo='POST').parametros_publicos['pagina'], 2)
+        self.assertFalse(Publicacion.objects.filter(url_normalizada__in=titles, convocatoria__isnull=False).exists())
 
     def test_cursor_retries_failed_page_and_wraps_without_duplicates(self):
         source = self.configured()

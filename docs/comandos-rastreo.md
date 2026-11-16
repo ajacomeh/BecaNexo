@@ -178,6 +178,14 @@ Resultados reales confirmados: fuente 1 activa y aprobación automática false; 
 .\.venv\Scripts\python.exe backend/manage.py rastreo integridad
 ```
 
+## Candidata PUCE Ambato: preparacion sin activacion
+
+Estado de las fuentes al 14/11/2026: SIAU usa `/3` con 1440 minutos; `/4` permanece inactiva. UTPL conserva el conector pero robots.txt devuelve 403 y requiere aclarar acceso y reutilizacion. UPS conserva el conector y robots.txt no excluye rutas, pero sus condiciones institucionales requieren aclarar la retencion/reutilizacion de contenido. Universidad de las Artes conserva el parser generico; robots.txt excluye `/sitio/download/`, por lo que un futuro registro debe omitir esas descargas y confirmar condiciones de uso. Ninguna de estas fuentes institucionales tiene registro activo en desarrollo. Cada alta o activacion exige actor administrador, motivo auditado, UUID distinta y autorizacion operativa individual.
+
+El indice `https://www.pucesa.edu.ec/financiamiento-y-becas/becas/` permite lectura tecnica segun su robots.txt consultado el 14/11/2026. No se encontro una autorizacion especifica para conservar y reutilizar automaticamente el contenido de ese indice; una politica publicada en otro subdominio de PUCE Ambato no se atribuye a esta pagina. Mantener la fuente sin registrar hasta aclarar esta condicion o acordar un contrato de metadatos y enlaces que el motor pueda cumplir. HTTP 200 no justifica `--acceso-verificado`.
+
+Tras obtener la autorizacion institucional y una autorizacion operativa separada para BecaNexo, el registro inactivo previsto es `rastreo registrar-portal-generico` con `--nombre "PUCE Ambato"`, `--indice "https://www.pucesa.edu.ec/financiamiento-y-becas/becas/"`, `--host www.pucesa.edu.ec`, `--max-paginas 1`, `--max-profundidad 0`, `--max-fichas 4`, actor administrador, motivo documentado y UUID nueva. El servicio establece 1440 minutos y `activa=False`. Verificar despues el acceso mediante `verificar-portal-generico`; `activar-portal` y una unica ejecucion ordinaria requieren autorizacion posterior. La fecha general de inicio del 01/12/2026 para estudiantes nuevos de Grado y PUCETEC no se aplica a las fichas individuales sin evidencia de su alcance.
+
 ## Pruebas automatizadas
 
 ```powershell

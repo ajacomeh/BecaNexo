@@ -1,17 +1,19 @@
-"""Inicio y seguimiento administrativo de una ejecución manual de SIAU."""
+"""Inicio y seguimiento administrativo de fuentes de rastreo autorizadas."""
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as utc_timezone
 
 from django.core.exceptions import ValidationError
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.response import Response
 
 from usuarios.api import AuthView
 from .api import AdministradorActivo
 from convocatorias.siau_red import INDEX
-from .models import Ejecucion, Fuente
+from .models import Ejecucion, Fuente, Publicacion
 from .services import next_due, supported_policy
+from .portal_fuentes import PORTALES, portal_for_source
+from convocatorias.siau_red import AccessError
+from convocatorias.models import BorradorRastreo
 from .web_frequency import extraordinary_enabled, manual_window, source_blocked
 from .web_launch import LaunchBusy, launch_lock, marker_path, result_path, start_worker
 
@@ -22,45 +24,101 @@ class ControlRastreo(AuthView):
 
     @staticmethod
     def estado():
-        fuente = get_object_or_404(Fuente, url_base=INDEX)
-        ultima = Ejecucion.objects.filter(fuente=fuente).order_by('-inicio', '-id').first()
-        activa = Ejecucion.objects.filter(fuente=fuente, estado='en_curso').first()
-        proxima = next_due(fuente)
+        sources = list(Fuente.objects.order_by('id'))
+        ultima = Ejecucion.objects.order_by('-inicio', '-id').select_related('fuente').first()
+        activa = Ejecucion.objects.filter(estado='en_curso').first()
         extraordinaria = extraordinary_enabled()
-        try:
-            proxima_manual = manual_window(fuente) if extraordinaria else proxima
-            registro_invalido = False
-        except ValueError:
-            proxima_manual, registro_invalido = None, True
-        bloqueo_fuente = source_blocked(fuente) if extraordinaria else False
-        marker = marker_path(fuente.pk)
-        inicio_pendiente = marker.exists()
+        now = timezone.now()
+        available = []
+        windows = []
+        permitted = []
+        invalid_log = False
+        blocked = False
+        for source in sources:
+            if not source.activa or source.aprobada_publicacion_automatica:
+                continue
+            try:
+                if source.adaptador == 'siau':
+                    valid = source.url_base == INDEX and supported_policy(source)
+                elif source.adaptador.startswith('portal_ec:'):
+                    portal_for_source(source)
+                    valid = True
+                else:
+                    valid = False
+            except AccessError:
+                valid = False
+            if not valid:
+                continue
+            permitted.append(source)
+            try:
+                due = manual_window(source) if source.adaptador == 'siau' and extraordinaria else next_due(source)
+                source_block = source_blocked(source)
+            except ValueError:
+                invalid_log = True
+                continue
+            blocked = blocked or source_block
+            if due:
+                windows.append(due)
+            if not source_block and (not due or due <= now):
+                last = Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio', '-id').first()
+                available.append((last.inicio if last else datetime.min.replace(tzinfo=utc_timezone.utc), source))
+        available.sort(key=lambda entry: (entry[0], entry[1].pk))
+        selected = available[0][1] if available else None
+        marker_sources = [source for source in sources if marker_path(source.pk).exists()]
+        inicio_pendiente = bool(marker_sources)
         requiere_revision = False
-        if inicio_pendiente:
+        for source in marker_sources:
+            marker = marker_path(source.pk)
             try:
                 json.loads(marker.read_text(encoding='utf-8'))
                 # Un marcador antiguo exige revisión incluso si ya hay fila
                 # en_curso: el trabajador pudo terminar abruptamente.
-                requiere_revision = timezone.now().timestamp() - marker.stat().st_mtime > timedelta(minutes=2).total_seconds()
+                requiere_revision = requiere_revision or now.timestamp() - marker.stat().st_mtime > timedelta(minutes=2).total_seconds()
             except (OSError, ValueError, TypeError, AttributeError, ValidationError):
                 requiere_revision = True
-        try:
-            resultado_web = json.loads(result_path(fuente.pk).read_text(encoding='utf-8'))
-        except (OSError, ValueError):
-            resultado_web = None
-        permitida = fuente.activa and fuente.adaptador == 'siau' and supported_policy(fuente) and not fuente.aprobada_publicacion_automatica
-        puede_iniciar = (permitida and not activa and not inicio_pendiente and not registro_invalido
-                        and not bloqueo_fuente and (not proxima_manual or proxima_manual <= timezone.now()))
-        return {'fuente_id': fuente.pk, 'politica_version': fuente.politica_version,
-                'frecuencia_min': fuente.frecuencia_min, 'proxima_ejecucion': proxima,
-                'proxima_manual': proxima_manual, 'intervalo_manual_seg': 300 if extraordinaria else None,
-                'rastreo_extraordinario_habilitado': extraordinaria,
-                'bloqueo_fuente': bloqueo_fuente, 'registro_invalido': registro_invalido,
+        results = []
+        for source in permitted:
+            path = result_path(source.pk)
+            if path.exists():
+                try:
+                    results.append((path.stat().st_mtime, json.loads(path.read_text(encoding='utf-8'))))
+                except (OSError, ValueError):
+                    invalid_log = True
+        resultado_web = max(results, key=lambda row: row[0])[1] if results else None
+        proxima = min(windows) if windows else None
+        puede_iniciar = bool(selected and not activa and not inicio_pendiente and not invalid_log)
+        display = selected or (permitted[0] if permitted else None)
+        configured_adapters = {source.adaptador for source in sources}
+        unregistered = ([{'nombre': 'SIAU', 'adaptador': 'siau'}] if 'siau' not in configured_adapters else [])
+        unregistered.extend({'nombre': portal.nombre, 'adaptador': f'portal_ec:{key}'}
+                            for key, portal in PORTALES.items() if f'portal_ec:{key}' not in configured_adapters)
+        permitted_ids = {source.pk for source in permitted}
+        return {'fuente_id': selected.pk if selected else None,
+                'fuente_nombre': selected.nombre if selected else None,
+                'fuentes_activas': sum(source.activa for source in sources),
+                'fuentes_habilitadas': len(permitted),
+                'fuentes_registradas': [{'id': source.pk, 'nombre': source.nombre,
+                    'activa': source.activa, 'utilizable': source.pk in permitted_ids,
+                    'politica_version': source.politica_version, 'frecuencia_min': source.frecuencia_min}
+                    for source in sources],
+                'conectores_sin_registro': unregistered,
+                'fuentes_configuracion': [{'id': source.pk, 'nombre': source.nombre,
+                    'politica_version': source.politica_version, 'frecuencia_min': source.frecuencia_min}
+                    for source in permitted],
+                'publicaciones_total': Publicacion.objects.count(),
+                'borradores_total': BorradorRastreo.objects.count(),
+                'politica_version': display.politica_version if display else None,
+                'frecuencia_min': display.frecuencia_min if display else None,
+                'proxima_ejecucion': proxima,
+                'proxima_manual': proxima, 'intervalo_manual_seg': 300 if extraordinaria and selected and selected.adaptador == 'siau' else None,
+                'rastreo_extraordinario_habilitado': bool(extraordinaria and selected and selected.adaptador == 'siau'),
+                'bloqueo_fuente': blocked, 'registro_invalido': invalid_log,
                 'ejecucion_activa': activa.pk if activa else None,
                 'inicio_pendiente': inicio_pendiente, 'requiere_revision': requiere_revision,
                 'ultimo_inicio_web': resultado_web, 'puede_iniciar': puede_iniciar,
                 'ultima_ejecucion': ({'id': ultima.pk, 'estado': ultima.estado, 'origen': ultima.origen,
-                                      'inicio': ultima.inicio, 'fin': ultima.fin} if ultima else None)}
+                                      'inicio': ultima.inicio, 'fin': ultima.fin,
+                                      'fuente': ultima.fuente.nombre} if ultima else None)}
 
     def get(self, request):
         return Response(self.estado())
@@ -75,7 +133,7 @@ class ControlRastreo(AuthView):
             with launch_lock():
                 state = self.estado()
                 if not state['puede_iniciar']:
-                    return Response({'detail': 'La fuente no está disponible, hay una ejecución activa o aún no corresponde por frecuencia.',
+                    return Response({'detail': 'No hay fuentes autorizadas disponibles, hay una ejecución activa o aún no corresponde por frecuencia.',
                                      **state}, status=409)
                 key = start_worker(state['fuente_id'], request.user.pk, reason.strip(),
                                    state['rastreo_extraordinario_habilitado'])

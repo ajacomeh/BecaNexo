@@ -121,7 +121,7 @@ def capture(execution, source, portal):
                     from .auto_borradores import candidate_assessment
                     admitted, reason = candidate_assessment(publication, observation.version)
                     incident(execution, 'CANDIDATO_ACEPTADO' if admitted else 'CANDIDATO_PENDIENTE',
-                             'Ficha con evidencia suficiente para borrador privado.' if admitted else (reason or 'Revisión editorial pendiente.'),
+                             (reason or 'Ficha con evidencia suficiente para borrador privado.') if admitted else (reason or 'Revisión editorial pendiente.'),
                              publication=publication, severity='aviso')
                 if observation.version_id and getattr(settings, 'RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS', False):
                     try:

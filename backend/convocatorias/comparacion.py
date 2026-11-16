@@ -246,9 +246,14 @@ def evaluar_alternativa(reglas, perfil, formaciones, idiomas, destino):
 
 
 def evaluar_convocatoria(usuario, convocatoria):
+    from .models import BorradorRastreo
+    origin = BorradorRastreo.objects.filter(convocatoria=convocatoria).first()
+    unstructured = bool(origin and origin.datos_iniciales.get('requisitos_originales')
+                        and not convocatoria.requisitos.filter(activo=True).exists())
     perfil = Perfil.objects.select_related("nacionalidad", "residencia").filter(usuario=usuario).first()
     formaciones = list(perfil.formaciones.select_related("area")) if perfil else []
     idiomas = {i.idioma.codigo: i.nivel for i in perfil.idiomas.select_related("idioma")} if perfil else {}
+    preferencias = {(p.nivel, p.modalidad) for p in perfil.preferencias.all()} if perfil else set()
     requisitos = list(convocatoria.requisitos.filter(activo=True).select_related("tipo_requisito"))
     opciones = []
     for opcion in convocatoria.opciones.filter(activa=True).prefetch_related("paises"):
@@ -259,14 +264,19 @@ def evaluar_convocatoria(usuario, convocatoria):
             reglas = [r for r in aplicables if r.destino_id is None or (destino and r.destino_id == destino.pk)]
             evaluaciones = evaluar_alternativa(reglas, perfil, formaciones, idiomas, destino)
             estado = agregar(evaluaciones)
-            if destino is None and estado == "cumple": estado = "desconocido"
+            if (destino is None or unstructured) and estado == "cumple": estado = "desconocido"
             alternativas.append({"pais": destino.codigo if destino else None, "nombre": destino.nombre if destino else "Destino no especificado",
                                  "resultado": estado, "resumen": ETIQUETAS[estado], "requisitos": evaluaciones})
         estado = next(estado for estado in ("cumple", "desconocido", "no_cumple") if any(a["resultado"] == estado for a in alternativas))
         # Una alternativa seleccionada para el resumen nunca mezcla evidencias de distintos pa?ses.
         principal = next(a for a in alternativas if a["resultado"] == estado)
+        modalidad_preferencia = (
+            "desconocido" if not preferencias else
+            "coincide" if (opcion.nivel, opcion.modalidad) in preferencias else "no_coincide"
+        )
         opciones.append({"id": opcion.pk, "programa": opcion.programa, "nivel": opcion.nivel,
                          "modalidad": opcion.modalidad, "destinos": [p.nombre for p in destinos],
+                         "preferencia_modalidad": modalidad_preferencia,
                          "resultado": estado, "resumen": ETIQUETAS[estado], "requisitos": principal["requisitos"],
                          "resultados_destino": alternativas,
                          "verificaciones_externas_pendientes": len({e["id"] for a in alternativas for e in a["requisitos"] if e["comprobacion_externa"]}),

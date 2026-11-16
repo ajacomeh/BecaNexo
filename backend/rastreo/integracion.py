@@ -283,9 +283,10 @@ def crear_borrador(actor_id, proposal_id, payload):
 
 
 def representar_aplicacion(row):
+    from convocatorias.services import publicas
     return {'convocatoria_id': row.convocatoria_id, 'propuesta_id': row.propuesta_id,
             'revision_integracion_id': row.pk, 'revision': row.convocatoria.revision,
-            'publica': row.convocatoria.activa and row.convocatoria.revision == 'validada' and row.convocatoria.institucion.pais.codigo == 'EC',
+            'publica': publicas().filter(pk=row.convocatoria_id).exists(),
             'opciones_ids': row.detalle.get('opciones_ids', {}),
             'pendientes': row.detalle.get('pendientes', []),
             'omitidos': row.detalle.get('omitidos', [])}

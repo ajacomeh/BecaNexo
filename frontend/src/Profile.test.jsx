@@ -11,7 +11,7 @@ const catalogs = {
   paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }],
   idiomas: [{ id: 1, codigo: 'en', nombre: 'Inglés' }], areas: [{ id: 1, nombre: 'Informática' }],
   niveles: [{ valor: 'grado', nombre: 'Grado' }, { valor: 'maestria', nombre: 'Maestría' }],
-  modalidades: [{ valor: 'virtual', nombre: 'Virtual' }],
+  modalidades: [{ valor: 'virtual', nombre: 'Virtual' }, { valor: 'hibrida', nombre: 'Híbrida' }],
   niveles_idioma: [{ valor: 'B2', nombre: 'B2' }], estados: [{ valor: 'en_curso', nombre: 'En curso' }],
   dedicaciones: [{ valor: 'parcial', nombre: 'Tiempo parcial' }],
 }
@@ -311,6 +311,16 @@ it('guarda preferencias y distingue sin declarar de no', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Guardar disponibilidad' }))
   await waitFor(() => expect(profile.disponible_traslado).toBe(false))
   expect(profile.disponible_extranjero).toBeNull()
+})
+
+it('permite declarar Híbrida sin exigir cambios a preferencias anteriores', async () => {
+  mount('/preferencias')
+  await userEvent.click(await screen.findByRole('button', { name: 'Añadir preferencia' }))
+  await userEvent.selectOptions(screen.getByLabelText(/Nivel deseado/), 'grado')
+  await userEvent.selectOptions(screen.getByLabelText(/Modalidad deseada/), 'hibrida')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar preferencia' }))
+  expect(await screen.findByText('Grado · Híbrida')).toBeInTheDocument()
+  expect(lists.preferencias[0].modalidad).toBe('hibrida')
 })
 
 it('administrador no accede al formulario ni recibe invitación', async () => {

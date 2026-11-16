@@ -1,5 +1,11 @@
 # Respaldo conjunto de PostgreSQL y documentos
 
+## Copia previa a convocatorias.0008 — 13/11/2026
+
+Respaldo nuevo: `D:\Respaldos_BecaNexo\becanexo_pre_convocatorias_0008_20261114T004048Z_30692541` (marca UTC; 13/11/2026 en Ecuador). Incluye `becanexo_db.backup` de 315377 bytes, 42 documentos, `manifiesto.json`, `SHA256SUMS.txt` y `pg_restore-list.txt`. Se usó snapshot PostgreSQL exportado con transacción de solo lectura y exclusión del rastreo durante la copia. La comprobación independiente cotejó tamaño y SHA-256 del dump, 42 archivos copiados y 42 originales, así como las 43 entradas de `SHA256SUMS.txt`; `pg_restore --list` terminó correctamente. El manifiesto conserva inventario, migraciones, política y configuración operativa no secreta. La copia nueva **no se restauró de forma aislada**; su lectura íntegra no equivale a un ensayo de recuperación.
+
+Inventario de la captura: 9 convocatorias, 8 favoritos, 5 publicaciones, 25 versiones, 42 documentos, 47 relaciones documentales y un borrador automático (ID 9, pendiente). La política era `siau-nacionales/3`, frecuencia 1440 minutos y publicación automática deshabilitada. Para recuperar este estado, usar una base y raíz documental nuevas y aisladas, comprobar primero manifiesto, huellas y listado; restaurar con `pg_restore --no-owner --no-acl` sin `--clean` ni `--create`, y utilizar el código compatible con el esquema anterior a `convocatorias.0008`. No restaurar sobre `becanexo_db` ni atribuir recuperabilidad completa sin un ensayo aislado.
+
 ## Copia previa a rastreo.0013 y convocatorias.0006/0007 — 12/11/2026
 
 Respaldo nuevo: `D:\Respaldos_BecaNexo\becanexo_pre_migracion_b18_20261113T001611Z_8f098cd9` (marca UTC; 12/11/2026 en Ecuador). Contiene `becanexo_db.backup` (300907 bytes), `documentos/` (35 archivos), `manifiesto.json`, `pg_restore-list.txt` y `SHA256SUMS.txt`. La captura usó snapshot PostgreSQL exportado y exclusión del rastreador. Se cotejaron tamaño y SHA-256 del dump, de los 35 archivos copiados y de las 35 referencias con los originales; `pg_restore --list` terminó con código 0 y coincidió con el listado guardado. El manifiesto identifica el commit `a269fcd3c289b9c87ee25101a1bf2c36ee44d8e3`, migraciones aplicadas, política `/3`, frecuencia y configuración no secreta. No se ensayó una restauración completa.

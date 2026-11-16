@@ -140,6 +140,17 @@ def extract_html(download):
             return inline
         index = next((i for i, line in enumerate(lines) if line.casefold().rstrip(':') == label.casefold()), None)
         return lines[index + 1] if index is not None and index + 1 < len(lines) else ''
+    deadline_index = next((i for i, line in enumerate(lines) if line.casefold().rstrip(':') == 'postula hasta'), None)
+    deadlines_by_modality = []
+    if deadline_index is not None:
+        for line in lines[deadline_index + 1:deadline_index + 5]:
+            if line.casefold().startswith(('país:', 'pais:', 'idioma:', 'modalidad:', 'aplicar ahora')):
+                break
+            if ':' in line:
+                label, literal = line.split(':', 1)
+                parsed = fecha(literal.strip())
+                if parsed['fecha'] and re.search(r'presencial|h[ií]brid[ao]|en l[ií]nea|virtual', label, re.I):
+                    deadlines_by_modality.append({'modalidad_original': label.strip(), **parsed, 'url': url})
     description = (section('¿Quiénes pueden aplicar?', '¿Cuál es la cobertura')
                    or section('dirigida esta convocatoria', 'Requisitos para aplicar'))
     coverage = section('¿Cuál es la cobertura', '¿Cómo postular')
@@ -170,7 +181,8 @@ def extract_html(download):
                          'modalidad': evidencia(after('Modalidad'), url), 'destino': evidencia(after('País'), url)},
             'opciones': [], 'requisitos': {**evidencia(requirements, url), 'estado': 'pendientes_de_estructuracion'},
             'postulacion_y_documentos': evidencia(instructions, url),
-            'cierre': {**fecha(after('POSTULA HASTA')), 'url': url}, 'fecha_publicacion': None,
+            'cierre': {**fecha(after('POSTULA HASTA')), 'url': url},
+            'cierres_por_modalidad': deadlines_by_modality, 'fecha_publicacion': None,
             'enlaces_bases': [link for link in links if link['texto'].upper() == 'BASES'],
             'enlaces_postulacion': [link for link in links if link['texto'].upper() == 'POSTULA'],
             'texto_ficha': '\n'.join(lines), 'seccion_completa': parser.finished}
@@ -196,6 +208,8 @@ def validate_observation(item, reference_date):
     item['vigencia_observada'] = ('vencida' if date.fromisoformat(closure) < reference_date else 'cierre_no_anterior_al_dia_de_consulta') if closure else 'desconocida'
     if not closure:
         warnings.append('Fecha de cierre ausente o ambigua; no inferir permanencia.')
+    if len({row['fecha'] for row in item.get('cierres_por_modalidad', [])}) > 1:
+        warnings.append('Cierres diferentes por modalidad; verificar cada opción antes de considerarla abierta.')
     if item['vigencia_observada'] == 'vencida':
         warnings.append('Cierre vencido según la fecha publicada; no es una oferta abierta.')
     for amount in item['beneficio']['cantidades']:

@@ -243,15 +243,19 @@ class ScholarshipSections(HTMLParser):
             return
         if tag == self.heading:
             title = ' '.join(''.join(self.heading_text).split())
-            if re.match(r'^beca\b', title, re.I):
+            if self.current and self.current_level and int(tag[1]) > self.current_level:
+                self.current['text'].append('\n' + title + '\n')
+                self.current['links'].extend(self.heading_links)
+            elif (re.match(r'^beca\b', title, re.I) or
+                  (re.search(r'\bconvocatoria de becas?\b', title, re.I) and
+                   (re.search(r'\b20\d{2}\b', title) or re.match(r'^\s*\d{1,3}[ªºa.]?\s+', title, re.I)))):
                 self.current = {'title': title, 'category': self.category, 'text': [], 'links': self.heading_links[:],
                                 'heading_tag': tag}
                 self.blocks.append(self.current)
                 self.current_level = int(tag[1])
-            elif self.current and self.current_level and int(tag[1]) > self.current_level:
-                self.current['text'].append('\n' + title + '\n')
             else:
-                if re.search(r'becas?\s+de\s+(grado|posgrado|tecnolog)', title, re.I):
+                if (re.search(r'becas?\s+de\s+(grado|posgrado|tecnolog)', title, re.I)
+                        or re.fullmatch(r'estudiantes (?:de nuevo ingreso|actuales)', title, re.I)):
                     self.category = title
                 self.current = None
                 self.current_level = None
@@ -385,7 +389,7 @@ def _item(url, consultation, title, text, base_links, complete, postulation=()):
                 return '\n'.join(lines[pos:pos + 7])[:5000]
         return ''
     requirements = section(('requisito', 'condiciones'))
-    coverage = section(('porcentaje', 'cobertura', 'financiamiento')) or section(('beneficio:', 'beneficios específicos'))
+    coverage = section(('porcentaje', 'cobertura', 'financiamiento', 'monto de la beca')) or section(('beneficio',))
     modality = section(('modalidad',))
     destination = section(('país de estudio', 'destino'))
     close = ''
@@ -393,15 +397,30 @@ def _item(url, consultation, title, text, base_links, complete, postulation=()):
         if re.search(r'\b(cierre|postula hasta|fecha límite)\b', line, re.I):
             close = line[:500]
             break
+        if re.search(r'\b(?:convocatoria|postulaciones?)\b.*\bhasta el\b', line, re.I):
+            close = line[line.casefold().rfind('hasta el'):][:500]
+            break
     date_match = re.search(r'(\d{1,2} de [a-záéíóú]+(?: de)? \d{4})', close, re.I)
     parsed_date = fecha(date_match.group(1)) if date_match else {'original': close, 'fecha': None, 'precision': None, 'hora': None, 'zona_horaria': None}
+    opening = ''
+    for line in lines:
+        if re.search(r'\b(?:postulaciones? abiertas? desde el|(?:convocatoria|postulaciones?)\s+abierta desde el)\b', line, re.I):
+            opening = line[:500]
+            break
+    opening_match = re.search(r'(\d{1,2} de [a-záéíóú]+(?: de)? \d{4})', opening, re.I)
+    parsed_opening = fecha(opening_match.group(1)) if opening_match else None
     kind = 'convocatoria_con_cierre' if parsed_date['fecha'] else (
+        'convocatoria_con_apertura' if parsed_opening and parsed_opening['fecha'] else
         'programa_permanente' if re.search(r'\b(?:programa|vigencia|postulaci[oó]n|convocatoria) permanente\b', text, re.I)
         else 'tipo_de_beca_vigencia_desconocida')
     observed_status = 'desconocida'
-    if parsed_date['fecha']:
-        consulted = datetime.fromisoformat(consultation.replace('Z', '+00:00')).astimezone(ZoneInfo('America/Guayaquil')).date()
-        observed_status = 'abierta' if date.fromisoformat(parsed_date['fecha']) >= consulted else 'vencida'
+    consulted = datetime.fromisoformat(consultation.replace('Z', '+00:00')).astimezone(ZoneInfo('America/Guayaquil')).date()
+    if parsed_date['fecha'] and date.fromisoformat(parsed_date['fecha']) < consulted:
+        observed_status = 'vencida'
+    elif parsed_opening and parsed_opening['fecha'] and date.fromisoformat(parsed_opening['fecha']) > consulted:
+        observed_status = 'proxima'
+    elif parsed_date['fecha']:
+        observed_status = 'abierta'
     instructions = section(('cómo postular', 'proceso de postulación', 'postular/renovar'))
     return {'url': url, 'consulta_utc': consultation, 'version_extractor': POLITICA_VERSION,
             'titulo': evidencia(title, url), 'descripcion': evidencia(text[:15000], url),
@@ -412,6 +431,7 @@ def _item(url, consultation, title, text, base_links, complete, postulation=()):
                          'modalidad': evidencia(modality, url), 'destino': evidencia(destination, url)},
             'opciones': [], 'requisitos': {**evidencia(requirements, url), 'estado': 'pendientes_de_estructuracion'},
             'postulacion_y_documentos': evidencia(instructions, url), 'cierre': {**parsed_date, 'url': url},
+            'apertura': {**parsed_opening, 'url': url} if parsed_opening else None,
             'fecha_publicacion': None,
             'enlaces_bases': [{'url': link, 'url_original': link, 'texto': 'Documento público'} for link in base_links],
             'enlaces_postulacion': [{'url': link, 'url_original': link, 'texto': 'Postulación institucional'} for link in postulation],

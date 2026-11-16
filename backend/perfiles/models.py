@@ -5,7 +5,8 @@ from django.utils import timezone
 
 
 NIVELES = [(v, n) for v, n in [("bachillerato", "Bachillerato"), ("grado", "Tercer nivel / grado"), ("especializacion", "Especialización"), ("maestria", "Maestría"), ("doctorado", "Doctorado")]]
-MODALIDADES = [("presencial", "Presencial"), ("virtual", "Virtual"), ("semipresencial", "Semipresencial")]
+MODALIDADES = [("presencial", "Presencial"), ("virtual", "Virtual"),
+               ("semipresencial", "Semipresencial"), ("hibrida", "Híbrida")]
 MCER = [(v, v) for v in ("A1", "A2", "B1", "B2", "C1", "C2")]
 ESTADOS = [("en_curso", "En curso"), ("concluidos", "Concluidos")]
 DEDICACIONES = [("completa", "Tiempo completo"), ("parcial", "Tiempo parcial"), ("ambas", "Ambas")]
