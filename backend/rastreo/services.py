@@ -576,16 +576,12 @@ def run_candidate(candidate_id, actor_id, key, reason):
 
 
 def next_due(source):
-    # Una captura extraordinaria no reinicia las 24 horas del Programador.
+    # Todas las capturas consumen la misma ventana mínima de la fuente.
     last = (Ejecucion.objects.filter(fuente=source).exclude(estado='omitida')
-            .exclude(configuracion_snapshot__solicitud_extraordinaria__isnull=False)
             .order_by('-inicio', '-id').first())
     scheduled = last.inicio + timedelta(minutes=source.frecuencia_min) if last else None
-    from .web_frequency import extraordinary_enabled, global_due, source_retry_due
+    from .web_frequency import source_retry_due
     retry_limit = source_retry_due(source)
-    if source.adaptador == 'siau' and extraordinary_enabled():
-        global_limit = global_due(source)
-        return max(filter(None, (scheduled, global_limit, retry_limit)), default=None)
     return max(filter(None, (scheduled, retry_limit)), default=None)
 
 
@@ -611,22 +607,17 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                 if candidate_id and existing.configuracion_snapshot.get('solicitud_manual') != manual_context:
                     raise ValidationError('Clave idempotente pertenece a otro candidato o motivo.')
                 return existing
+            from .web_frequency import source_blocked
+            due = next_due(source)
             if origin == 'programada':
-                due = next_due(source)
                 if due and due > timezone.now():
                     return Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio').first()
             reason = None
-            if origin == 'manual' and source.adaptador.startswith('portal_ec:'):
-                due = next_due(source)
-                if due and due > timezone.now():
-                    reason = 'La frecuencia de esta fuente aún no permite otra captura.'
+            if due and due > timezone.now():
+                reason = 'La frecuencia de esta fuente aún no permite otra captura.'
+            if source_blocked(source):
+                reason = 'Fuente bloqueada por HTTP 429/503; requiere revisión antes de continuar.'
             if candidate_id:
-                from .web_frequency import source_blocked
-                due = next_due(source)
-                if due and due > timezone.now():
-                    reason = 'La frecuencia de esta fuente aún no permite otra captura.'
-                if source_blocked(source):
-                    reason = 'Fuente bloqueada por HTTP 429/503; requiere revisión antes de continuar.'
                 if (source.adaptador != 'siau' or source.politica_version != 'siau-nacionales/4'
                         or source.politica_acceso != PAGINATED_POLICY
                         or not CandidatoIndice.objects.filter(pk=candidate_id, fuente=source,

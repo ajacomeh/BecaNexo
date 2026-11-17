@@ -126,6 +126,7 @@ def capturar_metadatos(source_id, actor_id, key, reason):
     from django.utils import timezone
     from .models import CandidatoIndice, Ejecucion, Fuente, Incidencia
     from .services import actor_admin, exclusion, next_due, snapshot, NATIONAL_POLICY
+    from .web_frequency import source_blocked
 
     actor = actor_admin(actor_id)
     if not isinstance(reason, str) or not reason.strip():
@@ -147,6 +148,8 @@ def capturar_metadatos(source_id, actor_id, key, reason):
                 raise ValidationError('La fuente SIAU debe conservar la política /3 sin publicación automática.')
             if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
                 raise ValidationError('Existe una ejecución pendiente de recuperación.')
+            if source_blocked(source):
+                raise ValidationError('Fuente bloqueada por HTTP 429/503; requiere revisión antes de continuar.')
             due = next_due(source)
             if due and due > timezone.now():
                 raise ValidationError('Aún no corresponde otra consulta SIAU.')

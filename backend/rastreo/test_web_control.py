@@ -517,7 +517,8 @@ class WebControlTests(TransactionTestCase):
                 configuracion_snapshot={'solicitud_extraordinaria': {'motivo': 'prueba'}}, version_extractor='prueba',
                 inicio=timezone.now() - timedelta(minutes=6), estado='en_curso')
             from .services import next_due
-            self.assertLess(next_due(source), timezone.now())
+            # También una captura extraordinaria consume la ventana mínima.
+            self.assertGreater(next_due(source), timezone.now() + timedelta(hours=23))
             admin = self._client(self.actor)
             token = admin.get('/api/auth/csrf/').data['csrfToken']
             now = timezone.now()

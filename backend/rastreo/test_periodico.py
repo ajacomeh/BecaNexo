@@ -67,7 +67,7 @@ class PeriodicTests(TransactionTestCase):
         self.assertEqual(national_index_pages(national_index().split(b'<div onclick=')[0]), ([NATIONAL_PAGE], True))
 
     def test_national_discovery_is_audited_and_records_only_reviewable_candidate(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         source = self.source()
         enable_discovery(self.actor.pk, 'Índice anterior en prueba')
         key = uuid.uuid4()
@@ -92,7 +92,9 @@ class PeriodicTests(TransactionTestCase):
 
         with patch('convocatorias.siau_red.Downloader.once', side_effect=network):
             first = run_manual(source.pk, self.actor.pk, uuid.uuid4())
-            repeat = run_manual(source.pk, self.actor.pk, uuid.uuid4())
+            with patch('rastreo.services.timezone.now',
+                       return_value=first.inicio + timedelta(minutes=source.frecuencia_min)):
+                repeat = run_manual(source.pk, self.actor.pk, uuid.uuid4())
         self.assertEqual(summary(first)['estado'], 'finalizada')
         self.assertEqual(Publicacion.objects.count(), 3)
         publication = Publicacion.objects.get(url_normalizada=NATIONAL_PAGE)

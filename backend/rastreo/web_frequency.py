@@ -65,12 +65,13 @@ def source_blocked(source):
 
 
 def manual_window(source, exclude_key=None):
+    from .services import next_due
     accepted = acceptances(source.pk, exclude_key)
     latest = max(accepted) if accepted else None
     today = timezone.now().astimezone(utc_timezone.utc).date()
     daily = sum(value.astimezone(utc_timezone.utc).date() == today for value in accepted)
     daily_limit = (datetime.combine(today + timedelta(days=1), time.min, utc_timezone.utc)
                    if daily >= MAX_DAILY else None)
-    dates = [date for date in (latest + MANUAL_INTERVAL if latest else None, global_due(source), daily_limit,
-                               source_retry_due(source)) if date]
+    dates = [date for date in (latest + MANUAL_INTERVAL if latest else None, daily_limit,
+                               next_due(source)) if date]
     return max(dates) if dates else None
