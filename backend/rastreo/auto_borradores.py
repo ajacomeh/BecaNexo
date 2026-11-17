@@ -48,9 +48,15 @@ def _offerer_evidence(data):
     registered = []
     if re.search(r'\b(?:otorga|ofrece|coofrece|otorgad[ao]s?|ofrecid[ao]s?|coofrecid[ao]s?)\b', context):
         for institution in Institucion.objects.select_related('pais').filter(pais__codigo='EC'):
-            name = re.escape(_normal(institution.nombre))
-            if (re.search(rf'\b(?:otorgad[ao]s?|ofrecid[ao]s?|coofrecid[ao]s?)\s+por\s+{name}\b', context)
-                    or re.search(rf'\b{name}\s+(?:ofrece|otorga|coofrece)\b', context)):
+            aliases = {_normal(institution.nombre)}
+            # Un acrónimo editorial al final del registro no forma parte del nombre
+            # literal que puede aparecer en una ficha oficial.
+            without_acronym = re.sub(r'\s*\([A-Z0-9]{2,12}\)\s*$', '', institution.nombre).strip()
+            if without_acronym != institution.nombre and len(without_acronym) >= 20:
+                aliases.add(_normal(without_acronym))
+            if any(re.search(rf'\b(?:otorgad[ao]s?|ofrecid[ao]s?|coofrecid[ao]s?)\s+por\s+{re.escape(name)}\b', context)
+                   or re.search(rf'\b{re.escape(name)}\s+(?:ofrece|otorga|coofrece)\b', context)
+                   for name in aliases):
                 registered.append(institution)
     if registered:
         return 'verificado_ec', ' / '.join(row.nombre for row in registered), 'Participación de entidad ecuatoriana registrada y explícita en la ficha.'
@@ -120,7 +126,7 @@ def classify_candidate(publication, version, *, allow_partial=False):
         return result('fuera_alcance', 'La ficha excluye expresamente a ciudadanos ecuatorianos.',
                       elegibilidad='excluida', **details)
     recipient = 'confirmada' if re.search(
-        r'\b(?:personas|estudiantes|postulantes|ciudadan[oa]s?)\s+ecuatorian[oa]s?\b|'
+        r'\b(?:personas|estudiantes|postulantes|ciudadan[oa]s?(?:/[oa]s?)?)\s+ecuatorian[oa]s?(?:/[oa]s?)?\b|'
         r'\bciudadan[oa]s?\s+del\s+ecuador\b|\bnacionalidad\s+ecuatoriana\b|'
         r'\bcedula\s+de\s+ciudadania\s+ecuatoriana\b|'
         r'\becuatorian[oa]s?\s+(?:pueden|podran|deben)\s+postular\b', scope

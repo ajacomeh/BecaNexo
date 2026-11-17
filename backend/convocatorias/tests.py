@@ -7,10 +7,30 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 from perfiles.models import Pais, Area, Idioma
+from notificaciones.models import Notificacion
+from .services import postulables
 from . import models as m
 
 
 class ConvocatoriasTests(TestCase):
+    def test_educacion_continua_sin_nivel_es_solo_historica(self):
+        offer = self.oferta("Curso de educación continua sintético")
+        pk = offer["id"]
+        option = self.opcion(pk, nivel="no_aplica", modalidad="virtual",
+                             programa="Innovación educativa", cupos=50)
+        self.assertEqual(option["nivel"], "no_aplica")
+        self.assertNotIn("no_aplica", [row["valor"] for row in self.public.get("/api/becas/catalogos/").data["niveles"]])
+        self.assertIn("no_aplica", [row["valor"] for row in self.public.get("/api/becas/catalogos/").data["niveles_opcion"]])
+        self.write(f"/api/gestion/convocatorias/{pk}/", {
+            "cierre_dia": (timezone.localdate() - timedelta(days=1)).isoformat(),
+            "cierre_original": "Cierre confirmado, sin hora", }, "patch", 200)
+        self.write(f"/api/gestion/convocatorias/{pk}/publicar/", expected=200)
+        self.assertEqual(self.public.get(f"/api/becas/{pk}/").data["estado"], "cerrada")
+        self.assertEqual(self.public.get(f"/api/becas/?q=Curso%20de%20educaci%C3%B3n%20continua").data["count"], 0)
+        self.assertEqual(self.public.get(f"/api/becas/?estado=cerrada&nivel=no_aplica").data["count"], 1)
+        self.assertFalse(postulables().filter(pk=pk).exists())
+        self.assertFalse(Notificacion.objects.filter(convocatoria_id=pk).exists())
+
     def test_opciones_mismo_nivel_y_modalidad_conservan_ambitos(self):
         c = self.oferta()["id"]
         first = self.opcion(c, programa="Programa A", institucion_destino="Institución A", paises=[self.ec.pk])

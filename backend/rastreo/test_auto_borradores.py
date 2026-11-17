@@ -28,6 +28,23 @@ class AutoDraftTests(TransactionTestCase):
     source = base.RastreoTests.source
     fake = base.RastreoTests.fake
 
+    def test_literal_offerer_with_acronym_and_inclusive_citizenship(self):
+        ec, _ = Pais.objects.get_or_create(codigo="EC", defaults={"nombre": "Ecuador"})
+        Institucion.objects.create(nombre="Fundación Instituto Ecuatoriano de Estudios Occidente (OCCITEC)",
+                                    sector="privado", pais=ec)
+        publication = self.capture(offerer=False, citizenship=False)
+        version = latest_version(publication)
+        version.datos_extraidos['titulo']['texto_original'] = (
+            'Oferta de Becas Nacionales para Educación Continua otorgadas por '
+            'Fundación Instituto Ecuatoriano de Estudios Occidente')
+        version.datos_extraidos['descripcion']['texto_original'] = (
+            'Ciudadanos/as ecuatorianos/as docentes de instituciones de Imbabura.')
+        version.datos_extraidos['requisitos']['texto_original'] = 'Ser ciudadano/a ecuatoriano/a.'
+        result = classify_candidate(publication, version)
+        self.assertEqual(result['estado'], 'apta')
+        self.assertEqual(result['oferente'], 'verificado_ec')
+        self.assertEqual(result['elegibilidad'], 'confirmada')
+
     def test_non_national_siau_needs_ecuadorian_offerer_evidence(self):
         publication = self.capture()
         version = latest_version(publication)

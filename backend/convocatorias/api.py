@@ -58,7 +58,8 @@ class Catalogos(CatalogosPerfil):
     def get(self, request):
         parametros(request, set())
         data = super().get(request).data
-        data.update(tipos_beca=list(m.TipoBeca.objects.values("id", "nombre", "descripcion")),
+        data.update(niveles_opcion=[{"valor": value, "nombre": label} for value, label in m.NIVELES_OPCION],
+                    tipos_beca=list(m.TipoBeca.objects.values("id", "nombre", "descripcion")),
                     tipos_requisito=[{"id": t.pk, "codigo": t.codigo, "nombre": t.nombre, "esquema_valor": esquema(t.codigo)}
                                      for t in m.TipoRequisito.objects.all() if t.codigo in CONTRATOS])
         return Response(data)
@@ -106,7 +107,7 @@ def filtrar(request, qs, admin=False):
     query = p.get("q", "").strip()
     if len(query) > 200: raise serializers.ValidationError({"q": "Máximo 200 caracteres."})
     options = {"activa": True}
-    for key, choices in (("nivel", m.NIVELES), ("modalidad", m.MODALIDADES)):
+    for key, choices in (("nivel", m.NIVELES_OPCION), ("modalidad", m.MODALIDADES)):
         if key in p:
             if p[key] not in dict(choices): raise serializers.ValidationError({key: "Valor no permitido."})
             options[key] = p[key]

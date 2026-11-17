@@ -11,7 +11,7 @@ export default function CatalogFilters({ params, catalogs, onApply, onClear, sta
   }
   return <section className="profile-card catalog-filters"><h2>Filtros de búsqueda</h2>{activeCount !== null && <p className="catalog-filter-status" role="status">{activeCount === 0 ? 'Sin filtros activos' : `${activeCount} ${activeCount === 1 ? 'filtro activo' : 'filtros activos'}`}</p>}<form onSubmit={e => { e.preventDefault(); onApply(values) }}>
     <div className="catalog-filter-grid"><label className="field"><span>Buscar título, institución, área, descripción o programa</span><input name="q" maxLength={200} value={values.q || ''} onChange={e => setValues({ ...values, q: e.target.value })} /></label>
-      {select('nivel', 'Nivel', 'Todos los niveles', catalogs.niveles.map(r => [r.valor, r.nombre]))}
+      {select('nivel', 'Nivel', 'Todos los niveles', (catalogs.niveles_opcion || catalogs.niveles).map(r => [r.valor, r.nombre]))}
       {select('modalidad', 'Modalidad', 'Todas las modalidades', catalogs.modalidades.map(r => [r.valor, r.nombre]))}
       {select('destino', 'Destino de estudio', 'Todos los destinos', catalogs.paises.map(r => [r.codigo, r.nombre]))}
     </div>

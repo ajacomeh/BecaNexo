@@ -15,6 +15,7 @@ def dominio(field, values, name, nullable=False):
 SECTORES = [("publico", "Público"), ("privado", "Privado")]
 REVISIONES = [("pendiente", "Pendiente / borrador"), ("validada", "Validada")]
 COBERTURAS = [(x, x.replace("_", " ").capitalize()) for x in ("total", "parcial", "mixta", "no_especificada")]
+NIVELES_OPCION = [*NIVELES, ("no_aplica", "No aplica (educación continua)")]
 PERIODOS = [(x, x.capitalize()) for x in ("unico", "mensual", "anual", "otra")]
 MODOS = [("dato_declarado", "Dato declarado"), ("entidad_oferente", "Entidad oferente")]
 
@@ -88,7 +89,7 @@ class Convocatoria(models.Model):
 
 class OpcionEstudio(models.Model):
     convocatoria = models.ForeignKey(Convocatoria, on_delete=models.PROTECT, related_name="opciones")
-    nivel = models.CharField(max_length=30, choices=NIVELES)
+    nivel = models.CharField(max_length=30, choices=NIVELES_OPCION)
     modalidad = models.CharField(max_length=20, choices=MODALIDADES)
     activa = models.BooleanField(default=True)
     programa = models.TextField(null=True, blank=True)
@@ -101,7 +102,7 @@ class OpcionEstudio(models.Model):
     class Meta:
         db_table = "MAE_OPCION_ESTUDIO"
         ordering = ["id"]
-        constraints = [dominio("nivel", NIVELES, "opcion_nivel"), dominio("modalidad", MODALIDADES, "opcion_modalidad"),
+        constraints = [dominio("nivel", NIVELES_OPCION, "opcion_nivel"), dominio("modalidad", MODALIDADES, "opcion_modalidad"),
                        models.CheckConstraint(condition=Q(cupos__isnull=True) | Q(cupos__gt=0), name="opcion_cupos"),
                        models.CheckConstraint(condition=Q(duracion_meses__isnull=True) | Q(duracion_meses__gt=0), name="opcion_duracion")]
 

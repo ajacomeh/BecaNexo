@@ -16,7 +16,7 @@ export const generalFields = (c, institutions) => [text('titulo', 'Título', { r
   text('cierre_original', 'Texto original del cierre', { hint: 'Conserva el literal de la fuente para un cierre expresado solo como día.' }), select('cobertura_tipo', 'Cobertura según las bases', enumOptions(['total', 'parcial', 'mixta', 'no_especificada'])),
   text('gastos_no_cubiertos', 'Gastos no cubiertos', { type: 'textarea' }), text('obligaciones_beneficiario', 'Obligaciones del beneficiario', { type: 'textarea' }),
   select('areas', 'Áreas académicas', choices(c.areas), { multiple: true, kind: 'ids' })]
-export const optionFields = (c) => [select('nivel', 'Nivel', choices(c.niveles, 'valor'), { required: true }),
+export const optionFields = (c) => [select('nivel', 'Nivel', choices(c.niveles_opcion || c.niveles, 'valor'), { required: true }),
   select('modalidad', 'Modalidad', choices(c.modalidades, 'valor'), { required: true }),
   select('activa', 'Opción activa', bool, { required: true, kind: 'boolean' }), text('programa', 'Programa'), text('institucion_destino', 'Institución de destino'),
   text('inicio_estudios', 'Inicio de estudios', { type: 'date' }), text('duracion_meses', 'Duración en meses', { type: 'number', kind: 'integer' }),

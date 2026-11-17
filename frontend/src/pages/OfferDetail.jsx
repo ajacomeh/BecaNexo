@@ -159,6 +159,7 @@ export default function OfferDetail() {
   }, [id, retry])
   const offer = String(data?.offer.id) === id ? data.offer : null
   const options = offer?.opciones || []
+  const academicAreas = offer ? (offer.areas || []).map(id => data.catalogs.areas?.find(area => area.id === id)?.nombre).filter(Boolean) : []
   const destinations = offer ? unique(options.flatMap(option => (option.paises || []).map(countryId => data.catalogs.paises.find(country => country.id === countryId)?.nombre))) : []
   const financing = offer ? benefitSummary(offer.beneficios) : []
   const period = offer ? publishedPeriod(offer) : null
@@ -180,7 +181,7 @@ export default function OfferDetail() {
       {offer.estado === 'sin_fecha' && <Message kind="info">La vigencia está por verificar. Esta beca se conserva para consulta y no se recomienda como postulable.</Message>}
       {offer.estado === 'cierre_hoy' && <Message kind="info">El cierre está indicado solo por día. No se conoce la hora; consulta el sitio oficial antes de postular.</Message>}
       <section className="profile-card offer-detail-section"><h2>Resumen y condiciones generales</h2><p className="preserve-text">{offer.descripcion}</p>
-        <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Cobertura publicada</dt><dd>{financing.length ? financing.join(' · ') : display(offer.cobertura_tipo)}</dd></div>
+        <dl className="detail-data"><div><dt>Tipo de beca</dt><dd>{display(offer.tipo_beca_nombre)}</dd></div><div><dt>Áreas académicas</dt><dd>{academicAreas.length ? academicAreas.join(', ') : 'No especificadas en esta ficha; consulta la fuente oficial'}</dd></div><div><dt>Cobertura publicada</dt><dd>{financing.length ? financing.join(' · ') : display(offer.cobertura_tipo)}</dd></div>
           {period ? <div><dt>Período de postulación</dt><dd>Apertura: {dayDate(period.start)} · Cierre: {dayDate(period.end)} · Horas no informadas</dd></div>
             : <><div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div>{offer.cierre_original && <div><dt>Fecha según fuente</dt><dd>{offer.cierre_original}</dd></div>}</>}
           <div><dt>Publicación en la fuente</dt><dd>{display(offer.fecha_publicacion)}</dd></div><div><dt>Gastos no cubiertos</dt><dd>{display(offer.gastos_no_cubiertos)}</dd></div><div><dt>Obligaciones</dt><dd>{display(offer.obligaciones_beneficiario)}</dd></div></dl><p className="small-note">Los instantes se muestran en America/Guayaquil. Un cierre expresado solo como día no tiene hora confirmada.</p></section>

@@ -271,7 +271,7 @@ def evaluar_convocatoria(usuario, convocatoria):
         # Una alternativa seleccionada para el resumen nunca mezcla evidencias de distintos pa?ses.
         principal = next(a for a in alternativas if a["resultado"] == estado)
         modalidad_preferencia = (
-            "desconocido" if not preferencias else
+            "desconocido" if opcion.nivel == "no_aplica" or not preferencias else
             "coincide" if (opcion.nivel, opcion.modalidad) in preferencias else "no_coincide"
         )
         opciones.append({"id": opcion.pk, "programa": opcion.programa, "nivel": opcion.nivel,

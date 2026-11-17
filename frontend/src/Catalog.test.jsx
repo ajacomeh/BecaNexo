@@ -8,11 +8,53 @@ import CatalogCard from './components/CatalogCard'
 import OfferDetail, { BenefitList, RequirementList, Documentation } from './pages/OfferDetail'
 import DemoApplication from './pages/DemoApplication'
 import { benefitSummary } from './pages/catalogPresentation'
+import { optionFields } from './pages/offerFields'
 
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: null }) }))
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }], niveles: [{ valor: 'grado', nombre: 'Grado' }], modalidades: [{ valor: 'virtual', nombre: 'Virtual' }, { valor: 'hibrida', nombre: 'Híbrida' }], tipos_beca: [{ id: 1, nombre: 'Mérito' }] }
 const offer = { id: 1, titulo: 'DEMOSTRACIÓN · Oferta', institucion: { nombre: 'Entidad' }, estado: 'sin_fecha', beneficios: [], opciones: [] }
+
+it('muestra el área confirmada de OCCITEC y no interpreta áreas vacías como todas', async () => {
+  const areaCatalogs = { ...catalogs, areas: [{ id: 2, nombre: 'Educación' }] }
+  const detail = { ...offer, id: 9, titulo: 'OCCITEC', descripcion: 'Educación continua', estado: 'cerrada',
+    areas: [2], requisitos: [], url_oficial: 'https://siau.senescyt.gob.ec/convocatoria/' }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? areaCatalogs : detail)
+  render(<MemoryRouter initialEntries={['/becas/9']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  const section = (await screen.findByText('Áreas académicas')).closest('section')
+  expect(within(section).getByText('Educación')).toBeVisible()
+  cleanup()
+
+  const udaCatalogs = { ...areaCatalogs, areas: [
+    { id: 8, nombre: 'Ingeniería, industria y construcción' },
+    { id: 9, nombre: 'Agricultura, silvicultura, pesca y veterinaria' },
+    { id: 11, nombre: 'Servicios' },
+  ] }
+  offersApi.get.mockImplementation(async path => path === 'becas/catalogos' ? udaCatalogs : { ...detail, id: 13, areas: [8, 9, 11] })
+  render(<MemoryRouter initialEntries={['/becas/13']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText('Ingeniería, industria y construcción, Agricultura, silvicultura, pesca y veterinaria, Servicios')).toBeVisible()
+  cleanup()
+
+  offersApi.get.mockImplementation(async path => path === 'becas/catalogos' ? areaCatalogs : { ...detail, areas: [] })
+  render(<MemoryRouter initialEntries={['/becas/9']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  expect(await screen.findByText('No especificadas en esta ficha; consulta la fuente oficial')).toBeVisible()
+  expect(screen.queryByText('Todas las áreas')).not.toBeInTheDocument()
+})
+
+it('muestra educación continua sin asignar un nivel académico al perfil', async () => {
+  const continuing = { ...catalogs, niveles_opcion: [...catalogs.niveles, { valor: 'no_aplica', nombre: 'No aplica (educación continua)' }] }
+  expect(optionFields(continuing).find(field => field.name === 'nivel').options).toContainEqual({
+    value: 'no_aplica', label: 'No aplica (educación continua)',
+  })
+  expect(continuing.niveles.map(row => row.valor)).not.toContain('no_aplica')
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? continuing : { count: 0, page_size: 12, page: 1, results: [] })
+  render(<MemoryRouter><PublicCatalog /></MemoryRouter>)
+  expect(await screen.findByRole('option', { name: 'No aplica (educación continua)' })).toBeVisible()
+  cleanup()
+  render(<MemoryRouter><CatalogCard catalogs={continuing} offer={{ ...offer, estado: 'cerrada',
+    opciones: [{ id: 2, nivel: 'no_aplica', modalidad: 'virtual', programa: 'Curso de educación continua', paises: [1] }] }} /></MemoryRouter>)
+  expect(screen.getByText(/No aplica \(educación continua\) · Virtual/)).toBeVisible()
+})
 
 it('muestra oferente desconocido y vigencia por verificar sin atribuir la fuente', async () => {
   render(<MemoryRouter><CatalogCard offer={{ ...offer, institucion: null }} catalogs={catalogs} /></MemoryRouter>)
