@@ -1,10 +1,12 @@
 """Transición individual; HTTP simulado y escrituras solo en base aislada."""
 import hashlib
+import io
 import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.db import connection
 from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
@@ -84,6 +86,36 @@ class CandidateTransitionTests(TransactionTestCase):
         self.assertIsNone(origin.convocatoria.institucion_id)
         self.assertEqual(run.configuracion_snapshot['solicitud_manual']['candidato_id'], self.candidate.pk)
 
+    def test_individual_candidate_under_v3_keeps_ordinary_policy(self):
+        set_paginated_discovery(self.actor.pk, 'Conservar rastreo ordinario /3', False)
+        run, calls = self.execute()
+        self.source.refresh_from_db()
+        self.assertEqual(self.source.politica_version, 'siau-nacionales/3')
+        self.assertEqual(run.configuracion_snapshot['politica_version'], 'siau-nacionales/3')
+        self.assertEqual(calls, [ROBOTS, URL])
+        self.assertEqual(run.estado, 'finalizada')
+        self.assertEqual(Publicacion.objects.count(), 1)
+        self.assertEqual(BorradorRastreo.objects.count(), 1)
+        self.assertFalse(publicas().exists())
+
+    def test_cli_processes_one_candidate_under_v3_with_idempotency(self):
+        set_paginated_discovery(self.actor.pk, 'Conservar rastreo ordinario /3', False)
+        key = uuid.uuid4()
+        calls = []
+        def network(url):
+            calls.append(url)
+            return ((200, {'content-type': 'text/plain'}, ROBOTS_TEXT) if url == ROBOTS
+                    else (200, {'content-type': 'text/html'}, fiche()))
+        output = io.StringIO()
+        with patch('convocatorias.siau_red.Downloader.once', side_effect=network):
+            call_command('rastreo', 'procesar-candidato', candidato_id=self.candidate.pk,
+                         actor_id=self.actor.pk, clave=str(key), motivo='Validación sintética', stdout=output)
+            repeated = run_candidate(self.candidate.pk, self.actor.pk, key, 'Validación sintética')
+        self.assertEqual(calls, [ROBOTS, URL])
+        self.assertEqual(repeated.estado, 'finalizada')
+        self.assertIn('"estado": "finalizada"', output.getvalue())
+        self.assertEqual(Ejecucion.objects.filter(fuente=self.source).count(), 2)
+
     def test_partial_without_deadline_or_requirements_stays_private_and_pending(self):
         run, _ = self.execute(fiche(requirements=False, deadline=False))
         self.assertEqual(run.estado, 'finalizada')
@@ -131,7 +163,17 @@ class CandidateTransitionTests(TransactionTestCase):
         self.assertEqual(calls, [])
         self.assertEqual(Publicacion.objects.count(), 0)
 
-    def test_idempotency_and_policy_gate(self):
+    def test_v3_individual_http_503_blocks_next_attempt(self):
+        set_paginated_discovery(self.actor.pk, 'Conservar rastreo ordinario /3', False)
+        first, calls = self.execute(status=503)
+        self.assertEqual(first.estado, 'fallida')
+        self.assertEqual(calls, [ROBOTS, URL])
+        second, calls = self.execute()
+        self.assertEqual(second.estado, 'omitida')
+        self.assertEqual(calls, [])
+        self.assertFalse(Publicacion.objects.exists())
+
+    def test_idempotency_and_frequency_gate(self):
         key = uuid.uuid4()
         first, _ = self.execute(key=key)
         second, calls = self.execute(key=key)
@@ -143,4 +185,5 @@ class CandidateTransitionTests(TransactionTestCase):
         set_paginated_discovery(self.actor.pk, 'Revertir solo en pruebas', False)
         omitted, calls = self.execute()
         self.assertEqual(omitted.estado, 'omitida')
+        self.assertIn('frecuencia', omitted.error_resumen)
         self.assertEqual(calls, [])

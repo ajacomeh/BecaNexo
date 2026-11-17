@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rastreo.models import Fuente, Ejecucion, Publicacion, Version, VersionDocumento, Observacion
 from rastreo.observaciones import differences
-from rastreo.services import configure, enable_discovery, enable_national_discovery, revert_national_discovery, set_paginated_discovery, set_frequency, run_manual, run_scheduled, next_due, recover, summary, register_portal, register_generic_portal, verify_generic_access, set_portal_active
+from rastreo.services import configure, enable_discovery, enable_national_discovery, revert_national_discovery, set_paginated_discovery, set_frequency, run_manual, run_candidate, run_scheduled, next_due, recover, summary, register_portal, register_generic_portal, verify_generic_access, set_portal_active
 from rastreo.storage import integrity_report, StorageError
 
 
@@ -15,11 +15,12 @@ class Command(BaseCommand):
     help = 'Rastreo local de confianza: configurar, activar, desactivar, ejecutar, resumen, recuperar, integridad.'
 
     def add_arguments(self, parser):
-        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'registrar-portal', 'registrar-portal-generico', 'verificar-portal-generico', 'activar-portal', 'desactivar-portal', 'habilitar-descubrimiento', 'habilitar-nacionales', 'revertir-nacionales', 'habilitar-paginacion', 'revertir-paginacion', 'configurar-frecuencia', 'ejecutar', 'programado', 'estado-programacion', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
+        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'registrar-portal', 'registrar-portal-generico', 'verificar-portal-generico', 'activar-portal', 'desactivar-portal', 'habilitar-descubrimiento', 'habilitar-nacionales', 'revertir-nacionales', 'habilitar-paginacion', 'revertir-paginacion', 'configurar-frecuencia', 'ejecutar', 'procesar-candidato', 'programado', 'estado-programacion', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
         parser.add_argument('--actor-id', type=int)
         parser.add_argument('--motivo')
         parser.add_argument('--clave', help='UUID idempotente; obligatorio al ejecutar.')
         parser.add_argument('--fuente-id', type=int)
+        parser.add_argument('--candidato-id', type=int)
         parser.add_argument('--ejecucion-id', type=int)
         parser.add_argument('--publicacion-id', type=int)
         parser.add_argument('--version-id', type=int)
@@ -76,6 +77,10 @@ class Command(BaseCommand):
                 if not options['clave'] or not options['fuente_id']:
                     raise ValidationError('--clave UUID y --fuente-id obligatorios.')
                 result = summary(run_manual(options['fuente_id'], options['actor_id'], options['clave']))
+            elif action == 'procesar-candidato':
+                if not options['candidato_id'] or not options['actor_id'] or not options['clave'] or not options['motivo']:
+                    raise ValidationError('--candidato-id, --actor-id, --clave UUID y --motivo obligatorios.')
+                result = summary(run_candidate(options['candidato_id'], options['actor_id'], options['clave'], options['motivo']))
             elif action == 'programado':
                 if options['actor_id'] or options['clave']:
                     raise ValidationError('La ejecución programada no admite actor ni clave manual.')

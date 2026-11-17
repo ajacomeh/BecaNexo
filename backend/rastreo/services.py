@@ -629,11 +629,12 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
             if source_blocked(source):
                 reason = 'Fuente bloqueada por HTTP 429/503; requiere revisión antes de continuar.'
             if candidate_id:
-                if (source.adaptador != 'siau' or source.politica_version != 'siau-nacionales/4'
-                        or source.politica_acceso != PAGINATED_POLICY
+                if (source.adaptador != 'siau'
+                        or source.politica_version not in ('siau-nacionales/3', 'siau-nacionales/4')
+                        or not supported_policy(source)
                         or not CandidatoIndice.objects.filter(pk=candidate_id, fuente=source,
                             url_normalizada=manual_context['url']).exists()):
-                    reason = 'Candidato o política fuera del contrato SIAU /4.'
+                    reason = 'Candidato o política fuera del contrato de ficha individual SIAU.'
             if not locked:
                 reason = 'Origen o fuente ocupados por otra ejecución.'
             elif not source.activa:
