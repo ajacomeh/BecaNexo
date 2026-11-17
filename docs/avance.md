@@ -1,5 +1,9 @@
 # Avance de BecaNexo
 
+## Intervalo central configurable de doce horas (16/11/2026)
+
+El contrato técnico de fuentes nuevas y del conector genérico admite desde 720 minutos. El servicio auditado `set_frequency`, la CLI y `next_due` usan `CFG_FUENTE.frecuencia_min`; el panel administrativo muestra ese valor y el Programador conserva su comprobación horaria sin imponer otra frecuencia. La migración `rastreo.0015` cambia solo el valor predeterminado del modelo, sin transformar registros; se validó en `test_becanexo_fusion_db` y se aplicó en `becanexo_db` tras comprobar que era la única pendiente. SIAU ID 1 conserva 1440 minutos y la política `/3`: cambiar su intervalo operativo a 720 exige confirmar las condiciones de acceso de la fuente. No se activó ninguna fuente ni la tarea Windows, ni se ejecutó un rastreo.
+
 ## Consulta limitada SIAU: espera HTTP 429/503 (16/11/2026)
 
 `siau_metadatos` registra el código HTTP y `Retry-After` en la incidencia de fallo y reutiliza `REINTENTO_FUENTE` para bloquear el siguiente intento hasta el mayor plazo entre la frecuencia de la fuente y la espera indicada. Sin cabecera válida conserva el intervalo configurado. No reintenta, no avanza el cursor ni guarda candidatos tras ese fallo. Aprobaron 11 pruebas focalizadas con HTTP simulado en `test_becanexo_fusion_db`, una repetición de la prueba ajustada, Django check y `git diff --check`. No se consultó SIAU ni se modificó `becanexo_db`.

@@ -396,25 +396,25 @@ class PeriodicTests(TransactionTestCase):
     def test_frequency_change_is_audited_and_idempotent(self):
         source = self.source()
         key = uuid.uuid4()
-        changed, did_change = set_frequency(source.pk, self.actor.pk, 'Frecuencia de prueba', 60, key)
+        changed, did_change = set_frequency(source.pk, self.actor.pk, 'Frecuencia de prueba', 1440, key)
         self.assertTrue(did_change)
-        self.assertEqual(changed.frecuencia_min, 60)
-        same, did_change = set_frequency(source.pk, self.actor.pk, 'Frecuencia de prueba', 60, key)
+        self.assertEqual(changed.frecuencia_min, 1440)
+        same, did_change = set_frequency(source.pk, self.actor.pk, 'Frecuencia de prueba', 1440, key)
         self.assertFalse(did_change)
         self.assertEqual(same.pk, source.pk)
         audit = Revision.objects.get(clave_accion=key)
-        self.assertEqual(audit.detalle['antes']['frecuencia_min'], 1440)
-        self.assertEqual(audit.detalle['despues']['frecuencia_min'], 60)
+        self.assertEqual(audit.detalle['antes']['frecuencia_min'], 720)
+        self.assertEqual(audit.detalle['despues']['frecuencia_min'], 1440)
         with self.assertRaises(ValidationError):
-            set_frequency(source.pk, self.user.pk, 'Sin permiso', 60)
+            set_frequency(source.pk, self.user.pk, 'Sin permiso', 720)
         with self.assertRaises(ValidationError):
             set_frequency(source.pk, self.actor.pk, 'Demasiado frecuente', 1)
         with patch('rastreo.services.Revision.objects.create', side_effect=RuntimeError('sintético')):
             with self.assertRaises(RuntimeError):
-                set_frequency(source.pk, self.actor.pk, 'Revisión no guardada', 120)
+                set_frequency(source.pk, self.actor.pk, 'Revisión no guardada', 720)
         source.refresh_from_db()
-        self.assertEqual(source.frecuencia_min, 60)
+        self.assertEqual(source.frecuencia_min, 1440)
         output = io.StringIO()
         call_command('rastreo', 'configurar-frecuencia', fuente_id=source.pk, actor_id=self.actor.pk,
-                     motivo='Frecuencia por CLI', frecuencia_min=120, stdout=output)
-        self.assertIn('"frecuencia_min": 120', output.getvalue())
+                     motivo='Frecuencia por CLI', frecuencia_min=720, stdout=output)
+        self.assertIn('"frecuencia_min": 720', output.getvalue())

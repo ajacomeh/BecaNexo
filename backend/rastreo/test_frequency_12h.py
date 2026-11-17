@@ -30,7 +30,7 @@ class TwelveHourFrequencyTests(TransactionTestCase):
         enable_national_discovery(self.actor.pk, 'Nacionales de prueba')
         self.source_row, changed = set_frequency(self.source_row.pk, self.actor.pk,
                                                  'Ensayo aislado de doce horas', 720)
-        self.assertTrue(changed)
+        self.assertFalse(changed)
         self.assertEqual(self.source_row.politica_version, 'siau-nacionales/3')
         self.now = timezone.now().replace(microsecond=0)
 

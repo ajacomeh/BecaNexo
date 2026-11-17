@@ -261,6 +261,7 @@ class WebControlTests(TransactionTestCase):
             token = admin.get('/api/auth/csrf/').data['csrfToken']
             state = admin.get(ROOT).data
             self.assertEqual(state['fuente_id'], ups.pk)
+            self.assertEqual(state['frecuencia_min'], 720)
             self.assertEqual(state['fuentes_activas'], 2)
             self.assertEqual({item['nombre'] for item in state['fuentes_registradas']}, {siau.nombre, ups.nombre})
             self.assertEqual([item['adaptador'] for item in state['conectores_sin_registro']], ['portal_ec:utpl'])
@@ -423,8 +424,8 @@ class WebControlTests(TransactionTestCase):
             self.assertEqual(json.loads((Path(root) / f'resultado-{source.pk}.json').read_text())['ejecucion_id'], run.pk)
             self.assertFalse((Path(root) / f'fuente-{source.pk}.json').exists())
 
-    def test_ordinary_web_request_keeps_1440_minute_window(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_db')
+    def test_ordinary_web_request_keeps_configured_window(self):
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         source = self.source()
         with tempfile.TemporaryDirectory() as root, override_settings(RASTREO_WEB_LAUNCH_ROOT=root):
             key = str(uuid.uuid4())
@@ -439,7 +440,7 @@ class WebControlTests(TransactionTestCase):
             self.assertEqual(execution.configuracion_snapshot['solicitud_manual']['motivo'], marker['motivo'])
             self.assertNotIn('solicitud_extraordinaria', execution.configuracion_snapshot)
             from .services import next_due
-            self.assertGreater(next_due(source), timezone.now() + timedelta(hours=23))
+            self.assertGreater(next_due(source), timezone.now() + timedelta(minutes=source.frecuencia_min - 1))
 
     def test_worker_reports_startup_failure_without_database_or_secrets(self):
         with tempfile.TemporaryDirectory() as root:
@@ -518,7 +519,7 @@ class WebControlTests(TransactionTestCase):
                 inicio=timezone.now() - timedelta(minutes=6), estado='en_curso')
             from .services import next_due
             # También una captura extraordinaria consume la ventana mínima.
-            self.assertGreater(next_due(source), timezone.now() + timedelta(hours=23))
+            self.assertGreater(next_due(source), timezone.now() + timedelta(minutes=source.frecuencia_min - 7))
             admin = self._client(self.actor)
             token = admin.get('/api/auth/csrf/').data['csrfToken']
             now = timezone.now()

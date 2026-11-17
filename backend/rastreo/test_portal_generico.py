@@ -12,7 +12,7 @@ from convocatorias.models import BorradorRastreo, Institucion
 from perfiles.models import Pais
 from .models import Fuente, Incidencia, Publicacion, Revision
 from .portal_fuentes import extract_section, generic_portal, portal_for_source, sections
-from .services import register_generic_portal, verify_generic_access, run_manual, set_portal_active
+from .services import register_generic_portal, verify_generic_access, run_manual, set_portal_active, set_frequency
 
 
 HOST = 'becas.universidad.edu.ec'
@@ -107,6 +107,18 @@ class GenericRunTests(TransactionTestCase):
             'Acceso público y robots verificados en entorno simulado',
             max_pages=max_pages, access_verified=verified)[0]
 
+    def test_generic_source_accepts_twelve_hours_and_rejects_less(self):
+        source = self.register()
+        self.assertEqual(source.frecuencia_min, 720)
+        self.assertTrue(portal_for_source(source))
+        with self.assertRaises(ValidationError):
+            set_frequency(source.pk, self.actor.pk, 'Intervalo demasiado corto', 719)
+        source, changed = set_frequency(source.pk, self.actor.pk, 'Ensayo de frecuencia mayor', 1440)
+        self.assertTrue(changed)
+        source, changed = set_frequency(source.pk, self.actor.pk, 'Volver a doce horas', 720)
+        self.assertTrue(changed)
+        self.assertTrue(portal_for_source(source))
+
     def test_inactive_until_access_is_confirmed_and_audited(self):
         with self.assertRaises(ValidationError):
             register_generic_portal(self.user.pk, 'Universidad', SEED, HOST, 'Intento')
@@ -169,7 +181,7 @@ class GenericRunTests(TransactionTestCase):
             'Verificación sintética de acceso exclusivamente en la base aislada',
             max_pages=1, max_depth=0, max_cards=4, access_verified=True)
         self.assertFalse(source.activa)
-        self.assertEqual(source.frecuencia_min, 1440)
+        self.assertEqual(source.frecuencia_min, 720)
         set_portal_active(source.pk, self.actor.pk, 'Activación únicamente del fixture aislado', True)
         html = ('<html><h2>Estudiantes de nuevo ingreso</h2>'
             '<h3>Beca de mérito académico</h3>'

@@ -9,12 +9,15 @@ def check(name, condition):
     return models.CheckConstraint(name=name, condition=condition)
 
 
+FRECUENCIA_MINIMA_MIN = 720
+
+
 class Fuente(models.Model):
     nombre = models.CharField(max_length=160)
     tipo = models.CharField(max_length=12, default='publico')
     adaptador = models.CharField(max_length=100, default='siau')
     url_base = models.TextField(unique=True)
-    frecuencia_min = models.PositiveIntegerField(default=1440)
+    frecuencia_min = models.PositiveIntegerField(default=FRECUENCIA_MINIMA_MIN)
     espera_seg = models.PositiveIntegerField(default=2)
     timeout_seg = models.PositiveIntegerField(default=15)
     activa = models.BooleanField(default=False)

@@ -113,6 +113,7 @@ class PortalRunTests(TransactionTestCase):
         source, changed = register_portal(self.actor.pk, 'utpl', 'Alta de fuente sintética')
         self.assertTrue(changed)
         self.assertFalse(source.activa)
+        self.assertEqual(source.frecuencia_min, 720)
         return source
 
     def network(self, url):

@@ -390,4 +390,4 @@ class AjaxPaginationTests(TransactionTestCase):
                      motivo='Prueba CLI', stdout=output)
         self.assertIn('siau-nacionales/4', output.getvalue())
         source.refresh_from_db()
-        self.assertEqual(source.frecuencia_min, 1440)
+        self.assertEqual(source.frecuencia_min, 720)

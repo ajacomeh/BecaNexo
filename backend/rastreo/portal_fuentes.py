@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from convocatorias.siau_extraccion import evidencia, fecha
 from convocatorias.siau_red import AccessError
+from .models import FRECUENCIA_MINIMA_MIN
 
 
 @dataclass(frozen=True)
@@ -78,7 +79,7 @@ def portal_for_source(source):
         except (KeyError, TypeError, ValueError) as exc:
             raise AccessError('Política genérica inválida.') from exc
         if (source.politica_version != GENERIC_POLICY_VERSION or data != portal.politica
-                or source.aprobada_publicacion_automatica or source.frecuencia_min < 1440
+                or source.aprobada_publicacion_automatica or source.frecuencia_min < FRECUENCIA_MINIMA_MIN
                 or (source.activa and not portal.acceso_verificado)):
             raise AccessError('Fuente genérica fuera del contrato auditado.')
         return portal

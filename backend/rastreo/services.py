@@ -1,4 +1,5 @@
 import uuid
+import copy
 import json
 import time
 import http.client
@@ -14,7 +15,7 @@ from django.utils import timezone
 
 from convocatorias.siau_red import Downloader, AccessError, SourceBackoff, retry_after_at, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT, HOST
 from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
-from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion, CandidatoIndice
+from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion, CandidatoIndice, FRECUENCIA_MINIMA_MIN
 from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
 from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, NATIONAL_FICHA, NationalIndexLinks, candidate_url, index_pages, national_index_pages, national_ficha_content, candidate_ficha_content
@@ -67,7 +68,7 @@ def register_portal(actor_id, portal_key, reason, key=None):
         raise ValidationError('Fuente ya registrada: no sobrescribir configuración.')
     source = Fuente.objects.create(nombre=portal.nombre, adaptador='portal_ec:' + portal.clave,
         url_base=portal.indice, politica_version=POLITICA_VERSION, politica_acceso=portal.politica,
-        frecuencia_min=1440, activa=False, aprobada_publicacion_automatica=False)
+        frecuencia_min=FRECUENCIA_MINIMA_MIN, activa=False, aprobada_publicacion_automatica=False)
     Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
         motivo=reason.strip(), detalle={'antes': None, 'despues': snapshot(source.pk)}, clave_accion=key)
     return source, True
@@ -99,7 +100,7 @@ def register_generic_portal(actor_id, name, seed, host, reason, *, max_pages=8,
         raise ValidationError('Fuente ya registrada.')
     source = Fuente.objects.create(nombre=portal.nombre, adaptador='portal_ec:generico',
         url_base=seed, politica_version=GENERIC_POLICY_VERSION, politica_acceso=portal.politica,
-        frecuencia_min=1440, activa=False, aprobada_publicacion_automatica=False)
+        frecuencia_min=FRECUENCIA_MINIMA_MIN, activa=False, aprobada_publicacion_automatica=False)
     Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
         motivo=reason.strip(), detalle={'antes': None, 'despues': snapshot(source.pk)}, clave_accion=key)
     return source, True
@@ -348,8 +349,8 @@ def set_paginated_discovery(actor_id, reason, enable, key=None):
 @transaction.atomic
 def set_frequency(source_id, actor_id, reason, minutes, key=None):
     actor = actor_admin(actor_id)
-    if not reason or not reason.strip() or not isinstance(minutes, int) or not 60 <= minutes <= 10080:
-        raise ValidationError('Motivo y frecuencia de 60 a 10080 minutos obligatorios.')
+    if not reason or not reason.strip() or not isinstance(minutes, int) or not FRECUENCIA_MINIMA_MIN <= minutes <= 10080:
+        raise ValidationError(f'Motivo y frecuencia de {FRECUENCIA_MINIMA_MIN} a 10080 minutos obligatorios.')
     key = uuid.UUID(str(key)) if key else uuid.uuid4()
     with connection.cursor() as cursor:
         cursor.execute('SELECT pg_advisory_xact_lock(742600, 1)')
@@ -360,8 +361,18 @@ def set_frequency(source_id, actor_id, reason, minutes, key=None):
             raise ValidationError('Clave de acción reutilizada con otro contenido.')
         return previous.fuente, False
     source = Fuente.objects.select_for_update().get(pk=source_id)
-    if not supported_policy(source) or source.aprobada_publicacion_automatica:
-        raise ValidationError('Fuente fuera del contrato SIAU.')
+    if source.adaptador == 'siau':
+        if not supported_policy(source) or source.aprobada_publicacion_automatica:
+            raise ValidationError('Fuente fuera del contrato SIAU.')
+    elif source.adaptador.startswith('portal_ec:'):
+        proposed = copy.copy(source)
+        proposed.frecuencia_min = minutes
+        try:
+            portal_for_source(proposed)
+        except AccessError as exc:
+            raise ValidationError('Fuente fuera del contrato institucional.') from exc
+    else:
+        raise ValidationError('Adaptador no admitido.')
     if source.frecuencia_min == minutes:
         return source, False
     if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
