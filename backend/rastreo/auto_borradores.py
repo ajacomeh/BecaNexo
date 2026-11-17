@@ -63,7 +63,7 @@ def _offerer_evidence(data):
             else 'No se identificó una entidad oferente en la ficha.')
 
 
-def classify_candidate(publication, version):
+def classify_candidate(publication, version, *, allow_partial=False):
     """Clasificación editorial; pendiente nunca equivale a fuera de alcance."""
     def result(state, reason, **details):
         return {'estado': state, 'motivo': reason, 'oferente': details.get('oferente', 'desconocido'),
@@ -102,14 +102,20 @@ def classify_candidate(publication, version):
             return result('pendiente', 'Título y cierre coinciden con otra fuente; revisión de posible duplicado.')
     else:
         return result('fuera_alcance', 'Adaptador sin clasificación de becas autorizada.')
-    if data.get('seccion_completa') is not True or not version.documentos.filter(rol='ficha_html').exists():
+    if not version.documentos.filter(rol='ficha_html').exists():
         return result('pendiente', 'Ficha nacional sin evidencia HTML completa.')
-    if not _literal(data.get('requisitos'), 5000) or not _literal(data.get('cierre'), 500):
+    if not allow_partial and data.get('seccion_completa') is not True:
+        return result('pendiente', 'Ficha nacional sin evidencia HTML completa.')
+    if not allow_partial and (not _literal(data.get('requisitos'), 5000) or not _literal(data.get('cierre'), 500)):
         return result('pendiente', 'No se verificaron requisitos y cierre de la oportunidad.')
+    if allow_partial and not _literal(data.get('descripcion'), 15000):
+        return result('pendiente', 'La ficha no aporta descripción suficiente para identificar una beca individual.')
     scope = ' '.join(_normal(_literal(data.get(key), 15000)) for key in ('titulo', 'descripcion', 'requisitos', 'postulacion_y_documentos'))
     offerer, mentioned, offerer_reason = _offerer_evidence(data)
     details = {'oferente': offerer, 'oferente_mencionado': mentioned,
-               'naturaleza': 'beca_individual', 'datos_esenciales': True}
+               'naturaleza': 'beca_individual', 'datos_esenciales': bool(
+                   data.get('seccion_completa') and _literal(data.get('requisitos'), 5000)
+                   and _literal(data.get('cierre'), 500))}
     if re.search(r'\b(?:no\s+(?:pueden|podran)\s+postular|no\s+se\s+admiten|se\s+excluye(?:n)?\s+a?)\s+(?:personas|ciudadan[oa]s?)?\s*ecuatorian[oa]s?\b', scope):
         return result('fuera_alcance', 'La ficha excluye expresamente a ciudadanos ecuatorianos.',
                       elegibilidad='excluida', **details)
@@ -121,6 +127,9 @@ def classify_candidate(publication, version):
     ) else 'no_especificada'
     if offerer == 'solo_extranjero':
         return result('fuera_alcance', offerer_reason, elegibilidad=recipient, **details)
+    if allow_partial and offerer != 'verificado_ec':
+        return result('pendiente', 'La ficha parcial no acredita un oferente o cooferente ecuatoriano.',
+                      elegibilidad=recipient, **details)
     if adapter == 'siau' and not re.search(r'\bbecas?\s+nacionales?\b', _normal(title)) and offerer != 'verificado_ec':
         return result('pendiente', 'Ficha difundida por SIAU sin evidencia de oferente o cooferente ecuatoriano; revisar procedencia.',
                       elegibilidad=recipient, **details)
@@ -243,7 +252,7 @@ def confirm_latest_version(offer_id, version_id, offer_version, actor_id, reason
 
 
 @transaction.atomic
-def prepare_automatic_draft(publication_id, version_id):
+def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
     publication = Publicacion.objects.select_for_update().select_related('fuente').get(pk=publication_id)
     if publication.convocatoria_id:
         origin = BorradorRastreo.objects.filter(publicacion=publication).select_related('convocatoria', 'version').first()
@@ -260,7 +269,7 @@ def prepare_automatic_draft(publication_id, version_id):
             return origin, False, f'Versión {version.pk} con cambios relevantes; revisión administrativa pendiente.'
         return origin, False, None
     version = Version.objects.get(pk=version_id, publicacion=publication)
-    assessment = classify_candidate(publication, version)
+    assessment = classify_candidate(publication, version, allow_partial=allow_partial)
     if assessment['estado'] != 'apta':
         return None, False, assessment['motivo']
     data = version.datos_extraidos
@@ -286,6 +295,7 @@ def prepare_automatic_draft(publication_id, version_id):
     if not description: pending.append('Completar descripción respaldada.')
     if not closure_day: pending.append('Verificar vigencia y fecha de cierre.')
     if requirements: pending.append('Estructurar y revisar requisitos extraídos.')
+    else: pending.append('Verificar requisitos de la beca en la fuente oficial.')
     pending.extend(['Confirmar enlace oficial de consulta o postulación.',
                     'Registrar y revisar al menos una opción de estudio.'])
     if version.manifiesto.get('pendientes'):

@@ -1,5 +1,6 @@
 """Candidatas del índice SIAU; no decide admisibilidad ni publica becas."""
 import re
+import unicodedata
 from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
@@ -125,3 +126,22 @@ def national_ficha_content(content, *, include_all_becas=False):
     return (title_ok
             and any('POSTULA HASTA' in line.upper() for line in lines)
             and any('REQUISITOS GENERALES' in line.upper() for line in lines))
+
+
+def candidate_ficha_content(content, index_title):
+    """Reconoce una ficha individual respaldada por el índice, aun con campos ausentes."""
+    parser = FichaHTML()
+    try:
+        parser.feed(content.decode('utf-8-sig'))
+    except UnicodeError:
+        return False
+    parser.flush()
+    lines = parser.lines
+    if len(lines) < 2 or len(lines[0]) < 15 or len(' '.join(lines[1:]).strip()) < 40:
+        return False
+    def words(value):
+        plain = ''.join(c for c in unicodedata.normalize('NFD', value.casefold()) if not unicodedata.combining(c))
+        return {word for word in re.findall(r'[a-z0-9]+', plain) if len(word) >= 4}
+    title_words, index_words = words(lines[0]), words(index_title)
+    generic = {'beca', 'becas', 'oferta', 'programa', 'universidad', 'internacionales', 'nacionales'}
+    return ('beca' in title_words or 'becas' in title_words) and bool((title_words & index_words) - generic)

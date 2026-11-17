@@ -14,10 +14,10 @@ from django.utils import timezone
 
 from convocatorias.siau_red import Downloader, AccessError, SourceBackoff, retry_after_at, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT, HOST
 from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
-from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion
+from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion, CandidatoIndice
 from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
-from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, NationalIndexLinks, candidate_url, index_pages, national_index_pages, national_ficha_content
+from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, NATIONAL_FICHA, NationalIndexLinks, candidate_url, index_pages, national_index_pages, national_ficha_content, candidate_ficha_content
 from .siau_ajax import AJAX_INDEX, MAX_INDEX_PAGES, ajax_request, grid_config, robots_allowed, robots_allow_ajax
 from .portal_fuentes import PORTALES, POLITICA_VERSION, GENERIC_POLICY_VERSION, generic_portal, portal_for_source, links as portal_links, extract_portal
 
@@ -414,6 +414,7 @@ class PersistentDownloader(Downloader):
         self.sequence = 0
         self.publication = None
         self.page_url = None
+        self.candidate = None
         self.pages = set() if self.portal else set(PAGES)
         self.pdfs = set() if self.portal else set(PDFS)
 
@@ -453,8 +454,9 @@ class PersistentDownloader(Downloader):
                              'Contrato AJAX público fuera de los límites admitidos.', access)
                     raise AccessError('Índice nacional fuera del contrato AJAX.') from None
             if (not self.portal and self.page_url == url and url not in PAGES and self.execution.configuracion_snapshot['politica_version'] in ('siau-nacionales/3', 'siau-nacionales/4')
-                    and not national_ficha_content(content, include_all_becas=
-                        self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/4')):
+                    and not (candidate_ficha_content(content, self.candidate.titulo_publico) if self.candidate
+                             else national_ficha_content(content, include_all_becas=
+                                 self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/4'))):
                 access = self.record(url, entry, status, 'bloqueado', error='FICHA_FUERA_ALCANCE')
                 incident(self.execution, 'FICHA_FUERA_ALCANCE', 'La ficha no conserva la estructura nacional anunciada en el índice.', access, 'aviso')
                 raise AccessError('Ficha fuera del alcance nacional verificado.')
@@ -560,6 +562,19 @@ def run_scheduled(source_id, key=None):
     return _run(source_id, None, key or uuid.uuid4(), 'programada')
 
 
+def run_candidate(candidate_id, actor_id, key, reason):
+    """Procesa una ficha de un candidato, con los mismos controles de una captura manual."""
+    actor_admin(actor_id)
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValidationError('Motivo de auditoría obligatorio.')
+    candidate = CandidatoIndice.objects.select_related('fuente').get(pk=candidate_id)
+    if candidate_url(candidate.url_normalizada, NATIONAL_FICHA) != candidate.url_normalizada:
+        raise ValidationError('El candidato no conserva una URL individual canónica admitida.')
+    return _run(candidate.fuente_id, actor_id, key, 'manual',
+                {'modalidad': 'candidato_indice', 'candidato_id': candidate.pk,
+                 'url': candidate.url_normalizada, 'motivo': reason.strip()})
+
+
 def next_due(source):
     # Una captura extraordinaria no reinicia las 24 horas del Programador.
     last = (Ejecucion.objects.filter(fuente=source).exclude(estado='omitida')
@@ -576,10 +591,13 @@ def next_due(source):
 
 def _run(source_id, actor_id, key, origin, manual_context=None):
     key = uuid.UUID(str(key))
+    candidate_id = (manual_context or {}).get('candidato_id')
     existing = Ejecucion.objects.filter(clave_idempotencia=key).first()
     if existing:
         if existing.fuente_id != source_id or existing.solicitado_por_id != actor_id or existing.origen != origin:
             raise ValidationError('Clave idempotente pertenece a otra operación.')
+        if candidate_id and existing.configuracion_snapshot.get('solicitud_manual') != manual_context:
+            raise ValidationError('Clave idempotente pertenece a otro candidato o motivo.')
         return existing
     adapter = Fuente.objects.only('adaptador').get(pk=source_id).adaptador
     with exclusion(source_id, global_lock=not adapter.startswith('portal_ec:')) as locked:
@@ -590,6 +608,8 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
             if existing:
                 if existing.fuente_id != source_id or existing.solicitado_por_id != actor_id or existing.origen != origin:
                     raise ValidationError('Clave idempotente pertenece a otra operación.')
+                if candidate_id and existing.configuracion_snapshot.get('solicitud_manual') != manual_context:
+                    raise ValidationError('Clave idempotente pertenece a otro candidato o motivo.')
                 return existing
             if origin == 'programada':
                 due = next_due(source)
@@ -600,6 +620,18 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                 due = next_due(source)
                 if due and due > timezone.now():
                     reason = 'La frecuencia de esta fuente aún no permite otra captura.'
+            if candidate_id:
+                from .web_frequency import source_blocked
+                due = next_due(source)
+                if due and due > timezone.now():
+                    reason = 'La frecuencia de esta fuente aún no permite otra captura.'
+                if source_blocked(source):
+                    reason = 'Fuente bloqueada por HTTP 429/503; requiere revisión antes de continuar.'
+                if (source.adaptador != 'siau' or source.politica_version != 'siau-nacionales/4'
+                        or source.politica_acceso != PAGINATED_POLICY
+                        or not CandidatoIndice.objects.filter(pk=candidate_id, fuente=source,
+                            url_normalizada=manual_context['url']).exists()):
+                    reason = 'Candidato o política fuera del contrato SIAU /4.'
             if not locked:
                 reason = 'Origen o fuente ocupados por otra ejecución.'
             elif not source.activa:
@@ -629,6 +661,8 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
         if portal:
             from .portal_runner import capture
             return capture(execution, source, portal)
+        if candidate_id:
+            return _capture_candidate(execution, source, candidate_id)
         try:
             root_path()
             downloader = PersistentDownloader(execution, source)
@@ -794,6 +828,60 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
             Ejecucion.objects.filter(pk=execution.pk).update(estado='fallida', fin=timezone.now(), error_resumen=type(exc).__name__)
         # BaseException/interrupción dura deja en_curso; el lock se libera y se recupera explícitamente.
         return execution
+
+
+def _capture_candidate(execution, source, candidate_id):
+    """Captura una sola ficha indexada; no consulta índices ni descarga bases."""
+    candidate = CandidatoIndice.objects.get(pk=candidate_id, fuente=source)
+    url = candidate.url_normalizada
+    try:
+        root_path()
+        downloader = PersistentDownloader(execution, source)
+        downloader.candidate = candidate
+        downloader.page_url = url
+        downloader.pages.add(url)
+        downloader.allowed_urls.add(url)
+        robots = downloader.fetch(ROBOTS)
+        policy = RobotFileParser(ROBOTS)
+        policy.parse(robots['contenido'].decode('utf-8-sig').splitlines())
+        delay = policy.crawl_delay(AGENT) or 0
+        if delay > 60:
+            raise AccessError('crawl-delay excede el presupuesto admitido.')
+        downloader.pause = max(downloader.pause, delay)
+        if not robots_allowed(robots['contenido'], url):
+            incident(execution, 'ROBOTS', 'Ficha bloqueada por robots.txt.')
+            raise AccessError('robots.txt bloquea la ficha.')
+        page = downloader.fetch(url, can_fetch=lambda target: robots_allowed(robots['contenido'], target))
+        item = extract_html(page)
+        publication = downloader.publication
+        if publication is None:
+            raise AccessError('La ficha no produjo una identidad verificable.')
+        html_access = execution.accesos.filter(url_normalizada=page['url'], documento__isnull=False).select_related('documento').latest('id')
+        pending = [{'url': link['url'], 'estado': 'base_no_descargada'} for link in item['enlaces_bases']]
+        observed = observe(execution, publication, item,
+            [{'rol': 'ficha_html', 'url': url, 'url_original': url, 'documento': html_access.documento}], pending)
+        if observed.version_id:
+            from .auto_borradores import classify_candidate, prepare_automatic_draft
+            version = observed.version
+            assessment = classify_candidate(publication, version, allow_partial=True)
+            if assessment['estado'] == 'apta' and getattr(settings, 'RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS', False):
+                try:
+                    _, _, review_reason = prepare_automatic_draft(publication.pk, version.pk, allow_partial=True)
+                    if review_reason:
+                        incident(execution, 'BORRADOR_REVISION_PENDIENTE', review_reason,
+                                 severity='aviso', publication=publication)
+                except Exception as exc:
+                    incident(execution, 'BORRADOR_AUTO_FALLIDO', type(exc).__name__, publication=publication)
+            elif assessment['estado'] != 'apta':
+                incident(execution, 'CANDIDATO_PENDIENTE' if assessment['estado'] == 'pendiente' else 'CANDIDATO_FUERA_ALCANCE',
+                         assessment['motivo'], severity='aviso', publication=publication)
+        failures = execution.incidencias.filter(gravedad='error').exists()
+        Ejecucion.objects.filter(pk=execution.pk).update(estado='parcial' if failures else 'finalizada', fin=timezone.now())
+    except Exception as exc:
+        # Los errores técnicos nunca se convierten en datos editoriales.
+        incident(execution, 'CANDIDATO_FALLIDO', type(exc).__name__)
+        Ejecucion.objects.filter(pk=execution.pk).update(estado='fallida', fin=timezone.now(), error_resumen=type(exc).__name__)
+    return execution
 
 
 def recover(source_id, actor_id, reason):
