@@ -10,7 +10,8 @@ SESSION_COOKIE_NAME = 'becanexo_demo_multifuente_session'
 CSRF_COOKIE_NAME = 'becanexo_demo_multifuente_csrf'
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
-AVISOS_CORREO_HABILITADOS = False
+# Solo en esta base aislada; el backend de correo en memoria impide tráfico SMTP.
+AVISOS_CORREO_HABILITADOS = True
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 EMAIL_HOST_USER = ''
 EMAIL_HOST_PASSWORD = ''

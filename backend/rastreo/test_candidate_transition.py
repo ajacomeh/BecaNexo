@@ -1,6 +1,7 @@
 """Transición individual; HTTP simulado y escrituras solo en base aislada."""
 import hashlib
 import io
+import json
 import os
 import uuid
 from datetime import timedelta
@@ -94,14 +95,19 @@ class CandidateTransitionTests(TransactionTestCase):
         from convocatorias.services import publicas
         from datetime import timedelta
         from .test_evidencia_pdf import pdf_pages
-        import json
-
         self.source, _ = set_frequency(self.source.pk, self.actor.pk, 'Intervalo SIAU del ensayo', 1440)
         siau_key = uuid.uuid4()
         pdf_url = 'https://siau.senescyt.gob.ec/wp-content/uploads/2026/11/bases-demo-multifuente.pdf'
-        siau_html = fiche().replace(b'</section>', f'<a href="{pdf_url}">BASES</a></section>'.encode())
+        closure = timezone.localdate() + timedelta(days=30)
+        month = ('enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+                 'septiembre', 'octubre', 'noviembre', 'diciembre')[closure.month - 1]
+        closure_text = f'{closure.day} de {month} de {closure.year}'
+        siau_html = fiche(deadline_text=closure_text).replace(
+            b'</ol>', b'<li>Contar con estudios de grado concluidos.</li></ol>').replace(
+            b'</section>', f'<a href="{pdf_url}">BASES</a></section>'.encode())
         pdf = pdf_pages(['Bases sinteticas de beca nacional', 'Requisitos generales',
-                         'Ser ciudadano ecuatoriano', 'Cierre 20 de noviembre de 2026'])
+                         'Ser ciudadano ecuatoriano', 'Estudios de grado concluidos',
+                         f'Cierre {closure_text}'])
         siau_calls = []
         def siau_network(url):
             siau_calls.append(url)
@@ -126,8 +132,8 @@ class CandidateTransitionTests(TransactionTestCase):
         generic_html = (b'<html><h2>Estudiantes de nuevo ingreso</h2>'
             b'<h3>Beca de merito academico</h3>'
             b'<p>Universidad institucional sintetica ofrece esta beca a ciudadanos ecuatorianos.</p>'
-            b'<h4>Requisitos</h4><p>Ser estudiante ecuatoriano activo.</p>'
-            b'<p>Cierre: 12 de noviembre de 2027.</p></html>')
+            b'<h4>Requisitos</h4><p>Ser estudiante ecuatoriano activo.</p>' +
+            f'<p>Cierre: {closure_text}.</p></html>'.encode())
         generic_calls = []
         def generic_network(url):
             generic_calls.append(url)
@@ -203,10 +209,13 @@ class CandidateTransitionTests(TransactionTestCase):
                 raise ValueError('La contraseña temporal debe tener al menos 12 caracteres.')
             self.actor.set_password(password)
             self.actor.save(update_fields=['password'])
+            demo = self.prepare_integral_visual(origins, password)
             repo = Path(__file__).resolve().parents[2]
             for port in (8001, 5174):
                 with socket.socket() as probe:
-                    probe.bind(('127.0.0.1', port))
+                    probe.settimeout(1)
+                    if probe.connect_ex(('127.0.0.1', port)) == 0:
+                        raise RuntimeError(f'El puerto {port} ya tiene un servidor; cierra esa demostración antes de iniciar otra.')
             environment = os.environ.copy()
             environment['BECANEXO_DEMO_STORAGE_ROOT'] = self.temp.name
             environment['AVISOS_CORREO_HABILITADOS'] = 'False'
@@ -248,17 +257,37 @@ class CandidateTransitionTests(TransactionTestCase):
                 with opener.open('http://127.0.0.1:8001/api/gestion/rastreo/publicaciones/') as response:
                     self.assertEqual(json.load(response)['count'], 2)
                 with opener.open('http://127.0.0.1:8001/api/gestion/convocatorias/?revision=pendiente') as response:
-                    self.assertEqual(json.load(response)['count'], 2)
+                    self.assertEqual(json.load(response)['count'], 1)
                 for origin in origins:
                     documents_url = (f'http://127.0.0.1:8001/api/gestion/rastreo/publicaciones/'
                                      f'{origin.publicacion_id}/versiones/{origin.version_id}/documentos/')
                     with opener.open(documents_url) as response:
                         self.assertGreaterEqual(json.load(response)['count'], 1)
                 with opener.open('http://127.0.0.1:8001/api/becas/') as response:
-                    self.assertEqual(json.load(response)['count'], 0)
+                    self.assertEqual(json.load(response)['count'], 1)
+                for suffix, expected, notices in (('apto', 'cumple', 1), ('no-apto', 'no_cumple', 0)):
+                    applicant = build_opener(HTTPCookieProcessor(CookieJar()))
+                    with applicant.open('http://127.0.0.1:8001/api/auth/csrf/') as response:
+                        applicant_csrf = json.load(response)['csrfToken']
+                    request = Request('http://127.0.0.1:8001/api/auth/login/',
+                        data=json.dumps({'email': f'postulante-{suffix}@example.com',
+                                         'password': password}).encode(),
+                        headers={'Content-Type': 'application/json', 'X-CSRFToken': applicant_csrf,
+                                 'Origin': 'http://127.0.0.1:5174'}, method='POST')
+                    with applicant.open(request) as response:
+                        self.assertEqual(response.status, 200)
+                    with applicant.open('http://127.0.0.1:8001/api/becas/recomendaciones/') as response:
+                        recommendation = json.load(response)['results']
+                    self.assertEqual(recommendation[0]['elegibilidad'], expected)
+                    self.assertEqual(recommendation[0]['afinidad']['estado'], 'calculada')
+                    with applicant.open('http://127.0.0.1:8001/api/notificaciones/') as response:
+                        self.assertEqual(json.load(response)['count'], notices)
                 print('DEMOSTRACIÓN VISUAL AISLADA: http://127.0.0.1:5174/login')
-                print('Cuenta temporal: rastreo-admin@example.com; contraseña elegida solo en esta terminal.')
+                print('Cuentas temporales: rastreo-admin@example.com, postulante-apto@example.com, postulante-no-apto@example.com.')
+                print('Usa la contraseña temporal elegida solo en esta terminal; cierra sesión para cambiar de cuenta.')
                 print('Panel: http://127.0.0.1:5174/gestion/rastreo')
+                print(f'Beca publicada: http://127.0.0.1:5174/becas/{demo["convocatoria"]}')
+                print('Postulantes: http://127.0.0.1:5174/inicio y http://127.0.0.1:5174/notificaciones')
                 print('Cierre: regresa a esta terminal y pulsa Enter; se cerrarán servidores y fixtures.')
                 if not smoke:
                     try:
@@ -268,12 +297,116 @@ class CandidateTransitionTests(TransactionTestCase):
             finally:
                 for proc in reversed(processes):
                     if proc.poll() is None:
+                        if os.name == 'nt':
+                            subprocess.run(['taskkill', '/PID', str(proc.pid), '/T', '/F'],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                check=False, timeout=10)
+                    if proc.poll() is None:
                         proc.terminate()
                         try:
                             proc.wait(timeout=5)
                         except subprocess.TimeoutExpired:
                             proc.kill()
                             proc.wait(timeout=5)
+
+    def prepare_integral_visual(self, origins, password):
+        """Completa solo el fixture aislado mediante la API editorial vigente."""
+        from django.contrib.auth import get_user_model
+        from django.core import mail
+        from notificaciones.correo import procesar_pendientes
+        from notificaciones.models import EntregaCorreo, Notificacion, PreferenciaCorreo
+        from perfiles.models import Area, Formacion, Perfil, PerfilArea, Preferencia
+        from convocatorias.models import Evento, TipoRequisito
+
+        call_command('cargar_catalogos_convocatorias', verbosity=0)
+        ec = Pais.objects.get(codigo='EC')
+        area = Area.objects.create(nombre='Educación sintética de demostración')
+        users = []
+        for suffix, level, career, mode in (
+            ('apto', 'grado', 'Pedagogía sintética', 'virtual'),
+            ('no-apto', 'bachillerato', 'Bachillerato sintético', 'presencial'),
+        ):
+            user = get_user_model().objects.create_user(
+                email=f'postulante-{suffix}@example.com', nombre=f'Postulante {suffix}', password=password)
+            profile = Perfil.objects.create(usuario=user, nacionalidad=ec,
+                descripcion=f'Interés en educación y formación académica {career}.')
+            Formacion.objects.create(perfil=profile, nivel=level, carrera=career,
+                titulo_obtenido=True, estado_estudios='concluidos')
+            PerfilArea.objects.create(perfil=profile, area=area)
+            Preferencia.objects.create(perfil=profile, nivel=level, modalidad=mode)
+            users.append(user)
+        eligible, incompatible = users
+        PreferenciaCorreo.objects.create(usuario=eligible, habilitada=True)
+        self.assertFalse(PreferenciaCorreo.objects.filter(usuario=incompatible, habilitada=True).exists())
+
+        admin = APIClient(enforce_csrf_checks=True)
+        csrf = admin.get('/api/auth/csrf/').data['csrfToken']
+        login = admin.post('/api/auth/login/', {'email': self.actor.email, 'password': password},
+            format='json', HTTP_X_CSRFTOKEN=csrf)
+        self.assertEqual(login.status_code, 200, login.data)
+        csrf = login.data['csrfToken']
+        origin = next(row for row in origins if row.publicacion.fuente_id == self.source.pk)
+        offer = origin.convocatoria
+        publish_path = f'/api/gestion/convocatorias/{offer.pk}/publicar/'
+        blocked = admin.post(publish_path, {}, format='json', HTTP_X_CSRFTOKEN=csrf)
+        self.assertEqual(blocked.status_code, 400, blocked.data)
+        self.assertFalse(publicas().filter(pk=offer.pk).exists())
+        institution = Institucion.objects.get(nombre='Universidad Ecuatoriana Demo')
+        update = admin.patch(f'/api/gestion/convocatorias/{offer.pk}/',
+            {'institucion': institution.pk, 'url_oficial': origin.publicacion.url_original,
+             'areas': [area.pk]}, format='json', HTTP_X_CSRFTOKEN=csrf)
+        self.assertEqual(update.status_code, 200, update.data)
+        option = admin.post(f'/api/gestion/convocatorias/{offer.pk}/opciones/',
+            {'nivel': 'grado', 'modalidad': 'virtual', 'programa': 'Programa sintético de grado',
+             'paises': [ec.pk]}, format='json', HTTP_X_CSRFTOKEN=csrf)
+        self.assertEqual(option.status_code, 201, option.data)
+        requirement = admin.post(f'/api/gestion/convocatorias/{offer.pk}/requisitos/',
+            {'tipo_requisito': TipoRequisito.objects.get(codigo='FORMACION').pk,
+             'texto_original': 'Contar con estudios de grado concluidos.',
+             'valor_estructurado': {'niveles_admitidos': ['grado'], 'estado_exigido': 'concluidos',
+                                    'titulo_obtenido': True},
+             'modo_comprobacion': 'dato_declarado', 'obligatorio': True, 'validado': True,
+             'referencia_bases': origin.publicacion.url_original},
+            format='json', HTTP_X_CSRFTOKEN=csrf)
+        self.assertEqual(requirement.status_code, 201, requirement.data)
+        published = admin.post(publish_path, {}, format='json', HTTP_X_CSRFTOKEN=csrf)
+        self.assertEqual(published.status_code, 200, published.data)
+        offer.refresh_from_db()
+        self.assertTrue(publicas().filter(pk=offer.pk).exists())
+        self.assertTrue(Evento.objects.filter(convocatoria=offer, actor=self.actor, accion='publicar').exists())
+
+        results = {}
+        for suffix, user, expected in (('apto', eligible, 'cumple'), ('no-apto', incompatible, 'no_cumple')):
+            client = APIClient()
+            self.assertTrue(client.login(email=user.email, password=password))
+            comparison = client.get(f'/api/becas/{offer.pk}/comparacion/')
+            recommendation = client.get('/api/becas/recomendaciones/')
+            inbox = client.get('/api/notificaciones/')
+            self.assertEqual((comparison.status_code, recommendation.status_code, inbox.status_code),
+                             (200, 200, 200))
+            self.assertEqual(comparison.data['opciones'][0]['resultado'], expected)
+            row = next(item for item in recommendation.data['results'] if item['convocatoria']['id'] == offer.pk)
+            self.assertEqual(row['elegibilidad'], expected)
+            self.assertEqual(row['afinidad']['estado'], 'calculada')
+            self.assertEqual(inbox.data['count'], 1 if suffix == 'apto' else 0)
+            results[suffix] = {'comparacion': expected, 'afinidad': row['afinidad']['estado'],
+                               'notificaciones': inbox.data['count']}
+        self.assertEqual(Notificacion.objects.count(), 1)
+        self.assertEqual(EntregaCorreo.objects.count(), 1)
+        self.assertEqual(EntregaCorreo.objects.get().notificacion.usuario_id, eligible.pk)
+        self.assertEqual(procesar_pendientes(limite=1)['enviados'], 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [eligible.email])
+        again = admin.post(publish_path, {}, format='json', HTTP_X_CSRFTOKEN=csrf)
+        self.assertEqual(again.status_code, 200, again.data)
+        self.assertEqual((Publicacion.objects.count(), BorradorRastreo.objects.count(),
+                          Notificacion.objects.count(), EntregaCorreo.objects.count()), (2, 2, 1, 1))
+        self.assertEqual(procesar_pendientes(limite=1)['enviados'], 0)
+        print(json.dumps({'demo_integral': 'sintetica', 'convocatoria_publicada': offer.pk,
+                          'borrador_privado': next(row.convocatoria_id for row in origins if row.pk != origin.pk),
+                          'perfiles': results, 'correo_simulado': 'enviado_en_memoria',
+                          'destinatario': eligible.email, 'duplicados': 0}, ensure_ascii=False))
+        return {'convocatoria': offer.pk}
 
     def test_individual_candidate_under_v3_keeps_ordinary_policy(self):
         set_paginated_discovery(self.actor.pk, 'Conservar rastreo ordinario /3', False)
