@@ -12,7 +12,7 @@ from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from convocatorias.models import BorradorRastreo, Institucion
+from convocatorias.models import BorradorRastreo, Convocatoria, Institucion
 from convocatorias.services import publicas
 from convocatorias.siau_red import ROBOTS
 from perfiles.models import Pais
@@ -86,6 +86,62 @@ class CandidateTransitionTests(TransactionTestCase):
         self.assertFalse(publicas().filter(pk=origin.convocatoria_id).exists())
         self.assertIsNone(origin.convocatoria.institucion_id)
         self.assertEqual(run.configuracion_snapshot['solicitud_manual']['candidato_id'], self.candidate.pk)
+
+    def test_siau_and_generic_portal_keep_private_drafts_and_frequency_separate(self):
+        from .services import register_generic_portal, set_portal_active, set_frequency, run_manual, next_due
+        from convocatorias.services import publicas
+        from datetime import timedelta
+
+        self.source, _ = set_frequency(self.source.pk, self.actor.pk, 'Intervalo SIAU del ensayo', 1440)
+        siau_key = uuid.uuid4()
+        siau_run, siau_calls = self.execute(key=siau_key)
+        self.assertEqual(siau_run.estado, 'finalizada')
+        self.assertEqual(siau_calls, [ROBOTS, URL])
+        generic_index = 'https://becas.universidad.edu.ec/becas/'
+        generic, _ = register_generic_portal(
+            self.actor.pk, 'Universidad institucional sintética', generic_index,
+            'becas.universidad.edu.ec', 'Acceso simulado exclusivamente en la base aislada',
+            max_pages=1, max_depth=0, max_cards=2, access_verified=True)
+        self.assertFalse(generic.activa)
+        set_portal_active(generic.pk, self.actor.pk, 'Activación del fixture aislado', True)
+        generic_html = (b'<html><h2>Estudiantes de nuevo ingreso</h2>'
+            b'<h3>Beca de merito academico</h3>'
+            b'<p>Universidad institucional sintetica ofrece esta beca a ciudadanos ecuatorianos.</p>'
+            b'<h4>Requisitos</h4><p>Ser estudiante ecuatoriano activo.</p>'
+            b'<p>Cierre: 12 de noviembre de 2027.</p></html>')
+        generic_calls = []
+        def generic_network(url):
+            generic_calls.append(url)
+            if url == 'https://becas.universidad.edu.ec/robots.txt':
+                return 200, {'content-type': 'text/plain'}, b'User-agent: *\nDisallow: /privado/\n'
+            self.assertEqual(url, generic_index)
+            return 200, {'content-type': 'text/html'}, generic_html
+
+        generic_key = uuid.uuid4()
+        with patch('convocatorias.siau_red.Downloader.once', side_effect=generic_network):
+            generic_run = run_manual(generic.pk, self.actor.pk, generic_key)
+        generic_run.refresh_from_db()
+        self.assertEqual(generic_run.estado, 'finalizada')
+        self.assertEqual(generic_calls, ['https://becas.universidad.edu.ec/robots.txt', generic_index])
+
+        origins = list(BorradorRastreo.objects.select_related('publicacion', 'convocatoria').order_by('id'))
+        self.assertEqual(len(origins), 2)
+        self.assertEqual({row.publicacion.fuente_id for row in origins}, {self.source.pk, generic.pk})
+        self.assertEqual(len({row.convocatoria.clave_deduplicacion for row in origins}), 2)
+        self.assertTrue(all(row.convocatoria.revision == 'pendiente' for row in origins))
+        self.assertFalse(publicas().exists())
+        self.assertEqual(Publicacion.objects.filter(fuente=self.source).count(), 1)
+        self.assertEqual(Publicacion.objects.filter(fuente=generic).count(), 1)
+        self.assertEqual(next_due(self.source), siau_run.inicio + timedelta(minutes=self.source.frecuencia_min))
+        self.assertEqual(next_due(generic), generic_run.inicio + timedelta(minutes=generic.frecuencia_min))
+        self.assertNotEqual(self.source.frecuencia_min, generic.frecuencia_min)
+        with patch('convocatorias.siau_red.Downloader.once') as network:
+            self.assertEqual(run_candidate(self.candidate.pk, self.actor.pk, siau_key,
+                                           'Validación sintética').pk, siau_run.pk)
+            self.assertEqual(run_manual(generic.pk, self.actor.pk, generic_key).pk, generic_run.pk)
+            network.assert_not_called()
+        self.assertEqual((Publicacion.objects.count(), BorradorRastreo.objects.count(),
+                          Convocatoria.objects.count()), (2, 2, 2))
 
     def test_individual_candidate_under_v3_keeps_ordinary_policy(self):
         set_paginated_discovery(self.actor.pk, 'Conservar rastreo ordinario /3', False)
