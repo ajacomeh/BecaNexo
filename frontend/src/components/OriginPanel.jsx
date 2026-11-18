@@ -29,6 +29,20 @@ function CandidateCard({ item, type, onPrepare }) {
   </li>
 }
 
+function TabularEvidence({ evidence }) {
+  if (!evidence?.tablas?.length && !evidence?.enlaces_documentales?.length) return null
+  return <details><summary>Tablas y anexos de la ficha para revisar</summary>
+    <p>Las filas conservan su contexto original; ninguna condición queda validada automáticamente.</p>
+    <ul className="origin-candidate-list">{evidence.tablas?.map((table, index) => <li key={index} className="origin-candidate">
+      <h4>{table.titulo || table.encabezado || `Tabla ${index + 1}`}</h4>
+      {table.titulo && table.encabezado && <p className="origin-candidate-source">Sección: {table.encabezado}</p>}
+      <p className="origin-candidate-source">Versión {table.procedencia.version_id} · Documento {table.procedencia.documento_id}</p>
+      <ul>{table.filas.map((row, rowIndex) => <li key={rowIndex}>{row.celdas.join(' · ')} <span className="small-note">({row.tipo}; {row.condicion}{row.fecha_sugerida ? `; fecha ${row.fecha_sugerida}` : ''})</span></li>)}</ul>
+    </li>)}
+    {!!evidence.enlaces_documentales?.length && <li className="origin-candidate"><h4>Enlaces documentales encontrados</h4><ul>{evidence.enlaces_documentales.map((link, index) => <li key={index}>{publicUrl(link.url) ? <a href={publicUrl(link.url)} target="_blank" rel="noopener noreferrer">{link.texto}</a> : link.texto} <span className="small-note">(por revisar)</span></li>)}</ul></li>}</ul>
+  </details>
+}
+
 export default function OriginPanel({ offer, onPrepare }) {
   const [data, setData] = useState(null)
   const [documents, setDocuments] = useState([])
@@ -100,6 +114,8 @@ export default function OriginPanel({ offer, onPrepare }) {
     <details><summary>Requisitos extraídos para revisar ({data.candidatos_editables?.requisitos?.length || 0})</summary><ul className="origin-candidate-list">{data.candidatos_editables?.requisitos?.map((item, index) => <CandidateCard key={index} item={item} type="requisitos" onPrepare={onPrepare} />)}</ul></details>
     {!!data.candidatos_editables?.otros_campos?.beneficios?.length && <details><summary>Beneficios interpretados para revisar</summary><ul className="origin-candidate-list">{data.candidatos_editables.otros_campos.beneficios.map((item, index) => <CandidateCard key={index} item={item} type="beneficios" onPrepare={onPrepare} />)}</ul></details>}
     <details><summary>Opciones sugeridas para revisar ({data.candidatos_editables?.opciones?.length || 0})</summary><ul className="origin-candidate-list">{data.candidatos_editables?.opciones?.map((item, index) => <CandidateCard key={index} item={item} type="opciones" onPrepare={onPrepare} />)}</ul></details>
+    {data.candidatos_editables?.otros_campos?.evidencia_tabular?.estado === 'no_disponible' && <p role="status">No se pudo verificar el HTML archivado para leer sus tablas; consulta los documentos de origen.</p>}
+    <TabularEvidence evidence={data.candidatos_editables?.otros_campos?.evidencia_tabular} />
     <details><summary>Datos de origen conservados</summary><dl>{Object.entries(data.datos_iniciales).filter(([key, value]) => key !== 'candidatos_editables' && value).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{typeof value === 'object' ? `${value.nombre} (ID ${value.id}; confirmar antes de asignar)` : value}</dd></div>)}</dl></details>
   </section>
   if (!data?.aplicacion) return null

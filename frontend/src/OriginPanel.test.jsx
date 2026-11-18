@@ -109,6 +109,24 @@ it('expone un beneficio literal como candidato editable sin atribuirle concepto'
   expect(onPrepare).toHaveBeenCalledWith('beneficios', expect.objectContaining({ porcentaje: 25 }))
 })
 
+it('muestra tablas y anexos archivados como pendientes sin preparar reglas', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
+    publicacion_id: 15, version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
+    candidatos_editables: { requisitos: [], opciones: [], otros_campos: { evidencia_tabular: {
+      estado: 'extraida', tablas: [{ encabezado: 'Beca socioeconómica', titulo: 'Requisitos específicos',
+        procedencia: { version_id: 23, documento_id: 8 }, filas: [{ celdas: ['Renovación', 'Mantener promedio'],
+          tipo: 'requisito_o_documento', condicion: 'renovacion', fecha_sugerida: null }] }],
+      enlaces_documentales: [{ texto: 'Anexo de solicitud', url: 'https://institucion.edu.ec/anexo.pdf' }],
+    } } } })
+  const onPrepare = vi.fn()
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
+  await userEvent.setup().click(await screen.findByText('Tablas y anexos de la ficha para revisar'))
+  expect(screen.getByText(/Renovación · Mantener promedio/)).toBeVisible()
+  expect(screen.getByText(/requisito_o_documento; renovacion/)).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Anexo de solicitud' })).toHaveAttribute('href', 'https://institucion.edu.ec/anexo.pdf')
+  expect(onPrepare).not.toHaveBeenCalled()
+})
+
 it('avisa de una versión relevante y confirma su revisión sin aplicar datos automáticamente', async () => {
   const current = { aplicacion: null, automatico: true, publicacion_id: 15,
     version_id: 23, version_actual_id: 24, version_convocatoria: 3,

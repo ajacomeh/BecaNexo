@@ -158,9 +158,12 @@ def candidate_assessment(publication, version):
 def editable_candidates(version):
     """Interpreta la evidencia sin escribir ni validar candidatos editoriales."""
     from .estructura_semantica import interpretar_requisitos, candidatos_adicionales
+    from .evidencia_tabular import extraer_tablas
+    from .storage import StorageError, root_path, verify_file
     data = version.datos_extraidos or {}
     requirements = _literal(data.get('requisitos'), 5000)
-    document_id = version.documentos.filter(rol='ficha_html').values_list('documento_id', flat=True).first()
+    html = version.documentos.filter(rol='ficha_html').select_related('documento').first()
+    document_id = html.documento_id if html else None
     suggestions = interpretar_requisitos(requirements, version_id=version.pk,
         url=(data.get('requisitos') or {}).get('url'), documento_id=document_id)
     studies = data.get('estudios') or {}
@@ -177,8 +180,18 @@ def editable_candidates(version):
         options.append({'nivel': next(iter(levels)), 'modalidad': modalities[modality_text],
                         'destino_original': destination, 'validado': False,
                         'procedencia': {'version_id': version.pk, 'campos': ['estudios.niveles_mencionados', 'estudios.modalidad', 'estudios.destino']}})
-    return {'requisitos': suggestions, 'opciones': options,
-            'otros_campos': candidatos_adicionales(data, version_id=version.pk, documento_id=document_id)}
+    fields = candidatos_adicionales(data, version_id=version.pk, documento_id=document_id)
+    fields['evidencia_tabular'] = {'tablas': [], 'enlaces_documentales': [], 'estado': 'sin_html'}
+    if html:
+        try:
+            document = html.documento
+            path = root_path() / document.clave_almacenamiento
+            verify_file(path, document.sha256, document.tamano_bytes)
+            fields['evidencia_tabular'] = {**extraer_tablas(path.read_bytes(), html.url_normalizada,
+                version_id=version.pk, documento_id=document_id), 'estado': 'extraida'}
+        except (StorageError, OSError, UnicodeError, ValueError):
+            fields['evidencia_tabular']['estado'] = 'no_disponible'
+    return {'requisitos': suggestions, 'opciones': options, 'otros_campos': fields}
 
 
 def _candidate(publication, version):
