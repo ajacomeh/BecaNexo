@@ -37,8 +37,10 @@ class EnsayoIntegralDocumental(TransactionTestCase):
         self.assertEqual(first_run.estado, 'finalizada')
         self.assertEqual(len(calls), 2)  # robots y ficha; ninguna base externa
         publication = Publicacion.objects.get(fuente=self.source, url_normalizada=self.candidate.url_normalizada)
-        self.assertFalse(BorradorRastreo.objects.filter(publicacion=publication).exists())
         first_version = publication.versiones.get()
+        first_origin, first_created, _ = prepare_automatic_draft(publication.pk, first_version.pk, allow_partial=True)
+        self.assertTrue(first_created)
+        self.assertEqual(first_origin.convocatoria.estado, 'borrador')
         html_evidence = first_version.documentos.get(rol='ficha_html')
 
         pdf = pdf_pages([
@@ -73,8 +75,8 @@ class EnsayoIntegralDocumental(TransactionTestCase):
         version = observed.version
         self.assertEqual(version.documentos.count(), 2)
         origin, created, _ = prepare_automatic_draft(publication.pk, version.pk, allow_partial=True)
-        self.assertTrue(created)
-        self.assertEqual(origin.version_id, version.pk)
+        self.assertFalse(created)
+        self.assertEqual(origin.version_id, first_version.pk)
         self.assertEqual(origin.publicacion_id, publication.pk)
         self.assertEqual(origin.convocatoria.estado, 'borrador')
         self.assertIsNone(origin.convocatoria.institucion_id)
@@ -116,7 +118,11 @@ class EnsayoIntegralDocumental(TransactionTestCase):
         client.force_login(self.actor)
         response = client.get(f'/api/gestion/rastreo/convocatorias/{origin.convocatoria_id}/origen/')
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['version_actual_id'], version.pk)
+        self.assertTrue(response.data['cambio_relevante'])
         self.assertTrue(response.data['candidatos_editables']['otros_campos']['propuestas_documentales'])
+        self.assertTrue(any(row['procedencia'].get('pagina') == 1 for row in
+                            response.data['candidatos_editables']['otros_campos']['propuestas_documentales']))
         print(json.dumps({'ensayo_id': origin.convocatoria_id, 'estado': origin.convocatoria.estado,
                           'publicacion': publication.pk, 'version': version.pk,
                           'propuestas': len(proposals), 'bloqueos_origen': len(pending_for_publication(origin.convocatoria, origin)),

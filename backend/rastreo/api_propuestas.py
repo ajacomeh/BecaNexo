@@ -115,10 +115,11 @@ class OrigenBorrador(AuthView):
             if auto:
                 from .auto_borradores import latest_version, materially_changed, version_confirmed, review_baseline, editable_candidates
                 current = latest_version(auto.publicacion)
-                extracted = auto.version.datos_extraidos or {}
+                evidence_version = current or auto.version
+                extracted = evidence_version.datos_extraidos or {}
                 return Response({'aplicacion': None, 'automatico': True, 'publicacion_id': auto.publicacion_id,
                     'version_id': auto.version_id, 'datos_iniciales': auto.datos_iniciales,
-                    'candidatos_editables': editable_candidates(auto.version),
+                    'candidatos_editables': editable_candidates(evidence_version),
                     'enlaces_origen': {'publicacion': auto.publicacion.url_original,
                         'bases': extracted.get('enlaces_bases') or [],
                         'postulacion': extracted.get('enlaces_postulacion') or []},
