@@ -236,6 +236,9 @@ class GenericRunTests(TransactionTestCase):
         self.assertEqual(guarded.post(path, {}, format='json', HTTP_X_CSRFTOKEN=token).status_code, 400)
         offer.url_oficial = seed  # Ficha del fixture confirmada manualmente en este ensayo.
         offer.save(update_fields=['url_oficial'])
+        ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
+        offer.institucion = Institucion.objects.create(nombre='PUCE Ambato de prueba', sector='privado', pais=ec)
+        offer.save(update_fields=['institucion'])
         OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='presencial')
         call_command('cargar_catalogos_convocatorias', verbosity=0)
         kind = TipoRequisito.objects.get(codigo='OTRO')

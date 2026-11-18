@@ -133,13 +133,17 @@ def classify_candidate(publication, version, *, allow_partial=False):
     ) else 'no_especificada'
     if offerer == 'solo_extranjero':
         return result('fuera_alcance', offerer_reason, elegibilidad=recipient, **details)
-    if allow_partial and offerer != 'verificado_ec':
+    national_siau = adapter == 'siau' and bool(re.search(r'\bbecas?\s+nacionales?\b', _normal(title)))
+    if allow_partial and offerer != 'verificado_ec' and not national_siau:
         return result('pendiente', 'La ficha parcial no acredita un oferente o cooferente ecuatoriano.',
                       elegibilidad=recipient, **details)
     if adapter == 'siau' and not re.search(r'\bbecas?\s+nacionales?\b', _normal(title)) and offerer != 'verificado_ec':
         return result('pendiente', 'Ficha difundida por SIAU sin evidencia de oferente o cooferente ecuatoriano; revisar procedencia.',
                       elegibilidad=recipient, **details)
     if offerer != 'verificado_ec' and recipient != 'confirmada':
+        if national_siau:
+            return result('apta', 'Borrador privado de beca nacional; oferente y destinatarios pendientes de revisión.',
+                          elegibilidad=recipient, **details)
         return result('pendiente', offerer_reason, elegibilidad=recipient, **details)
     if offerer != 'verificado_ec':
         return result('apta', 'Borrador privado: destinatarios ecuatorianos acreditados; oferente no identificado.',
@@ -363,6 +367,8 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
 def pending_for_publication(offer, origin):
     """Solo bloqueos materiales de procedencia, alcance y revisión vigente."""
     errors = []
+    if not offer.institucion_id:
+        errors.append('Asigna una institución oferente ecuatoriana antes de publicar.')
     if origin.publicacion.convocatoria_id != offer.pk or origin.version.publicacion_id != origin.publicacion_id:
         errors.append('La procedencia del borrador no coincide con la publicación rastreada.')
     if not origin.version.documentos.filter(rol='ficha_html').exists():

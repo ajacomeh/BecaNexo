@@ -62,10 +62,20 @@ class AutoDraftTests(TransactionTestCase):
 
     def capture(self, html=None, citizenship=True, offerer=True, offerers=None):
         source = self.source() if not hasattr(self, 'source_id') else None
+        simulated_now = None
         if source:
             enable_discovery(self.actor.pk, 'Índice sintético')
             enable_national_discovery(self.actor.pk, 'Ficha sintética')
             self.source_id = source.pk
+        else:
+            # Simula una ventana posterior sin alterar ejecuciones inmutables.
+            from datetime import timedelta
+            from django.utils import timezone
+            from .models import Ejecucion, Fuente
+            registered = Fuente.objects.get(pk=self.source_id)
+            previous = Ejecucion.objects.filter(fuente_id=self.source_id).order_by('-inicio').first()
+            if previous:
+                simulated_now = previous.inicio + timedelta(minutes=registered.frecuencia_min + 1)
 
         def network(url):
             if url == INDEX:
@@ -90,7 +100,9 @@ class AutoDraftTests(TransactionTestCase):
             else:
                 data['descripcion']['texto_original'] += '\nUniversidad ecuatoriana sintética ofrece esta beca.'
             return data
-        with patch('convocatorias.siau_red.Downloader.once', side_effect=network), patch(
+        from contextlib import nullcontext
+        clock = patch('rastreo.services.timezone.now', return_value=simulated_now) if simulated_now else nullcontext()
+        with clock, patch('convocatorias.siau_red.Downloader.once', side_effect=network), patch(
                 'rastreo.services.extract_html', side_effect=synthetic_extract):
             run = run_manual(self.source_id, self.actor.pk, uuid.uuid4())
         run.refresh_from_db()
@@ -237,14 +249,16 @@ class AutoDraftTests(TransactionTestCase):
         publication = self.capture(offerer=False, citizenship=False)
         version = latest_version(publication)
         self.assertEqual(classify_candidate(publication, version)['elegibilidad'], 'no_especificada')
-        self.assertEqual(classify_candidate(publication, version)['estado'], 'pendiente')
+        self.assertEqual(classify_candidate(publication, version)['estado'], 'apta')
+        self.assertIsNone(publication.convocatoria.institucion_id)
+        self.assertFalse(publicas().filter(pk=publication.convocatoria_id).exists())
         version.datos_extraidos['requisitos']['texto_original'] += '\nNacionalidad ecuatoriana acreditada.'
         assessment = classify_candidate(publication, version)
         self.assertEqual(assessment['elegibilidad'], 'confirmada')
         self.assertEqual(assessment['estado'], 'apta')
         self.assertNotEqual(assessment['oferente'], 'verificado_ec')
 
-    def test_publish_without_identified_offerer_keeps_source_and_unknown_requirements(self):
+    def test_publish_requires_identified_offerer_and_keeps_unknown_requirements(self):
         from datetime import timedelta
         from django.utils import timezone
         from convocatorias.comparacion import evaluar_convocatoria
@@ -262,26 +276,32 @@ class AutoDraftTests(TransactionTestCase):
         option = OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='virtual')
         option.paises.add(ec)
         self.assertTrue(any('Requisitos extraídos' in note for note in review_notes(offer, origin)))
-        self.assertFalse(pending_for_publication(offer, origin))
+        self.assertTrue(any('institución oferente' in note for note in pending_for_publication(offer, origin)))
         admin = APIClient(enforce_csrf_checks=True)
         admin.force_login(self.actor)
         token = admin.get('/api/auth/csrf/').data['csrfToken']
         response = admin.post(f'/api/gestion/convocatorias/{offer.pk}/publicar/', {}, format='json', HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(publicas().filter(pk=offer.pk).exists())
+        institution = Institucion.objects.create(nombre='Oferente ecuatoriano revisado', sector='publico', pais=ec)
+        offer.institucion = institution
+        offer.save(update_fields=['institucion'])
+        response = admin.post(f'/api/gestion/convocatorias/{offer.pk}/publicar/', {}, format='json', HTTP_X_CSRFTOKEN=token)
         self.assertEqual(response.status_code, 200, response.data)
         offer.refresh_from_db()
-        self.assertIsNone(offer.institucion_id)
+        self.assertEqual(offer.institucion_id, institution.pk)
         self.assertEqual(offer.revision, 'validada')
         self.assertEqual(publicas().filter(pk=offer.pk).count(), 1)
         self.assertEqual(evaluar_convocatoria(self.user, offer)['opciones'][0]['resultado'], 'desconocido')
         public = APIClient()
         self.assertEqual(public.get('/api/becas/').data['count'], 1)
-        self.assertIsNone(public.get(f'/api/becas/{offer.pk}/').data['institucion'])
+        self.assertEqual(public.get(f'/api/becas/{offer.pk}/').data['institucion']['id'], institution.pk)
         from favoritos.models import Favorito
         Favorito.objects.create(usuario=self.user, convocatoria=offer)
         public.force_login(self.user)
         favorite = public.get('/api/favoritos/')
         self.assertEqual(favorite.status_code, 200)
-        self.assertEqual(favorite.data['results'][0]['convocatoria']['institucion'], 'No identificada')
+        self.assertEqual(favorite.data['results'][0]['convocatoria']['institucion'], institution.nombre)
         self.assertTrue(Evento.objects.filter(convocatoria=offer, actor=self.actor, accion='publicar').exists())
 
     def test_unknown_and_expired_validity_are_historical_not_recommended(self):
@@ -295,6 +315,9 @@ class AutoDraftTests(TransactionTestCase):
         offer.cierre_dia = None
         offer.cierre_original = None
         offer.save(update_fields=['url_oficial', 'cierre', 'cierre_dia', 'cierre_original'])
+        ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
+        offer.institucion = Institucion.objects.create(nombre='Oferente ecuatoriano revisado', sector='publico', pais=ec)
+        offer.save(update_fields=['institucion'])
         OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='virtual')
         publicar(offer)
         self.assertEqual(offer.estado, 'sin_fecha')
@@ -322,6 +345,9 @@ class AutoDraftTests(TransactionTestCase):
         offer.cierre_original = None
         offer.cierre = timezone.now() - timedelta(days=1)
         offer.save(update_fields=['url_oficial', 'cierre_dia', 'cierre_original', 'cierre'])
+        ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
+        offer.institucion = Institucion.objects.create(nombre='Oferente ecuatoriano revisado', sector='publico', pais=ec)
+        offer.save(update_fields=['institucion'])
         OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='virtual')
         publicar(offer)
         self.assertEqual(offer.estado, 'cerrada')
@@ -332,15 +358,15 @@ class AutoDraftTests(TransactionTestCase):
 
     def test_stored_reevaluation_is_read_only_by_default_and_idempotent_when_applied(self):
         publication = self.capture(offerer=False, citizenship=False)
-        self.assertEqual(reevaluate_stored(publication.pk)['estado'], 'pendiente')
+        self.assertEqual(reevaluate_stored(publication.pk)['estado'], 'apta')
         ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
         Institucion.objects.create(nombre='Universidad ecuatoriana sintética', sector='publico', pais=ec)
         preview = reevaluate_stored(publication.pk)
         self.assertEqual(preview['estado'], 'apta')
-        self.assertIsNone(preview['borrador_id'])
+        self.assertEqual(preview['borrador_id'], publication.convocatoria_id)
         first = reevaluate_stored(publication.pk, apply=True)
         second = reevaluate_stored(publication.pk, apply=True)
-        self.assertTrue(first['creado'])
+        self.assertFalse(first['creado'])
         self.assertFalse(second['creado'])
         self.assertEqual(first['borrador_id'], second['borrador_id'])
         self.assertEqual(BorradorRastreo.objects.filter(publicacion=publication).count(), 1)
@@ -376,7 +402,8 @@ class AutoDraftTests(TransactionTestCase):
         version.datos_extraidos['tipo_oportunidad'] = 'categoria_general'
         self.assertEqual(classify_candidate(publication, version)['naturaleza'], 'informativa')
         self.assertEqual(classify_candidate(publication, version)['estado'], 'fuera_alcance')
-        self.assertFalse(BorradorRastreo.objects.exists())
+        self.assertEqual(BorradorRastreo.objects.count(), 1)
+        self.assertFalse(publicas().filter(pk=publication.convocatoria_id).exists())
 
     def test_international_title_without_offerer_evidence_stays_pending(self):
         publication = self.capture(citizenship=False, offerer=False)

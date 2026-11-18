@@ -10,6 +10,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.test import TransactionTestCase, override_settings
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from convocatorias.models import BorradorRastreo, Institucion
 from convocatorias.services import publicas
@@ -124,6 +125,44 @@ class CandidateTransitionTests(TransactionTestCase):
         self.assertIn('Verificar requisitos', ' '.join(origin.pendientes_iniciales))
         from .auto_borradores import pending_for_publication
         self.assertTrue(pending_for_publication(origin.convocatoria, origin))
+
+    def test_national_fiche_without_identified_offerer_creates_editable_private_draft(self):
+        from .auto_borradores import prepare_automatic_draft, pending_for_publication
+        title = 'Programa de Becas Nacionales de prueba'
+        self.candidate.titulo_publico = title
+        self.candidate.save(update_fields=['titulo_publico'])
+        html = fiche(requirements=False, deadline=False).replace(TITLE.encode(), title.encode()).replace(
+            b'Universidad Ecuatoriana Demo ofrece esta beca a estudiantes ecuatorianos.',
+            b'Este programa apoya estudios de grado; la institucion oferente debe verificarse.')
+        run, _ = self.execute(html)
+        self.assertEqual(run.estado, 'finalizada')
+        origin = BorradorRastreo.objects.get(publicacion__url_normalizada=URL)
+        offer = origin.convocatoria
+        self.assertIsNone(offer.institucion_id)
+        self.assertTrue(any('entidad oferente' in note for note in origin.pendientes_iniciales))
+        self.assertTrue(any('institución oferente' in note for note in pending_for_publication(offer, origin)))
+        repeated, created, _ = prepare_automatic_draft(origin.publicacion_id, origin.version_id, allow_partial=True)
+        self.assertFalse(created)
+        self.assertEqual(repeated.pk, origin.pk)
+        self.assertEqual(BorradorRastreo.objects.count(), 1)
+        self.assertFalse(publicas().filter(pk=offer.pk).exists())
+        self.assertEqual(APIClient().get(f'/api/becas/{offer.pk}/').status_code, 404)
+        from convocatorias.services import publicar
+        from rest_framework.exceptions import ValidationError as PublicationError
+        with self.assertRaises(PublicationError):
+            publicar(offer)
+
+        admin = APIClient(enforce_csrf_checks=True)
+        admin.force_login(self.actor)
+        token = admin.get('/api/auth/csrf/').data['csrfToken']
+        institution = Institucion.objects.get(nombre='Universidad Ecuatoriana Demo')
+        response = admin.patch(f'/api/gestion/convocatorias/{offer.pk}/',
+            {'institucion': institution.pk}, format='json', HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(response.status_code, 200, response.data)
+        offer.refresh_from_db()
+        self.assertEqual(offer.institucion_id, institution.pk)
+        self.assertFalse(publicas().filter(pk=offer.pk).exists())
+        self.assertTrue(any('participación ecuatoriana' in note for note in pending_for_publication(offer, origin)))
 
     def test_foreign_offerer_is_only_detected_publication(self):
         run, _ = self.execute(fiche(foreign=True))

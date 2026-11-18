@@ -8,10 +8,8 @@ from . import models as m, serializers as s
 
 
 def publicas():
-    return m.Convocatoria.objects.filter(activa=True, revision="validada").filter(
-        Q(institucion__pais__codigo="EC") |
-        Q(institucion__isnull=True, origen_automatico__isnull=False)
-    ).select_related("institucion", "tipo_beca")
+    return m.Convocatoria.objects.filter(activa=True, revision="validada",
+        institucion__pais__codigo="EC").select_related("institucion", "tipo_beca")
 
 
 def postulables():
@@ -71,8 +69,7 @@ def touch(obj):
 @transaction.atomic
 def publicar(obj):
     era_publica = obj.activa and obj.revision == "validada" and (
-        (bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC") or
-        m.BorradorRastreo.objects.filter(convocatoria=obj).exists())
+        bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC")
     errors = []
     from rastreo.integracion import estado_publicacion_integrada
     origen = estado_publicacion_integrada(obj)
@@ -84,8 +81,8 @@ def publicar(obj):
         errors.extend(pending_for_publication(obj, auto_origin))
     if obj.institucion_id and obj.institucion.pais.codigo != "EC":
         errors.append("El oferente identificado debe ser ecuatoriano.")
-    if not obj.institucion_id and not auto_origin:
-        errors.append("La convocatoria manual requiere un oferente ecuatoriano.")
+    if not obj.institucion_id:
+        errors.append("Asigna una institución oferente ecuatoriana antes de publicar.")
     if not obj.titulo.strip() or not obj.descripcion.strip() or not obj.url_oficial:
         errors.append("Completa título, descripción y enlace oficial.")
     opciones = list(obj.opciones.filter(activa=True))
