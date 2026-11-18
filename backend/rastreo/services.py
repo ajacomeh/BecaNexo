@@ -24,6 +24,7 @@ from .portal_fuentes import PORTALES, POLITICA_VERSION, GENERIC_POLICY_VERSION, 
 
 
 BASE_POLICY = {'urls': sorted(ALLOWED), 'bytes_html': 2097152, 'bytes_pdf': 8388608, 'reintentos': 1}
+CANDIDATE_BASE_LINK_LIMIT = 8
 DISCOVERY_POLICY = {**BASE_POLICY, 'descubrimiento': {'indice': INDEX, 'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES}}
 NATIONAL_POLICY = {**BASE_POLICY, 'descubrimiento': {'indice': INDEX, 'indice_nacionales': NATIONAL_INDEX,
     'max_fichas': MAX_FICHAS, 'max_bases': MAX_BASES, 'max_paginas_nacionales': 1}}
@@ -834,7 +835,7 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
 
 
 def _capture_candidate(execution, source, candidate_id):
-    """Captura una sola ficha indexada; no consulta índices ni descarga bases."""
+    """Captura una ficha sin consultar índices; PDF opcional bajo límites de acceso."""
     candidate = CandidatoIndice.objects.get(pk=candidate_id, fuente=source)
     url = candidate.url_normalizada
     try:
@@ -860,9 +861,39 @@ def _capture_candidate(execution, source, candidate_id):
         if publication is None:
             raise AccessError('La ficha no produjo una identidad verificable.')
         html_access = execution.accesos.filter(url_normalizada=page['url'], documento__isnull=False).select_related('documento').latest('id')
-        pending = [{'url': link['url'], 'estado': 'base_no_descargada'} for link in item['enlaces_bases']]
-        observed = observe(execution, publication, item,
-            [{'rol': 'ficha_html', 'url': url, 'url_original': url, 'documento': html_access.documento}], pending)
+        evidence = [{'rol': 'ficha_html', 'url': url, 'url_original': url, 'documento': html_access.documento}]
+        pending = []
+        links = list({link['url']: link for link in item['enlaces_bases']}.values())
+        too_many_links = len(links) > CANDIDATE_BASE_LINK_LIMIT
+        if too_many_links:
+            incident(execution, 'BASES_LIMITE', 'Demasiados enlaces BASES; revisar la ficha archivada.',
+                     severity='aviso', publication=publication)
+            links = links[:CANDIDATE_BASE_LINK_LIMIT]
+        pdf_enabled = getattr(settings, 'RASTREO_CANDIDATO_PDF_HABILITADO', False)
+        eligible = [link for link in links if candidate_url(link['url'], BASE) == link['url']]
+        single_pdf = pdf_enabled and not too_many_links and len({link['url'] for link in eligible}) == 1
+        for link in links:
+            pdf_url = link['url']
+            if not single_pdf or link not in eligible:
+                pending.append({'url': pdf_url, 'estado': 'base_no_descargada' if not pdf_enabled
+                                else 'fuera_de_lista' if link not in eligible else 'seleccion_pendiente'})
+                continue
+            # El descargador exige HTTPS, host, URL exacta, DNS público, MIME PDF,
+            # firma, tamaño y SHA-256; robots se comprueba también para esta ruta.
+            downloader.pdfs.add(pdf_url)
+            downloader.allowed_urls.add(pdf_url)
+            try:
+                pdf = downloader.fetch(pdf_url, can_fetch=lambda target: robots_allowed(robots['contenido'], target))
+                document = execution.accesos.filter(url_normalizada=pdf['url'], documento__isnull=False).select_related('documento').latest('id').documento
+                evidence.append({'rol': 'bases_pdf', 'url': pdf_url,
+                                 'url_original': link['url_original'], 'documento': document})
+            except SourceBackoff:
+                raise
+            except (AccessError, ValueError):
+                pending.append({'url': pdf_url, 'estado': 'inaccesible'})
+                incident(execution, 'BASE_INACCESIBLE', 'PDF individual no disponible; se conserva la ficha HTML.',
+                         severity='aviso', publication=publication)
+        observed = observe(execution, publication, item, evidence, pending)
         if observed.version_id:
             from .auto_borradores import classify_candidate, prepare_automatic_draft
             version = observed.version
