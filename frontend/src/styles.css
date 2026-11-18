@@ -321,6 +321,16 @@
 .profile-sidebar nav a.active { background: #2d507a; font-weight: 700; }
 .profile-sidebar nav a:hover { background: #26466d; }
 .notification-nav-count { margin-left: auto; border-radius: 999px; background: #edf3ff; color: #17345c; padding: 0 .4rem; font-weight: 700; }
+.mail-settings { padding: 16px 20px; }
+.mail-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; }
+.mail-settings-copy { min-width: 0; }
+.mail-settings .mail-settings-copy h2 { margin: 0 0 4px; font-size: 1rem; }
+.mail-settings .mail-settings-copy p, .mail-settings .mail-settings-status { margin: 0; line-height: 1.45; }
+.mail-settings-toggle { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; margin: 0; color: #17243b; font-size: .875rem; font-weight: 650; cursor: pointer; }
+.mail-settings-toggle input[type="checkbox"] { width: 17px; height: 17px; min-height: 0; margin: 0; padding: 0; flex: 0 0 17px; accent-color: #2563eb; cursor: pointer; }
+.mail-settings-toggle input:disabled { cursor: not-allowed; }
+.mail-settings .mail-settings-status { margin-top: 8px; }
+@media (max-width: 700px) { .mail-settings-row { align-items: flex-start; flex-direction: column; gap: 12px; } }
 .notification-list { list-style: none; padding: 0; margin: 0; }
 .notification-item { display: flex; flex-direction: column; gap: 12px; align-items: stretch; padding: 18px 20px; overflow-wrap: anywhere; }
 .notification-content { min-width: 0; width: 100%; }

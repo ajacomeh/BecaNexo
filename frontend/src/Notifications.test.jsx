@@ -40,6 +40,30 @@ it('mantiene el correo desactivado hasta consentimiento explícito y permite rev
   expect(offersApi.write).toHaveBeenCalledWith('notificaciones/correo', 'PATCH', { habilitado: false })
 })
 
+it('recupera la preferencia guardada al volver a cargar la página', async () => {
+  let saved = false
+  offersApi.get.mockImplementation((path) => Promise.resolve(path === 'notificaciones/correo'
+    ? { disponible: true, habilitado: saved } : data([])))
+  offersApi.write.mockImplementation((_path, _method, body) => {
+    saved = body.habilitado
+    return Promise.resolve({ disponible: true, habilitado: saved })
+  })
+  const first = mount()
+  let checkbox = await screen.findByRole('checkbox', { name: 'Recibir avisos por correo' })
+  await userEvent.click(checkbox)
+  await waitFor(() => expect(checkbox).toBeChecked())
+  first.unmount()
+  const second = mount()
+  checkbox = await screen.findByRole('checkbox', { name: 'Recibir avisos por correo' })
+  await waitFor(() => expect(checkbox).toBeChecked())
+  await userEvent.click(checkbox)
+  await waitFor(() => expect(checkbox).not.toBeChecked())
+  second.unmount()
+  mount()
+  checkbox = await screen.findByRole('checkbox', { name: 'Recibir avisos por correo' })
+  await waitFor(() => expect(checkbox).not.toBeChecked())
+})
+
 it('presenta carga, estado vacío, error y reintento', async () => {
   offersApi.get.mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce(data([]))
   mount()

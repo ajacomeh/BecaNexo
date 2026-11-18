@@ -60,9 +60,9 @@ export default function Notifications() {
   }
 
   return <OffersLayout><div className="page-heading"><div><p className="eyebrow">TUS AVISOS</p><h1>Notificaciones</h1><p>Convocatorias publicadas relacionadas con información que declaraste. Revisa siempre sus requisitos y bases oficiales.</p></div></div>
-    <section className="profile-card"><h2>Avisos por correo</h2><p className="small-note">Solo para becas reales con plazo vigente y compatibilidad confirmada según tus datos declarados. Las notificaciones de esta página continúan disponibles aunque desactives el correo.</p>
-      {mailPreference ? <label className="field"><input type="checkbox" checked={Boolean(mailPreference.habilitado)} disabled={!mailPreference.disponible || mailBusy} onChange={(event) => changeMail(event.target.checked)} /> Recibir avisos por correo</label> : !mailError && <p>Consultando preferencia de correo…</p>}
-      {mailPreference && !mailPreference.disponible && <p className="small-note">El envío por correo aún no está habilitado.</p>}
+    <section className="profile-card mail-settings"><div className="mail-settings-row"><div className="mail-settings-copy"><h2>Avisos por correo</h2><p className="small-note">Recibe avisos de becas reales, abiertas y compatibles. Tus notificaciones internas seguirán disponibles.</p></div>
+      {mailPreference ? <label className="mail-settings-toggle"><input type="checkbox" checked={Boolean(mailPreference.habilitado)} disabled={!mailPreference.disponible || mailBusy} onChange={(event) => changeMail(event.target.checked)} /> <span>Recibir avisos por correo</span></label> : !mailError && <p className="small-note mail-settings-status">Consultando preferencia de correo…</p>}</div>
+      {mailPreference && !mailPreference.disponible && <p className="small-note mail-settings-status">El envío por correo aún no está habilitado.</p>}
       <Message>{mailError}</Message></section>
     {!current && <p role="status"><Icon name="loading" />Cargando notificaciones…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => setRevision((value) => value + 1)}>Reintentar</Button></>}
