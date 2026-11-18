@@ -43,6 +43,21 @@ function TabularEvidence({ evidence }) {
   </details>
 }
 
+function PDFEvidence({ evidence }) {
+  if (!evidence?.documentos?.length) return null
+  return <details><summary>Bases PDF archivadas para revisar ({evidence.documentos.length})</summary>
+    <p>Texto detectado por página; ninguna condición queda validada ni aplicada al borrador.</p>
+    <ul className="origin-candidate-list">{evidence.documentos.map((document) => <li key={document.documento_id} className="origin-candidate">
+      <h4>Documento {document.documento_id} · {document.estado.replaceAll('_', ' ')}</h4>
+      <p className="origin-candidate-source">Versión {document.version_id}{document.total_paginas != null && ` · ${document.total_paginas} páginas`} · {publicUrl(document.url) ? <a href={publicUrl(document.url)} target="_blank" rel="noopener noreferrer">URL oficial asociada</a> : 'URL pendiente'}</p>
+      {document.estado === 'sin_texto' && <p>PDF sin texto seleccionable; requiere revisión manual. No se aplicó OCR.</p>}
+      {(document.fragmentos_truncados || document.paginas?.some((page) => page.texto_recortado) || document.estado === 'limite_paginas') && <p>Lectura parcial por límites de seguridad; revisa el PDF original.</p>}
+      {!!document.fragmentos.length && <ul>{document.fragmentos.map((item, index) => <li key={index}>{item.texto_original} <span className="small-note">(p. {item.procedencia.pagina}; {item.tipo}; {item.condicion}{item.categoria ? `; ${item.categoria}` : ''})</span></li>)}</ul>}
+    </li>)}</ul>
+    {evidence.omitidos_por_limite && <p>Hay más documentos; se conserva el límite de tres PDF por consulta.</p>}
+  </details>
+}
+
 export default function OriginPanel({ offer, onPrepare }) {
   const [data, setData] = useState(null)
   const [documents, setDocuments] = useState([])
@@ -116,6 +131,7 @@ export default function OriginPanel({ offer, onPrepare }) {
     <details><summary>Opciones sugeridas para revisar ({data.candidatos_editables?.opciones?.length || 0})</summary><ul className="origin-candidate-list">{data.candidatos_editables?.opciones?.map((item, index) => <CandidateCard key={index} item={item} type="opciones" onPrepare={onPrepare} />)}</ul></details>
     {data.candidatos_editables?.otros_campos?.evidencia_tabular?.estado === 'no_disponible' && <p role="status">No se pudo verificar el HTML archivado para leer sus tablas; consulta los documentos de origen.</p>}
     <TabularEvidence evidence={data.candidatos_editables?.otros_campos?.evidencia_tabular} />
+    <PDFEvidence evidence={data.candidatos_editables?.otros_campos?.evidencia_pdf} />
     <details><summary>Datos de origen conservados</summary><dl>{Object.entries(data.datos_iniciales).filter(([key, value]) => key !== 'candidatos_editables' && value).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{typeof value === 'object' ? `${value.nombre} (ID ${value.id}; confirmar antes de asignar)` : value}</dd></div>)}</dl></details>
   </section>
   if (!data?.aplicacion) return null

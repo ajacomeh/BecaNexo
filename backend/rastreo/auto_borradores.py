@@ -159,6 +159,7 @@ def editable_candidates(version):
     """Interpreta la evidencia sin escribir ni validar candidatos editoriales."""
     from .estructura_semantica import interpretar_requisitos, candidatos_adicionales
     from .evidencia_tabular import extraer_tablas
+    from .evidencia_pdf import MAX_DOCUMENTOS, leer_evidencia_pdf
     from .storage import StorageError, root_path, verify_file
     data = version.datos_extraidos or {}
     requirements = _literal(data.get('requisitos'), 5000)
@@ -191,6 +192,22 @@ def editable_candidates(version):
                 version_id=version.pk, documento_id=document_id), 'estado': 'extraida'}
         except (StorageError, OSError, UnicodeError, ValueError):
             fields['evidencia_tabular']['estado'] = 'no_disponible'
+    pdfs = list(version.documentos.filter(rol='bases_pdf').select_related('documento').order_by('id')[:MAX_DOCUMENTOS * 4])
+    seen = {}
+    documents = []
+    omitted = len(pdfs) == MAX_DOCUMENTOS * 4
+    for row in pdfs:
+        key = row.documento.sha256
+        if key in seen:
+            if row.url_normalizada not in seen[key]['urls']:
+                seen[key]['urls'].append(row.url_normalizada)
+        elif len(documents) < MAX_DOCUMENTOS:
+            result = leer_evidencia_pdf(row, version.pk)
+            seen[key] = result
+            documents.append(result)
+        else:
+            omitted = True
+    fields['evidencia_pdf'] = {'documentos': documents, 'omitidos_por_limite': omitted}
     return {'requisitos': suggestions, 'opciones': options, 'otros_campos': fields}
 
 

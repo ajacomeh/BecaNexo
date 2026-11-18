@@ -127,6 +127,28 @@ it('muestra tablas y anexos archivados como pendientes sin preparar reglas', asy
   expect(onPrepare).not.toHaveBeenCalled()
 })
 
+it('muestra evidencia PDF por página y señala documentos sin texto', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
+    publicacion_id: 15, version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
+    candidatos_editables: { requisitos: [], opciones: [], otros_campos: { evidencia_pdf: {
+      documentos: [
+        { documento_id: 8, version_id: 23, url: 'https://institucion.edu.ec/bases.pdf', estado: 'extraido', total_paginas: 2, fragmentos_truncados: true,
+          fragmentos: [{ texto_original: 'Cobertura del 75% al 100%', tipo: 'beneficio', condicion: 'inicial_por_revisar',
+            categoria: 'Beca socioeconómica', procedencia: { pagina: 2 } }] },
+        { documento_id: 9, version_id: 23, url: 'https://institucion.edu.ec/anexo.pdf', estado: 'sin_texto',
+          total_paginas: 1, fragmentos: [] },
+      ], omitidos_por_limite: false,
+    } } } })
+  const onPrepare = vi.fn()
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
+  await userEvent.setup().click(await screen.findByText('Bases PDF archivadas para revisar (2)'))
+  expect(screen.getByText(/Cobertura del 75% al 100%/)).toBeVisible()
+  expect(screen.getByText(/p\. 2; beneficio/)).toBeVisible()
+  expect(screen.getByText(/PDF sin texto seleccionable/)).toBeVisible()
+  expect(screen.getByText(/Lectura parcial por límites de seguridad/)).toBeVisible()
+  expect(onPrepare).not.toHaveBeenCalled()
+})
+
 it('avisa de una versión relevante y confirma su revisión sin aplicar datos automáticamente', async () => {
   const current = { aplicacion: null, automatico: true, publicacion_id: 15,
     version_id: 23, version_actual_id: 24, version_convocatoria: 3,
