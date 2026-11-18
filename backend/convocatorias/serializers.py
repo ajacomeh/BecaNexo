@@ -50,6 +50,8 @@ class ConvocatoriaSerializer(StrictModelSerializer):
 
     def validate(self, attrs):
         v = lambda k: attrs.get(k, getattr(self.instance, k, None))
+        if v("alcance_academico") not in (None, "pendiente") and not (v("alcance_detalle") or "").strip():
+            raise serializers.ValidationError({"alcance_detalle": "Describe el alcance respaldado antes de marcarlo como verificado."})
         institution = v("institucion")
         if institution is None:
             if not self.instance or not m.BorradorRastreo.objects.filter(convocatoria=self.instance).exists():

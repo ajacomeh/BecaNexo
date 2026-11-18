@@ -23,6 +23,7 @@ it('muestra el área confirmada de OCCITEC y no interpreta áreas vacías como t
   render(<MemoryRouter initialEntries={['/becas/9']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
   const section = (await screen.findByText('Áreas académicas')).closest('section')
   expect(within(section).getByText('Educación')).toBeVisible()
+  expect(screen.getByText('Pendiente de confirmar')).toBeVisible()
   cleanup()
 
   const udaCatalogs = { ...areaCatalogs, areas: [
@@ -39,6 +40,22 @@ it('muestra el área confirmada de OCCITEC y no interpreta áreas vacías como t
   render(<MemoryRouter initialEntries={['/becas/9']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
   expect(await screen.findByText('No especificadas en esta ficha; consulta la fuente oficial')).toBeVisible()
   expect(screen.queryByText('Todas las áreas')).not.toBeInTheDocument()
+})
+
+it('presenta el alcance documental sin convertirlo en opciones ni áreas', async () => {
+  const detail = { ...offer, descripcion: 'Convocatoria sintética', areas: [], requisitos: [],
+    alcance_academico: 'transversal', alcance_detalle: 'Estudiantes regulares desde segundo ciclo',
+    alcance_exclusiones: 'Medicina', alcance_sede: 'Santo Domingo', alcance_periodo: '2026-02' }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? { ...catalogs, areas: [] } : detail)
+  render(<MemoryRouter initialEntries={['/becas/1']}><Routes><Route path="/becas/:id" element={<OfferDetail />} /></Routes></MemoryRouter>)
+  const section = (await screen.findByText('Alcance académico')).closest('section')
+  expect(within(section).getByText('Transversal institucional documentado')).toBeVisible()
+  expect(within(section).getByText('Estudiantes regulares desde segundo ciclo')).toBeVisible()
+  expect(within(section).getByText('Medicina')).toBeVisible()
+  expect(within(section).getByText('Santo Domingo')).toBeVisible()
+  expect(within(section).getByText('2026-02')).toBeVisible()
+  expect(within(section).getByText(/opciones de estudio registradas pueden ser parciales/i)).toBeVisible()
+  expect(screen.getByText('No especificadas en esta ficha; consulta la fuente oficial')).toBeVisible()
 })
 
 it('muestra educación continua sin asignar un nivel académico al perfil', async () => {

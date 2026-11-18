@@ -13,6 +13,27 @@ from . import models as m
 
 
 class ConvocatoriasTests(TestCase):
+    def test_alcance_academico_documental_no_altera_opciones_ni_filtros(self):
+        pk = self.oferta("Alcance sintético")["id"]
+        path = f"/api/gestion/convocatorias/{pk}/"
+        self.assertEqual(m.Convocatoria.objects.get(pk=pk).alcance_academico, "pendiente")
+        option = self.opcion(pk, programa="Programa confirmado")
+        self.write(path, {"alcance_academico": "transversal"}, "patch", 400)
+        self.write(path, {"alcance_academico": "programas", "alcance_detalle": "Programa confirmado"}, "patch", 200)
+        self.write(path, {"alcance_academico": "transversal", "alcance_detalle": "Estudiantes regulares desde segundo ciclo",
+                          "alcance_exclusiones": "Medicina", "alcance_sede": "Sede documentada",
+                          "alcance_periodo": "2026-02"}, "patch", 200)
+        self.assertEqual(m.OpcionEstudio.objects.filter(convocatoria_id=pk).count(), 1)
+        self.assertEqual(list(m.ConvocatoriaArea.objects.filter(convocatoria_id=pk).values_list("area_id", flat=True)), [self.area.pk])
+        self.write(path + "publicar/", expected=200)
+        detail = self.public.get(f"/api/becas/{pk}/").data
+        self.assertEqual(detail["alcance_academico"], "transversal")
+        self.assertEqual(detail["alcance_exclusiones"], "Medicina")
+        self.assertEqual(detail["alcance_periodo"], "2026-02")
+        self.assertEqual(detail["opciones"][0]["id"], option["id"])
+        self.assertEqual(self.public.get("/api/becas/?estado=todas&nivel=grado").data["count"], 0)
+        self.assertEqual(self.public.get("/api/becas/?estado=todas&nivel=maestria").data["count"], 1)
+
     def test_educacion_continua_sin_nivel_es_solo_historica(self):
         offer = self.oferta("Curso de educación continua sintético")
         pk = offer["id"]

@@ -14,6 +14,8 @@ def dominio(field, values, name, nullable=False):
 
 SECTORES = [("publico", "Público"), ("privado", "Privado")]
 REVISIONES = [("pendiente", "Pendiente / borrador"), ("validada", "Validada")]
+ALCANCES_ACADEMICOS = [("pendiente", "Pendiente de confirmar"), ("programas", "Programas específicos"),
+                       ("transversal", "Transversal institucional")]
 COBERTURAS = [(x, x.replace("_", " ").capitalize()) for x in ("total", "parcial", "mixta", "no_especificada")]
 NIVELES_OPCION = [*NIVELES, ("no_aplica", "No aplica (educación continua)")]
 PERIODOS = [(x, x.capitalize()) for x in ("unico", "mensual", "anual", "otra")]
@@ -45,6 +47,11 @@ class Convocatoria(models.Model):
     institucion = models.ForeignKey(Institucion, null=True, blank=True, on_delete=models.PROTECT, related_name="convocatorias")
     titulo = models.CharField(max_length=250)
     descripcion = models.TextField(blank=True, default="")
+    alcance_academico = models.CharField(max_length=20, choices=ALCANCES_ACADEMICOS, default="pendiente")
+    alcance_detalle = models.TextField(blank=True, default="")
+    alcance_exclusiones = models.TextField(blank=True, default="")
+    alcance_sede = models.TextField(blank=True, default="")
+    alcance_periodo = models.TextField(blank=True, default="")
     apertura = models.DateTimeField(null=True, blank=True)
     cierre = models.DateTimeField(null=True, blank=True)
     cierre_dia = models.DateField(null=True, blank=True)
@@ -67,6 +74,7 @@ class Convocatoria(models.Model):
         ordering = ["-actualizado_en", "-id"]
         constraints = [
             dominio("revision", REVISIONES, "conv_revision"),
+            dominio("alcance_academico", ALCANCES_ACADEMICOS, "conv_alcance_academico"),
             dominio("cobertura_tipo", COBERTURAS, "conv_cobertura", True),
             models.CheckConstraint(condition=Q(version__gte=1), name="conv_version"),
             models.CheckConstraint(condition=Q(apertura__isnull=True) | Q(cierre__isnull=True) | Q(cierre__gte=F("apertura")), name="conv_fechas"),

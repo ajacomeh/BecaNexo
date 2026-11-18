@@ -185,6 +185,13 @@ export default function OfferDetail() {
           {period ? <div><dt>Período de postulación</dt><dd>Apertura: {dayDate(period.start)} · Cierre: {dayDate(period.end)} · Horas no informadas</dd></div>
             : <><div><dt>Apertura</dt><dd>{date(offer.apertura)}</dd></div>{offer.cierre_original && <div><dt>Fecha según fuente</dt><dd>{offer.cierre_original}</dd></div>}</>}
           <div><dt>Publicación en la fuente</dt><dd>{display(offer.fecha_publicacion)}</dd></div><div><dt>Gastos no cubiertos</dt><dd>{display(offer.gastos_no_cubiertos)}</dd></div><div><dt>Obligaciones</dt><dd>{display(offer.obligaciones_beneficiario)}</dd></div></dl><p className="small-note">Los instantes se muestran en America/Guayaquil. Un cierre expresado solo como día no tiene hora confirmada.</p></section>
+      <section className="profile-card offer-detail-section"><h2>Alcance académico</h2>
+        <dl className="detail-data"><div><dt>Estado del alcance</dt><dd>{offer.alcance_academico === 'programas' ? 'Programas específicos documentados' : offer.alcance_academico === 'transversal' ? 'Transversal institucional documentado' : 'Pendiente de confirmar'}</dd></div>
+          {offer.alcance_detalle && <div><dt>Alcance según la fuente</dt><dd className="preserve-text">{offer.alcance_detalle}</dd></div>}
+          {offer.alcance_exclusiones && <div><dt>Carreras excluidas</dt><dd className="preserve-text">{offer.alcance_exclusiones}</dd></div>}
+          {offer.alcance_sede && <div><dt>Sede</dt><dd className="preserve-text">{offer.alcance_sede}</dd></div>}
+          {offer.alcance_periodo && <div><dt>Período académico</dt><dd className="preserve-text">{offer.alcance_periodo}</dd></div>}</dl>
+        <p className="small-note">Las opciones de estudio registradas pueden ser parciales. El alcance documental no confirma por sí solo la elegibilidad; consulta las condiciones oficiales.</p></section>
       <Comparison key={offer.id} offerId={offer.id} catalogs={data.catalogs} />
       <h2 className="section-heading offer-options-heading">Opciones de estudio</h2><p className="small-note offer-options-note">Los requisitos, beneficios y documentos generales se aplican a todas las opciones salvo que se indique una condición específica. La entidad oferente verifica los documentos y certificados; BecaNexo no los recibe.</p>{offer.opciones.map((o, index) => <OptionStudy key={o.id} option={o} index={index} offer={offer} catalogs={data.catalogs} />)}
       <section className="profile-card offer-detail-section"><h2>Beneficios comunes</h2><BenefitList records={offer.beneficios.filter((b) => !b.opcion_estudio)} /><p className="profile-note">Cada porcentaje corresponde exclusivamente al concepto financiado. No representa el costo total de estudiar.</p></section>
