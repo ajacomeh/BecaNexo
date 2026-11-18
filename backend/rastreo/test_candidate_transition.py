@@ -87,16 +87,34 @@ class CandidateTransitionTests(TransactionTestCase):
         self.assertIsNone(origin.convocatoria.institucion_id)
         self.assertEqual(run.configuracion_snapshot['solicitud_manual']['candidato_id'], self.candidate.pk)
 
+    @override_settings(RASTREO_CANDIDATO_PDF_HABILITADO=True)
     def test_siau_and_generic_portal_keep_private_drafts_and_frequency_separate(self):
         from .services import register_generic_portal, set_portal_active, set_frequency, run_manual, next_due
         from convocatorias.services import publicas
         from datetime import timedelta
+        from .test_evidencia_pdf import pdf_pages
+        import json
 
         self.source, _ = set_frequency(self.source.pk, self.actor.pk, 'Intervalo SIAU del ensayo', 1440)
         siau_key = uuid.uuid4()
-        siau_run, siau_calls = self.execute(key=siau_key)
+        pdf_url = 'https://siau.senescyt.gob.ec/wp-content/uploads/2026/11/bases-demo-multifuente.pdf'
+        siau_html = fiche().replace(b'</section>', f'<a href="{pdf_url}">BASES</a></section>'.encode())
+        pdf = pdf_pages(['Bases sinteticas de beca nacional', 'Requisitos generales',
+                         'Ser ciudadano ecuatoriano', 'Cierre 20 de noviembre de 2026'])
+        siau_calls = []
+        def siau_network(url):
+            siau_calls.append(url)
+            if url == ROBOTS:
+                return 200, {'content-type': 'text/plain'}, ROBOTS_TEXT
+            if url == URL:
+                return 200, {'content-type': 'text/html'}, siau_html
+            self.assertEqual(url, pdf_url)
+            return 200, {'content-type': 'application/pdf'}, pdf
+        with patch('convocatorias.siau_red.Downloader.once', side_effect=siau_network):
+            siau_run = run_candidate(self.candidate.pk, self.actor.pk, siau_key, 'Validación sintética')
+        siau_run.refresh_from_db()
         self.assertEqual(siau_run.estado, 'finalizada')
-        self.assertEqual(siau_calls, [ROBOTS, URL])
+        self.assertEqual(siau_calls, [ROBOTS, URL, pdf_url])
         generic_index = 'https://becas.universidad.edu.ec/becas/'
         generic, _ = register_generic_portal(
             self.actor.pk, 'Universidad institucional sintética', generic_index,
@@ -132,6 +150,8 @@ class CandidateTransitionTests(TransactionTestCase):
         self.assertFalse(publicas().exists())
         self.assertEqual(Publicacion.objects.filter(fuente=self.source).count(), 1)
         self.assertEqual(Publicacion.objects.filter(fuente=generic).count(), 1)
+        self.assertEqual(BorradorRastreo.objects.get(publicacion__fuente=self.source)
+                         .version.documentos.filter(rol='bases_pdf').count(), 1)
         self.assertEqual(next_due(self.source), siau_run.inicio + timedelta(minutes=self.source.frecuencia_min))
         self.assertEqual(next_due(generic), generic_run.inicio + timedelta(minutes=generic.frecuencia_min))
         self.assertNotEqual(self.source.frecuencia_min, generic.frecuencia_min)
@@ -142,6 +162,27 @@ class CandidateTransitionTests(TransactionTestCase):
             network.assert_not_called()
         self.assertEqual((Publicacion.objects.count(), BorradorRastreo.objects.count(),
                           Convocatoria.objects.count()), (2, 2, 2))
+        admin = APIClient()
+        admin.force_login(self.actor)
+        publications_api = admin.get('/api/gestion/rastreo/publicaciones/')
+        runs_api = admin.get('/api/gestion/rastreo/ejecuciones/')
+        drafts_api = admin.get('/api/gestion/convocatorias/?revision=pendiente')
+        self.assertEqual([response.status_code for response in
+                          (publications_api, runs_api, drafts_api)], [200, 200, 200])
+        self.assertEqual((publications_api.data['count'], drafts_api.data['count']), (2, 2))
+        self.assertEqual(APIClient().get('/api/becas/').data['count'], 0)
+        print(json.dumps({'demo': 'multifuente_sintetica',
+                          'fuentes': [{'id': row.pk, 'adaptador': row.adaptador,
+                                       'frecuencia_min': row.frecuencia_min}
+                                      for row in (self.source, generic)],
+                          'ejecuciones': [siau_run.pk, generic_run.pk],
+                          'publicaciones': [row.publicacion_id for row in origins],
+                          'versiones': [row.version_id for row in origins],
+                          'borradores_privados': [row.convocatoria_id for row in origins],
+                          'api_admin': {'publicaciones': publications_api.data['count'],
+                                        'ejecuciones': runs_api.data['count'],
+                                        'borradores': drafts_api.data['count']},
+                          'catalogo_publico': 0}, ensure_ascii=False))
 
     def test_individual_candidate_under_v3_keeps_ordinary_policy(self):
         set_paginated_discovery(self.actor.pk, 'Conservar rastreo ordinario /3', False)
