@@ -1,6 +1,7 @@
 """Transición individual; HTTP simulado y escrituras solo en base aislada."""
 import hashlib
 import io
+import os
 import uuid
 from datetime import timedelta
 from unittest.mock import patch
@@ -183,6 +184,96 @@ class CandidateTransitionTests(TransactionTestCase):
                                         'ejecuciones': runs_api.data['count'],
                                         'borradores': drafts_api.data['count']},
                           'catalogo_publico': 0}, ensure_ascii=False))
+        if os.environ.get('BECANEXO_DEMO_VISUAL') == '1':
+            from getpass import getpass
+            from http.cookiejar import CookieJar
+            from pathlib import Path
+            from urllib.request import Request, build_opener, HTTPCookieProcessor
+            import secrets
+            import socket
+            import subprocess
+            import sys
+            import time
+
+            self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+            smoke = os.environ.get('BECANEXO_DEMO_VISUAL_SMOKE') == '1'
+            password = secrets.token_urlsafe(18) if smoke else getpass(
+                'Contraseña TEMPORAL para rastreo-admin@example.com (mínimo 12 caracteres): ')
+            if len(password) < 12:
+                raise ValueError('La contraseña temporal debe tener al menos 12 caracteres.')
+            self.actor.set_password(password)
+            self.actor.save(update_fields=['password'])
+            repo = Path(__file__).resolve().parents[2]
+            for port in (8001, 5174):
+                with socket.socket() as probe:
+                    probe.bind(('127.0.0.1', port))
+            environment = os.environ.copy()
+            environment['BECANEXO_DEMO_STORAGE_ROOT'] = self.temp.name
+            environment['AVISOS_CORREO_HABILITADOS'] = 'False'
+            environment['GMAIL_SMTP_USER'] = ''
+            environment['GMAIL_APP_PASSWORD'] = ''
+            processes = []
+            try:
+                processes.append(subprocess.Popen(
+                    [sys.executable, 'manage.py', 'runserver', '127.0.0.1:8001', '--noreload',
+                     '--settings=config.demo_multifuente_settings'],
+                    cwd=repo / 'backend', env=environment, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL))
+                processes.append(subprocess.Popen(
+                    ['node', 'node_modules/vite/bin/vite.js', '--config', 'vite.demo-multifuente.config.js',
+                     '--host', '127.0.0.1', '--port', '5174'],
+                    cwd=repo / 'frontend', env=environment, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL))
+                opener = build_opener(HTTPCookieProcessor(CookieJar()))
+                for url in ('http://127.0.0.1:8001/api/auth/csrf/', 'http://127.0.0.1:5174/'):
+                    for _ in range(40):
+                        if any(proc.poll() is not None for proc in processes):
+                            raise RuntimeError('Un servidor de demostración terminó antes de estar disponible.')
+                        try:
+                            with opener.open(url, timeout=2) as response:
+                                if response.status == 200:
+                                    break
+                        except (OSError, TimeoutError):
+                            time.sleep(0.25)
+                    else:
+                        raise RuntimeError(f'El servidor de demostración no respondió: {url}')
+                with opener.open('http://127.0.0.1:8001/api/auth/csrf/') as response:
+                    csrf = json.load(response)['csrfToken']
+                login = Request('http://127.0.0.1:8001/api/auth/login/',
+                    data=json.dumps({'email': self.actor.email, 'password': password}).encode(),
+                    headers={'Content-Type': 'application/json', 'X-CSRFToken': csrf,
+                             'Origin': 'http://127.0.0.1:5174'}, method='POST')
+                with opener.open(login) as response:
+                    self.assertEqual(response.status, 200)
+                with opener.open('http://127.0.0.1:8001/api/gestion/rastreo/publicaciones/') as response:
+                    self.assertEqual(json.load(response)['count'], 2)
+                with opener.open('http://127.0.0.1:8001/api/gestion/convocatorias/?revision=pendiente') as response:
+                    self.assertEqual(json.load(response)['count'], 2)
+                for origin in origins:
+                    documents_url = (f'http://127.0.0.1:8001/api/gestion/rastreo/publicaciones/'
+                                     f'{origin.publicacion_id}/versiones/{origin.version_id}/documentos/')
+                    with opener.open(documents_url) as response:
+                        self.assertGreaterEqual(json.load(response)['count'], 1)
+                with opener.open('http://127.0.0.1:8001/api/becas/') as response:
+                    self.assertEqual(json.load(response)['count'], 0)
+                print('DEMOSTRACIÓN VISUAL AISLADA: http://127.0.0.1:5174/login')
+                print('Cuenta temporal: rastreo-admin@example.com; contraseña elegida solo en esta terminal.')
+                print('Panel: http://127.0.0.1:5174/gestion/rastreo')
+                print('Cierre: regresa a esta terminal y pulsa Enter; se cerrarán servidores y fixtures.')
+                if not smoke:
+                    try:
+                        input('Pulsa Enter para cerrar la demostración: ')
+                    except (EOFError, KeyboardInterrupt):
+                        print('Cierre solicitado; limpiando la demostración aislada.')
+            finally:
+                for proc in reversed(processes):
+                    if proc.poll() is None:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                            proc.wait(timeout=5)
 
     def test_individual_candidate_under_v3_keeps_ordinary_policy(self):
         set_paginated_discovery(self.actor.pk, 'Conservar rastreo ordinario /3', False)
