@@ -160,6 +160,7 @@ def editable_candidates(version):
     from .estructura_semantica import interpretar_requisitos, candidatos_adicionales
     from .evidencia_tabular import extraer_tablas
     from .evidencia_pdf import MAX_DOCUMENTOS, leer_evidencia_pdf
+    from .propuestas_documentales import proponer
     from .storage import StorageError, root_path, verify_file
     data = version.datos_extraidos or {}
     requirements = _literal(data.get('requisitos'), 5000)
@@ -208,6 +209,7 @@ def editable_candidates(version):
         else:
             omitted = True
     fields['evidencia_pdf'] = {'documentos': documents, 'omitidos_por_limite': omitted}
+    fields['propuestas_documentales'] = proponer(fields['evidencia_tabular'], fields['evidencia_pdf'])
     return {'requisitos': suggestions, 'opciones': options, 'otros_campos': fields}
 
 

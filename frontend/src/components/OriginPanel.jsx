@@ -58,6 +58,23 @@ function PDFEvidence({ evidence }) {
   </details>
 }
 
+function DocumentProposals({ proposals, onPrepare }) {
+  if (!proposals?.length) return null
+  return <details><summary>Propuestas documentales para revisar ({proposals.length})</summary>
+    <p>Selecciona una propuesta para prepararla en el editor. Confirma su alcance y guarda el campo por separado; ninguna se valida ni publica aquí.</p>
+    <ul className="origin-candidate-list">{proposals.map((item, index) => <li key={`${item.procedencia.documento_id}-${item.procedencia.pagina || item.procedencia.fila || 0}-${index}`} className="origin-candidate">
+      <p className="origin-candidate-text">{item.texto_original}</p>
+      <div className="origin-candidate-meta"><span>{item.campo}</span><span>Pendiente de revisión</span>{item.categoria && <span>Categoría: {item.categoria}</span>}{item.seccion && <span>Sección: {item.seccion}</span>}</div>
+      <p className="origin-candidate-source">Documento {item.procedencia.documento_id} · Versión {item.procedencia.version_id}{item.procedencia.pagina && ` · p. ${item.procedencia.pagina}`}{item.procedencia.fila && ` · fila ${item.procedencia.fila}`}{publicUrl(item.procedencia.url) && <> · <a href={publicUrl(item.procedencia.url)} target="_blank" rel="noopener noreferrer">Origen oficial</a></>}</p>
+      {!!item.advertencias?.length && <ul>{item.advertencias.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+      {item.destino && <div className="origin-candidate-action"><Button type="button" className="button-light" onClick={() => onPrepare(item.destino,
+        item.destino === 'general' ? { campo: item.campo, valor: item.valor }
+          : item.destino === 'requisitos' ? { texto_original: item.valor, tipo_sugerido: item.campo === 'documento exigido' ? 'DOCUMENTO' : 'OTRO', estado: 'pendiente', procedencia: item.procedencia }
+            : { texto_original: item.valor, concepto_sugerido: item.valor, porcentaje: null, monto: null, procedencia: item.procedencia })}>Preparar en editor</Button></div>}
+    </li>)}</ul>
+  </details>
+}
+
 export default function OriginPanel({ offer, onPrepare }) {
   const [data, setData] = useState(null)
   const [documents, setDocuments] = useState([])
@@ -132,6 +149,7 @@ export default function OriginPanel({ offer, onPrepare }) {
     {data.candidatos_editables?.otros_campos?.evidencia_tabular?.estado === 'no_disponible' && <p role="status">No se pudo verificar el HTML archivado para leer sus tablas; consulta los documentos de origen.</p>}
     <TabularEvidence evidence={data.candidatos_editables?.otros_campos?.evidencia_tabular} />
     <PDFEvidence evidence={data.candidatos_editables?.otros_campos?.evidencia_pdf} />
+    <DocumentProposals proposals={data.candidatos_editables?.otros_campos?.propuestas_documentales} onPrepare={onPrepare} />
     <details><summary>Datos de origen conservados</summary><dl>{Object.entries(data.datos_iniciales).filter(([key, value]) => key !== 'candidatos_editables' && value).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{typeof value === 'object' ? `${value.nombre} (ID ${value.id}; confirmar antes de asignar)` : value}</dd></div>)}</dl></details>
   </section>
   if (!data?.aplicacion) return null

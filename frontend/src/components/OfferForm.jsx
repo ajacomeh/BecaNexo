@@ -12,7 +12,7 @@ const initialValue = (field, value) => {
   return value == null ? '' : String(value)
 }
 
-export default function OfferForm({ icon = "save", fields, initial = {}, onSubmit, label = 'Guardar', onCancel }) {
+export default function OfferForm({ icon = "save", fields, initial = {}, proposal, onSubmit, label = 'Guardar', onCancel }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, initialValue(f, initial[f.name])])))
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
@@ -47,6 +47,9 @@ export default function OfferForm({ icon = "save", fields, initial = {}, onSubmi
     </fieldset> : <ProfileField key={f.name} field={f} value={values[f.name]} disabled={busy} onChange={(v) => change(f.name, v)} error={errors[f.name]} />
   const supplementary = fields.filter(f => f.supplementary)
   return <form noValidate onSubmit={submit} aria-busy={busy}>
+    {proposal && fields.some((field) => field.name === proposal.campo) && <div className="profile-note"><p>Propuesta documental para {fields.find((field) => field.name === proposal.campo).label}: {proposal.valor}</p>
+      <Button type="button" className="button-light" disabled={busy || !!values[proposal.campo]} onClick={() => change(proposal.campo, proposal.valor)}>Usar propuesta en campo vacío</Button>
+      {!!values[proposal.campo] && <p>El campo ya contiene información; se conserva.</p>}</div>}
     <div className="field-grid">{fields.filter(f => !f.supplementary).map(renderField)}</div>
     {supplementary.length > 0 && <details open={supplementary.some(f => initial[f.name] || errors[f.name]) || undefined}>
       <summary>Información documental complementaria (opcional)</summary>
