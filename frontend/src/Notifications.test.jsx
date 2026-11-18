@@ -24,6 +24,22 @@ function mount() {
 
 beforeEach(() => vi.clearAllMocks())
 
+it('mantiene el correo desactivado hasta consentimiento explícito y permite revocarlo', async () => {
+  offersApi.get.mockImplementation((path) => Promise.resolve(path === 'notificaciones/correo'
+    ? { disponible: true, habilitado: false } : data([])))
+  offersApi.write.mockResolvedValueOnce({ disponible: true, habilitado: true })
+    .mockResolvedValueOnce({ disponible: true, habilitado: false })
+  mount()
+  const checkbox = await screen.findByRole('checkbox', { name: 'Recibir avisos por correo' })
+  expect(checkbox).not.toBeChecked()
+  await userEvent.click(checkbox)
+  await waitFor(() => expect(checkbox).toBeChecked())
+  expect(offersApi.write).toHaveBeenCalledWith('notificaciones/correo', 'PATCH', { habilitado: true })
+  await userEvent.click(checkbox)
+  await waitFor(() => expect(checkbox).not.toBeChecked())
+  expect(offersApi.write).toHaveBeenCalledWith('notificaciones/correo', 'PATCH', { habilitado: false })
+})
+
 it('presenta carga, estado vacío, error y reintento', async () => {
   offersApi.get.mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce(data([]))
   mount()
@@ -60,7 +76,8 @@ it('muestra la relación, navega al detalle y marca como leída sin perder el av
 
 it('no crea enlace falso para convocatoria pausada y pagina resultados', async () => {
   const first = Array.from({ length: 10 }, (_, n) => ({ ...item, id: n + 1, titulo: `Aviso ${n + 1}` }))
-  offersApi.get.mockImplementation((_, params) => Promise.resolve(params.page === 2
+  offersApi.get.mockImplementation((path, params) => Promise.resolve(path === 'notificaciones/correo'
+    ? { disponible: false, habilitado: false } : params.page === 2
     ? data([{ ...item, id: 11, titulo: 'Último aviso', disponible: false }], { page: 2, count: 11, no_leidas: 11 })
     : data(first, { count: 11, no_leidas: 11 })))
   mount()

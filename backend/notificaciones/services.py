@@ -1,9 +1,15 @@
 """Avisos internos posteriores a una publicación autorizada, sin inferencia semántica."""
 
+import logging
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import DatabaseError, transaction
 from perfiles.models import Perfil
 from convocatorias.comparacion import evaluar_convocatoria
-from .models import Notificacion
+from .models import Notificacion, PreferenciaCorreo, EntregaCorreo
+
+
+logger = logging.getLogger(__name__)
 
 
 def avisar_publicacion(convocatoria):
@@ -34,7 +40,19 @@ def avisar_publicacion(convocatoria):
         comparacion = evaluar_convocatoria(usuario, convocatoria)
         if not any(opcion["resultado"] != "no_cumple" for opcion in comparacion["opciones"]):
             continue
-        _, creada = Notificacion.objects.get_or_create(
+        aviso, creada = Notificacion.objects.get_or_create(
             usuario=usuario, convocatoria=convocatoria, defaults={"motivos": motivos})
         creadas += int(creada)
+        # El correo se encola; SMTP nunca se usa en la solicitud de publicación.
+        if (creada and settings.AVISOS_CORREO_HABILITADOS
+                and not convocatoria.titulo.rstrip().endswith("(Ficticia)")
+                and convocatoria.institucion_id
+                and any(opcion["resultado"] == "cumple" for opcion in comparacion["opciones"])):
+            try:
+                with transaction.atomic():
+                    if PreferenciaCorreo.objects.filter(usuario=usuario, habilitada=True).exists():
+                        EntregaCorreo.objects.get_or_create(notificacion=aviso)
+            except DatabaseError:
+                # Un problema en la cola no revierte la notificación interna.
+                logger.warning("No se pudo encolar un aviso de correo; la notificación interna se conservó.")
     return creadas

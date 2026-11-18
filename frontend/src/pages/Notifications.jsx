@@ -12,6 +12,9 @@ export default function Notifications() {
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState('')
+  const [mailPreference, setMailPreference] = useState(null)
+  const [mailError, setMailError] = useState('')
+  const [mailBusy, setMailBusy] = useState(false)
   const key = `${page}-${revision}`
   useEffect(() => {
     let live = true
@@ -22,6 +25,13 @@ export default function Notifications() {
     }).catch((failure) => { if (live) setResult({ key, error: failure.message }) })
     return () => { live = false }
   }, [key, page])
+  useEffect(() => {
+    let live = true
+    offersApi.get('notificaciones/correo').then((value) => {
+      if (live) setMailPreference(value)
+    }).catch(() => { if (live) setMailError('No se pudo consultar la preferencia de correo.') })
+    return () => { live = false }
+  }, [])
 
   const current = result?.key === key ? result : null
   async function mark(item) {
@@ -39,7 +49,21 @@ export default function Notifications() {
     finally { setBusy(null) }
   }
 
+  async function changeMail(enabled) {
+    if (mailBusy || !mailPreference?.disponible) return
+    setMailBusy(true); setMailError('')
+    try {
+      const result = await offersApi.write('notificaciones/correo', 'PATCH', { habilitado: enabled })
+      setMailPreference(result)
+    } catch { setMailError('No se pudo guardar la preferencia de correo.') }
+    finally { setMailBusy(false) }
+  }
+
   return <OffersLayout><div className="page-heading"><div><p className="eyebrow">TUS AVISOS</p><h1>Notificaciones</h1><p>Convocatorias publicadas relacionadas con información que declaraste. Revisa siempre sus requisitos y bases oficiales.</p></div></div>
+    <section className="profile-card"><h2>Avisos por correo</h2><p className="small-note">Solo para becas reales con plazo vigente y compatibilidad confirmada según tus datos declarados. Las notificaciones de esta página continúan disponibles aunque desactives el correo.</p>
+      {mailPreference ? <label className="field"><input type="checkbox" checked={Boolean(mailPreference.habilitado)} disabled={!mailPreference.disponible || mailBusy} onChange={(event) => changeMail(event.target.checked)} /> Recibir avisos por correo</label> : !mailError && <p>Consultando preferencia de correo…</p>}
+      {mailPreference && !mailPreference.disponible && <p className="small-note">El envío por correo aún no está habilitado.</p>}
+      <Message>{mailError}</Message></section>
     {!current && <p role="status"><Icon name="loading" />Cargando notificaciones…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => setRevision((value) => value + 1)}>Reintentar</Button></>}
     <Message>{error}</Message>

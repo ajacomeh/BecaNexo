@@ -1,20 +1,145 @@
 from datetime import date, timedelta
+import smtplib
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connection
 from django.test import TestCase
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from convocatorias.models import Convocatoria, ConvocatoriaArea, Institucion, OpcionEstudio, OpcionPais, Requisito, TipoRequisito
 from convocatorias.reglas import CONTRATOS
 from perfiles.models import Area, Pais, Perfil, PerfilArea, Preferencia
-from .models import Notificacion
+from .models import Notificacion, PreferenciaCorreo, EntregaCorreo
+from .correo import procesar_pendientes
 
 
 class NotificacionesTests(TestCase):
+    @override_settings(AVISOS_CORREO_HABILITADOS=False)
+    def test_modulo_desactivado_no_consulta_tablas_nuevas(self):
+        own = APIClient(enforce_csrf_checks=True)
+        own.force_login(self.area_user)
+        with patch("notificaciones.api.PreferenciaCorreo.objects.filter", side_effect=AssertionError("No consultar tabla nueva")):
+            self.assertEqual(own.get("/api/notificaciones/correo/").data,
+                             {"habilitado": False, "disponible": False})
+        with patch("notificaciones.services.PreferenciaCorreo.objects.filter", side_effect=AssertionError("No consultar tabla nueva")):
+            self.assertEqual(self.publicar(self.oferta()).status_code, 200)
+        self.assertEqual(Notificacion.objects.count(), 2)
+
+    @override_settings(AVISOS_CORREO_HABILITADOS=True,
+                       EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+                       BECANEXO_PUBLIC_BASE_URL="http://127.0.0.1:5173")
+    def test_consentimiento_cola_y_entrega_simulada(self):
+        from django.core import mail
+        own = APIClient(enforce_csrf_checks=True)
+        own.force_login(self.area_user)
+        path = "/api/notificaciones/correo/"
+        self.assertEqual(own.get(path).data["habilitado"], False)
+        self.assertEqual(own.patch(path, {"habilitado": True}, format="json").status_code, 403)
+        token = own.get("/api/auth/csrf/").data["csrfToken"]
+        self.assertEqual(own.patch(path, {"habilitado": True}, format="json", HTTP_X_CSRFTOKEN=token).status_code, 200)
+        self.assertEqual(own.patch(path, {"habilitado": "true"}, format="json", HTTP_X_CSRFTOKEN=token).status_code, 400)
+        self.assertEqual(own.get(path).data["habilitado"], True)
+        PreferenciaCorreo.objects.create(usuario=self.pref_user, habilitada=True)
+        offer = self.oferta()
+        self.assertEqual(self.publicar(offer).status_code, 200)
+        self.assertEqual(Notificacion.objects.count(), 2)  # La bandeja conserva también compatibilidad desconocida.
+        self.assertEqual(EntregaCorreo.objects.count(), 1)  # Correo solo para quien cumple y consintió.
+        self.assertEqual(EntregaCorreo.objects.get().notificacion.usuario_id, self.area_user.pk)
+        self.assertEqual(mail.outbox, [])
+        self.assertEqual(procesar_pendientes(limite=1)["enviados"], 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Beca sintética", mail.outbox[0].body)
+        self.assertIn("/becas/", mail.outbox[0].body)
+        self.assertIn("no garantiza", mail.outbox[0].body)
+        self.assertEqual(procesar_pendientes(limite=1)["enviados"], 0)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(self.publicar(offer).status_code, 200)
+        self.assertEqual(EntregaCorreo.objects.count(), 1)
+
+    @override_settings(AVISOS_CORREO_HABILITADOS=True,
+                       EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_bloqueos_de_correo_y_reintento_acotado(self):
+        PreferenciaCorreo.objects.create(usuario=self.area_user, habilitada=True)
+        offer = self.oferta()
+        offer.titulo = "Beca sintética (Ficticia)"
+        offer.save(update_fields=["titulo"])
+        self.assertEqual(self.publicar(offer).status_code, 200)
+        self.assertEqual(EntregaCorreo.objects.count(), 0)
+        Notificacion.objects.all().delete()  # Solo fixture aislado: simula un evento nuevo.
+        offer.titulo = "Beca sintética"
+        offer.revision = "pendiente"
+        offer.save(update_fields=["titulo", "revision"])
+        self.assertEqual(self.publicar(offer).status_code, 200)
+        item = EntregaCorreo.objects.get()
+        with patch("notificaciones.correo.get_connection", side_effect=ConnectionRefusedError):
+            self.assertEqual(procesar_pendientes(limite=1)["reintentos"], 1)
+            item.refresh_from_db()
+            self.assertEqual((item.estado, item.intentos), ("pendiente", 1))
+            self.assertEqual(procesar_pendientes(limite=1)["enviados"], 0)
+            for _ in range(2):
+                item.proximo_intento_en = timezone.now() - timedelta(seconds=1)
+                item.save(update_fields=["proximo_intento_en"])
+                procesar_pendientes(limite=1)
+            item.refresh_from_db()
+            self.assertEqual((item.estado, item.intentos), ("fallido", 3))
+        self.assertEqual(procesar_pendientes(limite=1)["enviados"], 0)
+
+    @override_settings(AVISOS_CORREO_HABILITADOS=True,
+                       EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_revocacion_de_consentimiento_no_envia(self):
+        preference = PreferenciaCorreo.objects.create(usuario=self.area_user, habilitada=True)
+        self.assertEqual(self.publicar(self.oferta()).status_code, 200)
+        preference.habilitada = False
+        preference.save(update_fields=["habilitada"])
+        self.assertEqual(procesar_pendientes(limite=1)["omitidos"], 1)
+        self.assertEqual(EntregaCorreo.objects.get().estado, "omitido")
+
+    @override_settings(AVISOS_CORREO_HABILITADOS=True,
+                       EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_resultado_smtp_indeterminado_no_se_reintenta(self):
+        PreferenciaCorreo.objects.create(usuario=self.area_user, habilitada=True)
+        self.assertEqual(self.publicar(self.oferta()).status_code, 200)
+        with patch("notificaciones.correo.EmailMessage.send", side_effect=smtplib.SMTPServerDisconnected):
+            self.assertEqual(procesar_pendientes(limite=1)["fallidos"], 1)
+        item = EntregaCorreo.objects.get()
+        self.assertEqual((item.estado, item.intentos, item.codigo_error),
+                         ("fallido", 1, "resultado_indeterminado"))
+        self.assertEqual(procesar_pendientes(limite=1)["enviados"], 0)
+
+    @override_settings(AVISOS_CORREO_HABILITADOS=True)
+    def test_envio_interrumpido_queda_fallido_sin_reenvio(self):
+        PreferenciaCorreo.objects.create(usuario=self.area_user, habilitada=True)
+        self.assertEqual(self.publicar(self.oferta()).status_code, 200)
+        EntregaCorreo.objects.update(estado="enviando", intentos=1,
+                                    actualizado_en=timezone.now() - timedelta(minutes=31))
+        self.assertEqual(procesar_pendientes(limite=1),
+                         {"enviados": 0, "reintentos": 0, "fallidos": 1, "omitidos": 0})
+        self.assertEqual(EntregaCorreo.objects.get().codigo_error, "resultado_indeterminado")
+
+    @override_settings(AVISOS_CORREO_HABILITADOS=True)
+    def test_convocatoria_cerrada_no_crea_correo_ni_aviso(self):
+        PreferenciaCorreo.objects.create(usuario=self.area_user, habilitada=True)
+        offer = self.oferta()
+        offer.cierre = timezone.now() - timedelta(days=1)
+        offer.save(update_fields=["cierre"])
+        self.assertEqual(self.publicar(offer).status_code, 200)
+        self.assertEqual((Notificacion.objects.count(), EntregaCorreo.objects.count()), (0, 0))
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+                       EMAIL_HOST_USER="prueba@example.com", EMAIL_HOST_PASSWORD="solo-prueba")
+    def test_comando_prueba_requiere_confirmacion_y_un_destinatario(self):
+        with self.assertRaises(CommandError):
+            call_command("enviar_correos_becas", prueba_a="control@example.com")
+        with patch("notificaciones.management.commands.enviar_correos_becas.EmailMessage.send", return_value=1) as send:
+            call_command("enviar_correos_becas", prueba_a="control@example.com", confirmar_prueba=True)
+        self.assertEqual(send.call_count, 1)
+        self.assertEqual((Notificacion.objects.count(), EntregaCorreo.objects.count()), (0, 0))
+
     @classmethod
     def setUpTestData(cls):
         cls.ec = Pais.objects.create(codigo="EC", nombre="Ecuador")

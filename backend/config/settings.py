@@ -33,6 +33,20 @@ DEBUG = env("DJANGO_DEBUG")
 RASTREO_EXTRAORDINARIO_HABILITADO = env.bool("RASTREO_EXTRAORDINARIO_HABILITADO", default=False)
 RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS = env.bool("RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS", default=False)
 
+# La cola de correo permanece inactiva hasta migrar y habilitarla expresamente.
+AVISOS_CORREO_HABILITADOS = env.bool("AVISOS_CORREO_HABILITADOS", default=False)
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_TIMEOUT = 8
+EMAIL_HOST_USER = env("GMAIL_SMTP_USER", default="")
+EMAIL_HOST_PASSWORD = env("GMAIL_APP_PASSWORD", default="")
+EMAIL_BACKEND = ("django.core.mail.backends.smtp.EmailBackend"
+                 if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD else
+                 "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = f"BecaNexo <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "BecaNexo <no-reply@example.invalid>"
+BECANEXO_PUBLIC_BASE_URL = env("BECANEXO_PUBLIC_BASE_URL", default="http://127.0.0.1:5173").rstrip("/")
+
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS")
 
 

@@ -1,0 +1,15 @@
+{% autoescape off %}Hola {{ nombre }}:
+
+BecaNexo identificó una nueva convocatoria relacionada con datos de estudio o intereses que declaraste.
+
+Beca: {{ titulo }}
+Entidad oferente: {{ institucion }}
+{% if cierre %}Fecha de cierre publicada: {{ cierre }} (consulta la hora en las bases oficiales)
+{% endif %}Coincidencia observada: {{ motivos|join:", " }}.
+
+La comparación de requisitos no encontró incompatibilidades obligatorias en al menos una opción evaluable según la información declarada. Esto no acredita documentos, no garantiza que cumplas todas las condiciones y no predice la adjudicación.
+
+Consulta el detalle en BecaNexo: {{ enlace }}
+
+Verifica siempre los requisitos, fechas y bases en la fuente oficial antes de postular. La postulación se realiza fuera de BecaNexo.
+{% endautoescape %}

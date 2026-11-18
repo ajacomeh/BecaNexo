@@ -1,10 +1,11 @@
 from django.shortcuts import get_object_or_404
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from usuarios.api import AuthView
 from convocatorias.services import publicas
-from .models import Notificacion
+from .models import Notificacion, PreferenciaCorreo
 
 
 class PostulanteActivo(permissions.BasePermission):
@@ -55,3 +56,26 @@ class MarcarLeida(AuthView):
         qs.filter(leida_en__isnull=True).update(leida_en=timezone.now())
         aviso = get_object_or_404(qs)
         return Response({"id": aviso.pk, "leida_en": aviso.leida_en})
+
+
+class PreferenciaEmail(AuthView):
+    permission_classes = [PostulanteActivo]
+    http_method_names = ["get", "patch", "options"]
+
+    def get(self, request):
+        if request.query_params:
+            raise serializers.ValidationError({"detail": "Esta consulta no acepta parámetros."})
+        habilitado = (PreferenciaCorreo.objects.filter(usuario=request.user, habilitada=True).exists()
+                      if settings.AVISOS_CORREO_HABILITADOS else False)
+        return Response({"habilitado": habilitado, "disponible": settings.AVISOS_CORREO_HABILITADOS})
+
+    def patch(self, request):
+        if request.query_params or set(request.data) != {"habilitado"} or type(request.data["habilitado"]) is not bool:
+            raise serializers.ValidationError({"habilitado": "Indica true o false, sin otros campos."})
+        if not settings.AVISOS_CORREO_HABILITADOS:
+            return Response({"detail": "El correo aún no está habilitado."}, status=503)
+        pref, _ = PreferenciaCorreo.objects.get_or_create(usuario=request.user)
+        pref.habilitada = request.data["habilitado"]
+        pref.actualizada_en = timezone.now()
+        pref.save(update_fields=["habilitada", "actualizada_en"])
+        return Response({"habilitado": pref.habilitada, "disponible": True})
