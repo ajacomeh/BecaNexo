@@ -58,8 +58,8 @@ def filas_de_candidatos(found, tipos, paises=None):
         texto = (item.get('texto_original') or '').strip()
         codigo = item.get('tipo_sugerido')
         procedencia = item.get('procedencia') or {}
-        base = {'modelo': 'requisitos', 'texto': texto, 'seccion': SECCIONES['requisitos'],
-                'documento_id': procedencia.get('documento_id'), 'metodo': item.get('metodo'),
+        base = {'modelo': 'requisitos', 'texto': texto, 'seccion': procedencia.get('seccion') or SECCIONES['requisitos'],
+                'documento_id': procedencia.get('documento_id'), 'pagina': procedencia.get('pagina'), 'metodo': item.get('metodo'),
                 'huella': _huella('requisitos', {'texto': _normal(texto), 'tipo': codigo})}
         if item.get('estado') == 'obligacion':
             filas.append({**base, 'omitido': 'Es una obligación posterior de la persona beneficiaria, no un requisito '
@@ -90,8 +90,8 @@ def filas_de_candidatos(found, tipos, paises=None):
         texto = (item.get('texto_original') or '').strip()
         concepto = (item.get('concepto_sugerido') or '').strip()
         procedencia = item.get('procedencia') or {}
-        base = {'modelo': 'beneficios', 'texto': texto, 'seccion': SECCIONES['beneficios'],
-                'documento_id': procedencia.get('documento_id'), 'metodo': 'regla',
+        base = {'modelo': 'beneficios', 'texto': texto, 'seccion': procedencia.get('seccion') or SECCIONES['beneficios'],
+                'documento_id': procedencia.get('documento_id'), 'pagina': procedencia.get('pagina'), 'metodo': 'regla',
                 'huella': _huella('beneficios', {'texto': _normal(texto), 'concepto': _normal(concepto)})}
         if item.get('estado') != 'identificada' or not concepto:
             filas.append({**base, 'omitido': 'Beneficio sin concepto o cuantía identificados con claridad.'})
@@ -167,6 +167,30 @@ def limpiar_url(url):
 def _urls(items):
     return list(dict.fromkeys(limpiar_url(row['url']) for row in items or []
                               if isinstance(row, dict) and isinstance(row.get('url'), str) and row['url'].strip()))
+
+
+def complementar_con_bases(found, bases, version_id):
+    """Completa los candidatos de la ficha con las bases en PDF, sin cambiar lo que la ficha ya aporta.
+
+    - Requisitos: se añaden los de las bases que la ficha no recoge (comparación robusta a espacios y signos).
+    - Beneficios: solo si la ficha no trae ninguno.
+    - Obligaciones de la persona becaria: solo si la ficha no las trae.
+    """
+    from .bases_pdf import beneficios_de_bases, clave, misma_condicion, obligaciones_de_bases, requisitos_de_bases
+    if not bases:
+        return found
+    vistas = [item.get('texto_original') or '' for item in found.get('requisitos', [])]
+    for item in requisitos_de_bases(bases, version_id):
+        nueva = item.get('texto_original') or ''
+        if clave(nueva) and not any(misma_condicion(nueva, vista) for vista in vistas):
+            vistas.append(nueva)
+            found.setdefault('requisitos', []).append(item)
+    otros = found.setdefault('otros_campos', {})
+    if not otros.get('beneficios'):
+        otros['beneficios'] = beneficios_de_bases(bases, version_id)
+    if not any(item.get('estado') == 'obligacion' for item in found.get('requisitos', [])):
+        otros['obligaciones_bases'] = obligaciones_de_bases(bases)
+    return found
 
 
 def campos_generales(found, evidencia):
@@ -264,6 +288,8 @@ def entidad_en_documentos(datos, texto, documento_id, registradas):
     encontradas = {}
     for institucion in registradas:
         alias = {institucion.nombre, re.sub(r'\s*\([A-Z0-9]{2,12}\)\s*$', '', institucion.nombre)}
+        # «Ministerio X del Ecuador (SIGLA)» suele nombrarse en las bases sin el país: «Ministerio X».
+        alias |= {re.sub(r'\s+(?:del|de)\s+ecuador$', '', nombre, flags=re.I) for nombre in list(alias)}
         sigla = _sigla(institucion.nombre)
         if sigla and len(sigla) >= 4:
             alias.add(sigla)
@@ -379,6 +405,7 @@ def completar_borrador(offer, evidencia, registro):
     """
     from .auto_borradores import candidatos_de_datos
     found = candidatos_de_datos(evidencia['datos'], evidencia['version_id'], evidencia.get('documento_id'), evidencia.get('texto') or '')
+    complementar_con_bases(found, evidencia.get('bases') or [], evidencia['version_id'])
     tipos = {row.codigo: row for row in TipoRequisito.objects.all()}
     paises = {_normal(row.nombre): row.pk for row in Pais.objects.all()}
     registro.setdefault('campos', [])
@@ -396,6 +423,11 @@ def completar_borrador(offer, evidencia, registro):
     written = {item['campo'] for item in registro['campos']}
     values, accepted = {}, []
     generales = campos_generales(found, evidencia)
+    obligaciones = (found.get('otros_campos') or {}).get('obligaciones_bases')
+    if obligaciones and not any(item['campo'] == 'obligaciones_beneficiario' for item in generales):
+        generales.append({'campo': 'obligaciones_beneficiario', 'valor': obligaciones['texto'], 'literal': obligaciones['texto'],
+                          'seccion': 'Bases en PDF · Obligaciones', 'documento_id': obligaciones['documento_id'],
+                          'pagina': obligaciones['pagina']})
     if 'institucion' not in written and offer.institucion_id is None:
         entidad = entidad_oferente(evidencia['datos'], evidencia.get('texto') or '', evidencia.get('documento_id'))
         if entidad['accion']:
@@ -475,19 +507,42 @@ def completar_borrador(offer, evidencia, registro):
             continue
         registro['huellas'].append(fila['huella'])
         registro['registros'].append({
-            **entry, 'id': record.pk, 'huella': fila['huella'], 'seccion': fila['seccion'], 'pagina': None,
+            **entry, 'id': record.pk, 'huella': fila['huella'], 'seccion': fila['seccion'], 'pagina': fila.get('pagina'),
             'documento_id': fila.get('documento_id') or evidencia.get('documento_id'), 'metodo': fila.get('metodo'),
             'contenido': contenido_de_requisito(record) if fila['modelo'] == 'requisitos' else None})
         resumen['creados'].append({**entry, 'id': record.pk})
     return resumen
 
 
+def bases_de_version(version):
+    """Lee los PDF de bases conservados de la versión, con los límites de `evidencia_pdf` (sin red)."""
+    from .evidencia_pdf import MAX_DOCUMENTOS, leer_evidencia_pdf
+    documentos, vistos = [], set()
+    for relacion in version.documentos.filter(rol='bases_pdf').select_related('documento').order_by('id'):
+        if relacion.documento.sha256 in vistos:
+            continue
+        vistos.add(relacion.documento.sha256)
+        if len(documentos) >= MAX_DOCUMENTOS:
+            break
+        documentos.append(leer_evidencia_pdf(relacion, version.pk))
+    return documentos
+
+
 def evidencia_de_origen(origin, version=None):
-    """Evidencia (datos, texto y documento de la ficha) de una versión del borrador de rastreo."""
+    """Evidencia de una versión del borrador: datos y texto de la ficha y sus bases en PDF ya conservadas."""
+    from .bases_pdf import fragmentos_para_entidad
     version = version or origin.version
     html = version.documentos.filter(rol='ficha_html').first()
-    return {'version_id': version.pk, 'datos': version.datos_extraidos or {}, 'texto': getattr(version, 'texto_extraido', '') or '',
-            'documento_id': html.documento_id if html else None, 'url_ficha': origin.publicacion.url_original}
+    bases = bases_de_version(version) if hasattr(version, 'documentos') else []
+    datos = dict(version.datos_extraidos or {})
+    legibles = fragmentos_para_entidad(bases)['documentos']
+    if legibles:
+        # Copia en memoria: la versión conservada no se modifica. Se suman a los fragmentos que ya hubiera.
+        previos = (datos.get('evidencia_pdf') or {}).get('documentos') or []
+        datos['evidencia_pdf'] = {'documentos': previos + legibles}
+    return {'version_id': version.pk, 'datos': datos, 'texto': getattr(version, 'texto_extraido', '') or '',
+            'documento_id': html.documento_id if html else None, 'url_ficha': origin.publicacion.url_original,
+            'bases': bases}
 
 
 def llenar_origen(origin, version=None, *, tocar=False):

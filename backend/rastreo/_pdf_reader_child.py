@@ -7,7 +7,8 @@ from pypdf import PdfReader
 
 MAX_PAGINAS = 12
 MAX_BYTES_PAGINA = 300_000
-MAX_CARACTERES_PAGINA = 3_000
+# Las bases reales ocupan unas 4.000 caracteres por página; 3.000 recortaba casi todas.
+MAX_CARACTERES_PAGINA = 12_000
 
 
 def leer(path):

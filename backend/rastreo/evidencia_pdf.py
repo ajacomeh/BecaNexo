@@ -42,9 +42,93 @@ def _tipo(line):
     return 'contexto'
 
 
+MAX_CARACTERES_PARRAFO = 1500
+# Palabras que, al final de una línea, indican que la frase continúa en la siguiente aunque empiece en mayúscula.
+_CONECTORES = {'de', 'del', 'el', 'la', 'los', 'las', 'y', 'e', 'o', 'u', 'en', 'por', 'para', 'con', 'a', 'al', 'que',
+               'su', 'sus', 'un', 'una', 'esta', 'este', 'estas', 'estos', 'dicha', 'dicho', 'segun', 'como', 'entre', 'sin', 'sobre'}
+_ELEMENTO = re.compile(r'^(?:\d{1,2}[.)]|[a-z][.)]|[•·●▪\-–])\s+')
+_ENCABEZADO_MAYOR = re.compile(r'^[A-Z]\.\s+[A-ZÁÉÍÓÚÑ]')
+# Encabezado mayor de las bases («E. REQUISITOS PARA LA POSTULACIÓN») → sección reconocida.
+_SECCIONES = (('obligaciones', r'^obligaciones\b'), ('requisitos', r'^requisitos?\b'),
+              ('financiamiento', r'\b(?:financiamiento|cobertura|rubros?|beneficios?)\b'),
+              ('cronograma', r'\b(?:cronograma|calendario|convocatoria)\b'), ('documentos', r'^document'),
+              ('objeto', r'^(?:objetivo|objeto)\b'))
+
+
+def _mayusculas(line):
+    letters = [ch for ch in line if ch.isalpha()]
+    return len(letters) >= 4 and sum(ch.isupper() for ch in letters) / len(letters) >= 0.8 and len(line) <= 120
+
+
+def _seccion_de_encabezado(line):
+    titulo = _normal(re.sub(r'^[A-Z]\.\s+', '', line)).strip(' :.')
+    for key, pattern in _SECCIONES:
+        if re.search(pattern, titulo):
+            return key
+    return 'otra'
+
+
+def _parrafos(pages):
+    """Reconstruye párrafos y elementos numerados o con viñeta, y la sección de las bases de cada uno.
+
+    Une las líneas que el maquetado del PDF cortó dentro de una frase y las palabras partidas por guion.
+    Un encabezado mayor («A. OBJETIVO») cambia la sección; los encabezados en mayúsculas dentro de una
+    sección (por ejemplo «REQUISITOS ESPECÍFICOS POR COMPONENTE») delimitan subsecciones.
+    """
+    paragraphs = []
+    section = None
+    subsection = ''
+    for page in pages:
+        if page['estado'] != 'texto':
+            continue
+        current = None
+
+        def close():
+            nonlocal current
+            if current and current['texto'].strip():
+                current['texto'] = ' '.join(current['texto'].split())[:MAX_CARACTERES_PARRAFO]
+                paragraphs.append(current)
+            current = None
+        for raw in page['texto'].splitlines():
+            line = ' '.join(raw.split())
+            if not line:
+                close()
+                continue
+            heading = bool(_ENCABEZADO_MAYOR.match(line)) or _mayusculas(line)
+            if heading:
+                if current and current.get('encabezado') and not _ENCABEZADO_MAYOR.match(line):
+                    current['texto'] += ' ' + line   # Encabezado partido en dos líneas.
+                    continue
+                close()
+                if _ENCABEZADO_MAYOR.match(line):
+                    section, subsection = _seccion_de_encabezado(line), ''
+                else:
+                    subsection = line
+                current = {'texto': line, 'pagina': page['pagina'], 'seccion_bases': section, 'subseccion': subsection,
+                           'elemento': False, 'encabezado': True}
+                continue
+            if current and not current['encabezado'] and not _ELEMENTO.match(line):
+                previous = current['texto'].rstrip()
+                last = _normal(previous.split()[-1]) if previous.split() else ''
+                if re.search(r'[A-Za-zÁÉÍÓÚÑáéíóúñ]-$', previous) and line[:1].islower():
+                    current['texto'] = previous[:-1] + line   # Palabra partida por guion.
+                    continue
+                if line[:1].islower() or previous.endswith(',') or last in _CONECTORES or not re.search(r'[.:;?!)]$', previous) and line[:1] in '(«"“':
+                    current['texto'] = previous + ' ' + line
+                    continue
+            close()
+            current = {'texto': line, 'pagina': page['pagina'], 'seccion_bases': section, 'subseccion': subsection,
+                       'elemento': bool(_ELEMENTO.match(line)), 'encabezado': False}
+        close()
+    return paragraphs
+
+
 def _fragmentos(pages, version_id, relation):
     rows = []
     truncated = False
+    by_page = {}
+    for paragraph in _parrafos(pages):
+        by_page.setdefault(paragraph['pagina'], []).append(paragraph)
     for page in pages:
         if page['estado'] != 'texto':
             continue
@@ -52,8 +136,9 @@ def _fragmentos(pages, version_id, relation):
         category = ''
         section = ''
         alternatives = False
-        for raw in page['texto'].splitlines():
-            line = ' '.join(raw.split())[:350]
+        # El límite cuenta párrafos reconstruidos, no líneas del maquetado.
+        for paragraph in by_page.get(page['pagina'], []):
+            line = paragraph['texto']
             if not line:
                 continue
             if len(rows) >= MAX_FRAGMENTOS:
@@ -84,7 +169,7 @@ def _fragmentos(pages, version_id, relation):
             date_literal, date_iso = _fecha_literal(line) if kind == 'cronograma' else (None, None)
             links = [url.rstrip('.,;)') for url in re.findall(r'https?://[^\s<>]+', line)][:3]
             rows.append({'texto_original': line, 'tipo': kind, 'categoria': category or None,
-                         'seccion': section or None, 'condicion': condition,
+                         'seccion': section or None, 'seccion_bases': paragraph['seccion_bases'], 'condicion': condition,
                          'fecha_literal': date_literal, 'fecha_sugerida': date_iso,
                          'porcentajes_literales': percentages, 'porcentaje_fijo': None,
                          'enlaces_literales': links, 'estado': 'pendiente_revision',
@@ -127,4 +212,6 @@ def leer_evidencia_pdf(relation, version_id, *, root=None):
                           'texto_recortado': page.get('texto_recortado', False)}
                          for page in extracted.get('paginas', [])]
     result['fragmentos'], result['fragmentos_truncados'] = _fragmentos(extracted.get('paginas', []), version_id, relation)
+    # Párrafos reconstruidos con su sección de las bases: los usa el llenado automático (rastreo.bases_pdf).
+    result['parrafos'] = _parrafos(extracted.get('paginas', []))
     return result
