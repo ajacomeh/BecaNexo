@@ -59,7 +59,26 @@ export default function Notifications() {
     finally { setMailBusy(false) }
   }
 
-  return <OffersLayout><div className="page-heading"><div><p className="eyebrow">TUS AVISOS</p><h1>Notificaciones</h1><p>Convocatorias publicadas relacionadas con información que declaraste. Revisa siempre sus requisitos y bases oficiales.</p></div></div>
+  function card(item) {
+    const fecha = new Date(item.creada_en).toLocaleDateString('es-EC')
+    return <li className={`profile-card notification-item${item.leida_en ? ' notification-read' : ' notification-unread'}`} key={item.id}>
+      <div className="notification-content">
+        <h3>{item.titulo}</h3>
+        <div className="notification-meta"><span className={`notification-state${item.leida_en ? ' notification-state-read' : ''}`}>{item.leida_en ? 'Leída' : 'Sin leer'}</span><span className="notification-date">Recibida: {fecha}</span></div>
+        <div className="notification-reason"><span className="notification-reason-label">Coincidencia:</span><ul className="notification-chips" aria-label="Motivos de la coincidencia">{item.motivos.map((motivo) => <li key={motivo}>{motivo}</li>)}</ul></div>
+        <div className="notification-actions">{item.disponible
+          ? <Link className="button notification-primary" to={`/becas/${item.convocatoria_id}`} aria-label={`Ver beca: ${item.titulo}`}><Icon name="detail" /><span>Ver beca</span></Link>
+          : <span className="small-note">La convocatoria ya no está disponible públicamente.</span>}
+          {!item.leida_en && <Button icon="success" className="button-light notification-secondary" busy={busy === item.id} disabled={busy !== null}
+            aria-label={`Marcar como leída: ${item.titulo}`} onClick={() => mark(item)}>Marcar como leída</Button>}</div>
+      </div>
+    </li>
+  }
+  const groups = current?.data ? [['sin-leer', 'Sin leer', current.data.results.filter((item) => !item.leida_en)],
+    ['leidas', 'Leídas', current.data.results.filter((item) => item.leida_en)]] : []
+
+  return <OffersLayout><div className="page-heading"><div><p className="eyebrow">TUS AVISOS</p><h1>Notificaciones</h1><p>Convocatorias publicadas relacionadas con información que declaraste. Revisa siempre sus requisitos y bases oficiales.</p>
+    <p className="small-note notification-disclaimer"><Icon name="info" /><span>La coincidencia no confirma todos los requisitos ni la adjudicación.</span></p></div></div>
     <section className="profile-card mail-settings"><div className="mail-settings-row"><div className="mail-settings-copy"><h2>Avisos por correo</h2><p className="small-note">Recibe avisos de becas reales, abiertas y compatibles. Tus notificaciones internas seguirán disponibles.</p></div>
       {mailPreference ? <label className="mail-settings-toggle"><input type="checkbox" checked={Boolean(mailPreference.habilitado)} disabled={!mailPreference.disponible || mailBusy} onChange={(event) => changeMail(event.target.checked)} /> <span>Recibir avisos por correo</span></label> : !mailError && <p className="small-note mail-settings-status">Consultando preferencia de correo…</p>}</div>
       {mailPreference && !mailPreference.disponible && <p className="small-note mail-settings-status">El envío por correo aún no está habilitado.</p>}
@@ -69,11 +88,10 @@ export default function Notifications() {
     <Message>{error}</Message>
     {current?.data && <><p className="results-count">{current.data.no_leidas} sin leer · {current.data.count} en total</p>
       {!current.data.count ? <section className="profile-card"><h2>Aún no tienes notificaciones</h2><p>Cuando se publique una convocatoria relacionada con tus datos declarados, aparecerá aquí.</p></section> :
-        <ul className="notification-list">{current.data.results.map((item) => <li className={`profile-card notification-item${item.leida_en ? ' notification-read' : ''}`} key={item.id}>
-          <div className="notification-content"><div className="notification-meta"><span className={`notification-state${item.leida_en ? ' notification-state-read' : ''}`}>{item.leida_en ? 'Leída' : 'Sin leer'}</span><span className="small-note">Recibida: {new Date(item.creada_en).toLocaleDateString('es-EC')}</span></div><h2>{item.titulo}</h2><p className="notification-reason"><strong>Coincidencia:</strong> {item.motivos.join(', ')}. La coincidencia no confirma todos los requisitos ni la adjudicación.</p></div>
-          <div className="notification-actions">{item.disponible ? <Link className="secondary-link" to={`/becas/${item.convocatoria_id}`}><Icon name="detail" /><span>Ver beca</span></Link> : <span className="small-note">La convocatoria ya no está disponible públicamente.</span>}
-            {!item.leida_en && <Button icon="success" busy={busy === item.id} disabled={busy !== null} onClick={() => mark(item)}>Marcar como leída</Button>}</div>
-        </li>)}</ul>}
+        groups.map(([id, title, items]) => items.length > 0 && <section className="notification-group" key={id} aria-labelledby={`notificaciones-${id}`}>
+          <h2 id={`notificaciones-${id}`}>{title} <span className="notification-group-count">({items.length})</span></h2>
+          <ul className="notification-list">{items.map(card)}</ul>
+        </section>)}
       {current.data.count > current.data.page_size && <nav className="pagination" aria-label="Paginación de notificaciones"><Button icon="previous" disabled={page === 1} onClick={() => setPage(page - 1)}>Anterior</Button><span>Página {page}</span><Button icon="next" disabled={page * current.data.page_size >= current.data.count} onClick={() => setPage(page + 1)}>Siguiente</Button></nav>}
     </>}
   </OffersLayout>

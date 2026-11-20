@@ -360,17 +360,47 @@
 .mail-settings-toggle input:disabled { cursor: not-allowed; }
 .mail-settings .mail-settings-status { margin-top: 8px; }
 @media (max-width: 700px) { .mail-settings-row { align-items: flex-start; flex-direction: column; gap: 12px; } }
+.notification-disclaimer { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: #53647e; }
+.notification-disclaimer .ui-icon { width: 16px; height: 16px; flex: none; }
+.notification-group { margin-top: 28px; }
+.notification-group > h2 { font-size: 1.05rem; color: #17345c; margin: 0; }
+.notification-group-count { color: #53647e; font-weight: 600; }
 .notification-list { list-style: none; padding: 0; margin: 0; }
-.notification-item { display: flex; flex-direction: column; gap: 12px; align-items: stretch; padding: 18px 20px; overflow-wrap: anywhere; }
-.notification-content { min-width: 0; width: 100%; }
+.notification-list > .notification-item { margin-top: 12px; }
+.notification-item { position: relative; display: flex; flex-direction: column; gap: 8px; align-items: stretch; padding: 14px 18px; overflow-wrap: anywhere; }
+/* Escritorio: título y acciones en la misma fila; estado, fecha y motivos debajo del título. */
+.notification-content { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title actions" "meta actions" "reason actions";
+  column-gap: 20px; row-gap: 6px; align-items: start; min-width: 0; width: 100%; }
+.notification-content > h3 { grid-area: title; }
+.notification-content > .notification-meta { grid-area: meta; }
+.notification-content > .notification-reason { grid-area: reason; }
+.notification-content > .notification-actions { grid-area: actions; }
+.notification-item h3 { margin: 0; font-size: 1.12rem; line-height: 1.35; font-weight: 650; color: #17345c; min-width: 0; }
 .notification-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-.notification-state { display: inline-block; border-radius: 999px; padding: 3px 9px; background: #e4f5ef; color: #086e50; font-size: .8rem; font-weight: 700; }
+.notification-state { display: inline-block; border-radius: 999px; padding: 3px 9px; background: #edf3ff; color: #1d4ed8; font-size: .8rem; font-weight: 700; }
 .notification-state-read { background: #edf1f7; color: #53647e; }
-.notification-item h2 { margin: 8px 0 4px; font-size: 1.08rem; line-height: 1.35; }
-.notification-item .notification-reason { margin: 0; line-height: 1.5; }
-.notification-read { background: #f7f9fc; }
-.notification-actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: flex-end; width: 100%; }
-.notification-actions .button, .notification-actions .secondary-link { width: auto; min-width: 0; margin: 0; }
+.notification-date { font-size: .82rem; color: #53647e; }
+/* Sin leer: barra lateral del color de la marca, fondo muy suave y título en negrita. */
+.profile-card.notification-unread { background: #f6f9ff; border-left: 4px solid #2563eb; }
+.notification-unread h3 { font-weight: 800; }
+.profile-card.notification-read { background: #fbfcfe; }
+.notification-read h3 { color: #3a4b63; }
+/* En las leídas «Ver beca» pasa a botón con borde: el azul lleno queda para lo pendiente de leer. */
+.notification-read .notification-primary { background: white; color: #1d4ed8; border: 1px solid #cad8ef; }
+.notification-read .notification-primary:hover { background: #edf3ff; }
+.notification-reason { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.notification-reason-label { font-size: .85rem; font-weight: 650; color: #17345c; }
+.notification-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.notification-chips li { padding: 3px 10px; border-radius: 999px; background: #edf3ff; color: #17345c; font-size: .8rem; border: 1px solid #cad8ef; }
+.notification-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: flex-end; flex: none; }
+.notification-actions .button { width: auto; min-width: 0; margin: 0; min-height: 40px; padding: 8px 16px; text-decoration: none; }
+.notification-actions .notification-secondary { font-weight: 600; }
+/* Móvil: una columna; las acciones pasan al final y a ancho completo. */
+@media (max-width: 700px) {
+  .notification-content { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "meta" "reason" "actions"; }
+  .notification-actions { width: 100%; flex-direction: column; align-items: stretch; margin-top: 4px; }
+  .notification-actions .button { width: 100%; justify-content: center; }
+}
 .sidebar-account { margin-top: auto; display: grid; gap: 14px; padding: 20px 12px 0; font-size: .85rem; overflow-wrap: anywhere; }
 @media (min-width: 951px) {
   .profile-sidebar { position: sticky; top: 0; height: 100dvh; align-self: start; }
