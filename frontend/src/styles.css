@@ -350,16 +350,37 @@
 .profile-sidebar nav a.active { background: #2d507a; font-weight: 700; }
 .profile-sidebar nav a:hover { background: #26466d; }
 .notification-nav-count { margin-left: auto; border-radius: 999px; background: #edf3ff; color: #17345c; padding: 0 .4rem; font-weight: 700; }
-.mail-settings { padding: 16px 20px; }
-.mail-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; }
-.mail-settings-copy { min-width: 0; }
-.mail-settings .mail-settings-copy h2 { margin: 0 0 4px; font-size: 1rem; }
-.mail-settings .mail-settings-copy p, .mail-settings .mail-settings-status { margin: 0; line-height: 1.45; }
-.mail-settings-toggle { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; margin: 0; color: #17243b; font-size: .875rem; font-weight: 650; cursor: pointer; }
-.mail-settings-toggle input[type="checkbox"] { width: 17px; height: 17px; min-height: 0; margin: 0; padding: 0; flex: 0 0 17px; accent-color: #2563eb; cursor: pointer; }
-.mail-settings-toggle input:disabled { cursor: not-allowed; }
-.mail-settings .mail-settings-status { margin-top: 8px; }
-@media (max-width: 700px) { .mail-settings-row { align-items: flex-start; flex-direction: column; gap: 12px; } }
+/* Franja compacta de una línea: ícono, título y descripción a la izquierda; interruptor y estado a la derecha. */
+.mail-settings { margin-top: 14px; padding: 8px 16px; background: white; border: 1px solid #d7dfed; border-radius: 12px; }
+.mail-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 24px; }
+.mail-settings-copy { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mail-settings-copy > .ui-icon { flex: none; width: 20px; height: 20px; color: #17345c; }
+.mail-settings .mail-settings-copy h2 { display: inline; margin: 0 8px 0 0; font-size: .95rem; }
+.mail-settings .mail-settings-copy p { display: inline; margin: 0; line-height: 1.4; font-size: .82rem; }
+.mail-settings .mail-settings-status { margin: 0; line-height: 1.4; }
+.mail-settings-copy > div { min-width: 0; }
+/* Interruptor: un checkbox con role switch y aspecto de pastilla; el estado también se lee en texto. */
+.mail-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; margin: 0; color: #17243b; font-size: .85rem; font-weight: 650; cursor: pointer; }
+.mail-switch input { position: absolute; inset: 0 auto 0 0; width: 44px; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.mail-switch-track { display: inline-flex; align-items: center; width: 44px; height: 24px; padding: 2px; border-radius: 999px; background: #c5d0e0; border: 1px solid #8fa0b8; transition: background .15s; }
+.mail-switch-thumb { width: 18px; height: 18px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(23, 36, 59, .35); transition: transform .15s; }
+.mail-switch input:checked + .mail-switch-track { background: #2563eb; border-color: #1d4ed8; }
+.mail-switch input:checked + .mail-switch-track .mail-switch-thumb { transform: translateX(20px); }
+.mail-switch input:focus-visible + .mail-switch-track { outline: 3px solid #087f8c; outline-offset: 3px; }
+.mail-switch input:disabled { cursor: not-allowed; }
+.mail-switch input:disabled + .mail-switch-track { opacity: .5; }
+.mail-switch-state { min-width: 6.5em; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.results-count.notification-count { margin: 10px 0 0; }
+.notification-count + .notification-group, .mail-settings ~ .notification-group:first-of-type { margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) { .mail-switch-track, .mail-switch-thumb { transition: none; } }
+/* Móvil: título y descripción arriba; interruptor y estado debajo. */
+@media (max-width: 700px) {
+  .mail-settings { padding: 10px 14px; }
+  .mail-settings-row { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .mail-settings-copy { align-items: flex-start; }
+  .mail-settings .mail-settings-copy h2, .mail-settings .mail-settings-copy p { display: block; margin: 0; }
+}
 .notification-disclaimer { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: #53647e; }
 .notification-disclaimer .ui-icon { width: 16px; height: 16px; flex: none; }
 .notification-group { margin-top: 28px; }

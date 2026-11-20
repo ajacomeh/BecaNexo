@@ -79,14 +79,14 @@ export default function Notifications() {
 
   return <OffersLayout><div className="page-heading"><div><p className="eyebrow">TUS AVISOS</p><h1>Notificaciones</h1><p>Convocatorias publicadas relacionadas con información que declaraste. Revisa siempre sus requisitos y bases oficiales.</p>
     <p className="small-note notification-disclaimer"><Icon name="info" /><span>La coincidencia no confirma todos los requisitos ni la adjudicación.</span></p></div></div>
-    <section className="profile-card mail-settings"><div className="mail-settings-row"><div className="mail-settings-copy"><h2>Avisos por correo</h2><p className="small-note">Recibe avisos de becas reales, abiertas y compatibles. Tus notificaciones internas seguirán disponibles.</p></div>
-      {mailPreference ? <label className="mail-settings-toggle"><input type="checkbox" checked={Boolean(mailPreference.habilitado)} disabled={!mailPreference.disponible || mailBusy} onChange={(event) => changeMail(event.target.checked)} /> <span>Recibir avisos por correo</span></label> : !mailError && <p className="small-note mail-settings-status">Consultando preferencia de correo…</p>}</div>
+    <section className="mail-settings" aria-label="Avisos por correo"><div className="mail-settings-row"><div className="mail-settings-copy"><Icon name="mail" /><div><h2>Avisos por correo</h2><p className="small-note">Recibe avisos de becas reales, abiertas y compatibles. Tus notificaciones internas seguirán disponibles.</p></div></div>
+      {mailPreference ? <label className="mail-switch"><input type="checkbox" role="switch" aria-label="Recibir avisos por correo" checked={Boolean(mailPreference.habilitado)} disabled={!mailPreference.disponible || mailBusy} onChange={(event) => changeMail(event.target.checked)} /><span className="mail-switch-track" aria-hidden="true"><span className="mail-switch-thumb" /></span><span className="mail-switch-state">{mailPreference.habilitado ? 'Activados' : 'Desactivados'}</span></label> : !mailError && <p className="small-note mail-settings-status">Consultando preferencia de correo…</p>}</div>
       {mailPreference && !mailPreference.disponible && <p className="small-note mail-settings-status">El envío por correo aún no está habilitado.</p>}
       <Message>{mailError}</Message></section>
     {!current && <p role="status"><Icon name="loading" />Cargando notificaciones…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => setRevision((value) => value + 1)}>Reintentar</Button></>}
     <Message>{error}</Message>
-    {current?.data && <><p className="results-count">{current.data.no_leidas} sin leer · {current.data.count} en total</p>
+    {current?.data && <><p className="results-count notification-count">{current.data.no_leidas} sin leer · {current.data.count} en total</p>
       {!current.data.count ? <section className="profile-card"><h2>Aún no tienes notificaciones</h2><p>Cuando se publique una convocatoria relacionada con tus datos declarados, aparecerá aquí.</p></section> :
         groups.map(([id, title, items]) => items.length > 0 && <section className="notification-group" key={id} aria-labelledby={`notificaciones-${id}`}>
           <h2 id={`notificaciones-${id}`}>{title} <span className="notification-group-count">({items.length})</span></h2>

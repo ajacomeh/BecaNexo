@@ -1,4 +1,4 @@
-import { House, GraduationCap, UserRound, SlidersHorizontal, Heart, ClipboardList, FileText, Building2, Radar, Pencil, LogOut, Search, FilterX, Plus, Save, X, Trash2, Eye, ArrowLeft, Download, ExternalLink, ListChecks, RefreshCw, ChevronLeft, ChevronRight, CircleCheck, CircleX, CircleHelp, TriangleAlert, Info, LoaderCircle, LogIn, UserPlus, Pause, Send, Bell } from 'lucide-react'
+import { House, GraduationCap, UserRound, SlidersHorizontal, Heart, ClipboardList, FileText, Building2, Radar, Pencil, LogOut, Search, FilterX, Plus, Save, X, Trash2, Eye, ArrowLeft, Download, ExternalLink, ListChecks, RefreshCw, ChevronLeft, ChevronRight, CircleCheck, CircleX, CircleHelp, TriangleAlert, Info, LoaderCircle, LogIn, UserPlus, Pause, Send, Bell, Mail } from 'lucide-react'
 
 const icons = {
   home: House, explore: GraduationCap, profile: UserRound, preferences: SlidersHorizontal,
@@ -8,7 +8,7 @@ const icons = {
   external: ExternalLink, compare: ListChecks, refresh: RefreshCw, previous: ChevronLeft,
   next: ChevronRight, success: CircleCheck, failure: CircleX, pending: CircleHelp,
   warning: TriangleAlert, info: Info, loading: LoaderCircle, login: LogIn, register: UserPlus,
-  pause: Pause, publish: Send, notifications: Bell,
+  pause: Pause, publish: Send, notifications: Bell, mail: Mail,
 }
 
 // Iconos decorativos: el texto visible conserva el significado y nombre accesible.
