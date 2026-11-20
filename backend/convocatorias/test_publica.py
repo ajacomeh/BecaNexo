@@ -1,4 +1,6 @@
+from datetime import timedelta
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from perfiles.models import Pais
 from .models import Institucion, Convocatoria, OpcionEstudio, TipoRequisito, Requisito
@@ -10,8 +12,10 @@ class ConsultaAnonimaTests(TestCase):
         ec = Pais.objects.create(codigo="EC", nombre="Ecuador")
         institution = Institucion.objects.create(nombre="Entidad sintética", sector="publico", pais=ec)
         cls.ids = {}
+        # El listado sin estado muestra solo becas postulables: plazo confirmado y vigente.
+        cierre = timezone.now() + timedelta(days=30)
         for index, (name, revision, active) in enumerate((("Publicada", "validada", True), ("Borrador", "pendiente", True), ("Pausada", "validada", False))):
-            c = Convocatoria.objects.create(institucion=institution, titulo=name, descripcion="Prueba", url_oficial="https://example.org/beca", clave_deduplicacion=str(index)*64, revision=revision, activa=active)
+            c = Convocatoria.objects.create(institucion=institution, titulo=name, descripcion="Prueba", url_oficial="https://example.org/beca", clave_deduplicacion=str(index)*64, revision=revision, activa=active, cierre=cierre)
             cls.ids[name] = c.pk
         OpcionEstudio.objects.create(convocatoria_id=cls.ids["Publicada"], nivel="maestria", modalidad="virtual")
         tipo = TipoRequisito.objects.create(codigo="OTRO", nombre="Condición", esquema_valor={})

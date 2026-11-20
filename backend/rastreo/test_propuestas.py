@@ -118,6 +118,7 @@ class PropuestaTests(TransactionTestCase):
         self.assertCountEqual(results, ['ok', 'conflict'])
         self.assertEqual(Propuesta.objects.count(), 2)
 
+    @base.ventana_cumplida()
     def test_observation_and_review_context_changes_without_mutating_history(self):
         from .revisiones import registrar
         obj, _ = guardar(self.actor.pk, self.publication.pk, self.payload())
@@ -129,6 +130,7 @@ class PropuestaTests(TransactionTestCase):
         self.assertTrue({'CONTEXTO_OBSOLETO', 'REVISION_CAMBIADA'} <= {v['codigo'] for v in result['bloqueos']})
         obj.refresh_from_db(); self.assertEqual(obj.pendientes, saved)
 
+    @base.ventana_cumplida()
     def test_a_b_a_selects_exact_observed_version(self):
         from .propuestas import latest
         from convocatorias.siau_red import PDFS

@@ -19,7 +19,8 @@ class FavoritosTests(TestCase):
         country = Pais.objects.create(codigo="EC", nombre="Ecuador")
         institution = Institucion.objects.create(nombre="DEMO pruebas", sector="privado", pais=country)
         cls.offer = Convocatoria.objects.create(institucion=institution, titulo="Oferta sintética", descripcion="Texto sintético",
-            url_oficial="https://example.org/test", clave_deduplicacion="a"*64, revision="validada")
+            url_oficial="https://example.org/test", clave_deduplicacion="a"*64, revision="validada",
+            cierre=timezone.now() + timedelta(days=30))  # postulable: el listado de becas la incluye
 
     def setUp(self):
         self.client = APIClient(enforce_csrf_checks=True)

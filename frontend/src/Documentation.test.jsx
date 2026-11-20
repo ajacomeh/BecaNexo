@@ -47,7 +47,8 @@ it('separa documentación común y de opción, conserva alternativas y enlaces s
   expect(screen.getByText('Cuando corresponda')).toBeVisible()
   expect(screen.getByRole('heading', { name: /Documentos de la opción/ })).toBeVisible()
   expect(screen.getByText('No obligatorio según lo registrado')).toBeVisible()
-  expect(screen.getByRole('link', { name: /Consultar documento o formulario oficial/ })).toHaveAttribute('href', 'https://example.org/formulario')
+  // Los enlaces de documentos se listan en «Bases y documentos oficiales», no en cada requisito.
+  expect(screen.queryByRole('link', { name: /Consultar documento o formulario oficial/ })).not.toBeInTheDocument()
   expect(screen.getByText('Certificado <b>externo</b>')).toBeVisible()
   expect(document.querySelector('b')).toBeNull()
   expect(screen.getByText(/BecaNexo no los recibe ni acredita/)).toBeVisible()

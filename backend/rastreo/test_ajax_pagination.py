@@ -177,11 +177,13 @@ class AjaxPaginationTests(TransactionTestCase):
             run = run_manual(source.pk, self.actor.pk, uuid.uuid4())
         access_id = run.accesos.order_by('id').first().pk
         old = [('rastreo', '0012_permitir_rectificaciones_integracion')]
-        new = [('rastreo', '0013_acceso_metodo_parametros')]
         try:
             MigrationExecutor(connection).migrate(old)
         finally:
-            MigrationExecutor(connection).migrate(new)
+            # Revertir a 0012 también deshace las migraciones dependientes de otras apps;
+            # se restauran todas las hojas para dejar la base de pruebas en el esquema final.
+            executor = MigrationExecutor(connection)
+            executor.migrate(executor.loader.graph.leaf_nodes())
         access = Acceso.objects.get(pk=access_id)
         self.assertEqual(access.metodo, 'GET')
         self.assertIsNone(access.parametros_publicos)
@@ -219,6 +221,7 @@ class AjaxPaginationTests(TransactionTestCase):
         self.assertEqual(source.politica_version, 'siau-nacionales/3')
         self.assertEqual(Acceso.objects.get(pk=post.pk).parametros_publicos['pagina'], 2)
 
+    @base.ventana_cumplida()
     def test_v4_discovers_scholarships_from_index_and_ajax_without_preloaded_urls(self):
         source = self.configured()
         korea = 'https://siau.senescyt.gob.ec/programa-de-becas-korea-lac-tech-corps-maestria-en-gestion-publica/'
@@ -255,6 +258,7 @@ class AjaxPaginationTests(TransactionTestCase):
         self.assertEqual(run.accesos.get(metodo='POST').parametros_publicos['pagina'], 2)
         self.assertFalse(Publicacion.objects.filter(url_normalizada__in=titles, convocatoria__isnull=False).exists())
 
+    @base.ventana_cumplida()
     def test_cursor_retries_failed_page_and_wraps_without_duplicates(self):
         source = self.configured()
         source, _ = set_paginated_discovery(self.actor.pk, 'Ampliar en pruebas', True)
@@ -278,6 +282,7 @@ class AjaxPaginationTests(TransactionTestCase):
         self.assertEqual(Publicacion.objects.filter(url_normalizada=PAGE).count(), 1)
         self.assertEqual(Publicacion.objects.get(url_normalizada=PAGE).versiones.count(), 1)
 
+    @base.ventana_cumplida()
     def test_reordering_and_new_cards_do_not_duplicate_publications(self):
         source = self.configured()
         source, _ = set_paginated_discovery(self.actor.pk, 'Ampliar en pruebas', True)
@@ -318,6 +323,7 @@ class AjaxPaginationTests(TransactionTestCase):
             following = run_manual(source.pk, self.actor.pk, uuid.uuid4())
         self.assertEqual(following.accesos.get(metodo='POST').parametros_publicos['pagina'], 2)
 
+    @base.ventana_cumplida()
     def test_fiche_budget_and_review_only(self):
         source = self.configured()
         source, _ = set_paginated_discovery(self.actor.pk, 'Ampliar en pruebas', True)
@@ -342,6 +348,7 @@ class AjaxPaginationTests(TransactionTestCase):
             run_manual(source.pk, self.actor.pk, uuid.uuid4())
         self.assertTrue(all(Publicacion.objects.filter(url_normalizada=url).exists() for url in urls))
 
+    @base.ventana_cumplida()
     def test_robots_blocks_ajax_and_v3_does_not_post(self):
         source = self.configured()
         with patch('convocatorias.siau_red.Downloader.once', side_effect=self.network), patch(

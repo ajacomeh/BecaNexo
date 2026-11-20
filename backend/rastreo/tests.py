@@ -18,6 +18,21 @@ from convocatorias.siau_red import ROBOTS, INDEX, PAGES, PDFS
 from convocatorias.test_siau import FIXTURE
 from .models import Fuente, Ejecucion, Documento, Acceso, Incidencia, Revision
 from .services import configure, run_manual, recover, exclusion, snapshot, summary
+
+
+def _solo_reintento(source):
+    from .web_frequency import source_retry_due
+    return source_retry_due(source)
+
+
+def ventana_cumplida():
+    """Da por transcurrida la ventana de frecuencia entre capturas consecutivas de una prueba.
+
+    Desde el 16/11/2026 toda captura consume la ventana de la fuente (services.next_due);
+    ese contrato se verifica en test_frequency_12h. Las pruebas decoradas evalúan otras
+    propiedades y conservan el bloqueo por HTTP 429/503 de source_retry_due.
+    """
+    return patch('rastreo.services.next_due', new=_solo_reintento)
 from .storage import save_document, integrity_report, StorageError
 
 
@@ -89,6 +104,7 @@ class RastreoTests(TransactionTestCase):
         self.assertEqual(source.nombre, 'SIAU')
         self.assertEqual(Revision.objects.count(), count)
 
+    @ventana_cumplida()
     def test_manual_run_idempotence_and_document_dedup(self):
         source = self.source()
         key = uuid.uuid4()
@@ -149,6 +165,7 @@ class RastreoTests(TransactionTestCase):
         self.assertFalse(Documento.objects.exists())
         self.assertTrue(integrity_report()['problemas'])
 
+    @ventana_cumplida()
     def test_network_failure_and_recovery(self):
         source = self.source()
         with patch('convocatorias.siau_red.Downloader.once', return_value=(404, {}, b'')):
@@ -241,6 +258,7 @@ class RastreoTests(TransactionTestCase):
         self.assertEqual(Ejecucion.objects.count(), 1)
         self.assertEqual(calls.call_count, 5)
 
+    @ventana_cumplida()
     def test_pdf_change_is_incidence_and_robots_failure_stops(self):
         source = self.source()
         self.run_fake(source)

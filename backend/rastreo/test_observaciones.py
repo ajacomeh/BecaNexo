@@ -36,6 +36,7 @@ class ObservacionesTests(TransactionTestCase):
         self.assertEqual(summary(run)['estado'], 'finalizada')
         return run
 
+    @base.ventana_cumplida()
     def test_first_detection_repeat_and_distinct_identities_shared_bytes(self):
         source = self.source()
         first = self.run_fake(source)
@@ -51,6 +52,7 @@ class ObservacionesTests(TransactionTestCase):
         self.assertEqual(list(first.observaciones.order_by('publicacion_id').values_list('version_id', flat=True)),
                          list(repeated.observaciones.order_by('publicacion_id').values_list('version_id', flat=True)))
 
+    @base.ventana_cumplida()
     def test_cosmetic_html_has_new_manifest_same_relevant_content(self):
         source = self.source()
         self.run_fake(source)
@@ -62,6 +64,7 @@ class ObservacionesTests(TransactionTestCase):
             self.assertNotEqual(a.hash_manifiesto, b.hash_manifiesto)
             self.assertEqual(a.hash_contenido_relevante, b.hash_contenido_relevante)
 
+    @base.ventana_cumplida()
     def test_relevant_requirements_benefits_preserve_negation(self):
         source = self.source()
         self.run_fake(source)
@@ -74,6 +77,7 @@ class ObservacionesTests(TransactionTestCase):
         self.assertIn('requisitos', differences(a, b)['cambios'])
         self.assertIn('beneficio', differences(a, c)['cambios'])
 
+    @base.ventana_cumplida()
     def test_pdf_change_records_exact_document_without_approval(self):
         source = self.source()
         self.run_fake(source)
@@ -87,6 +91,7 @@ class ObservacionesTests(TransactionTestCase):
         self.assertEqual(a.hash_contenido_relevante, b.hash_contenido_relevante)
         self.assertNotEqual(a.documentos.get(rol='bases_pdf').documento_id, b.documentos.get(rol='bases_pdf').documento_id)
 
+    @base.ventana_cumplida()
     def test_new_extractor_same_documents_new_version(self):
         source = self.source()
         self.run_fake(source)
@@ -96,6 +101,7 @@ class ObservacionesTests(TransactionTestCase):
         self.assertEqual(Version.objects.count(), 4)
         self.assertTrue(all(o.version.version_extractor == 'siau-html/test-nueva' for o in run.observaciones.select_related('version')))
 
+    @base.ventana_cumplida()
     def test_return_a_b_a_reuses_a_with_temporal_order(self):
         source = self.source()
         a = self.run_fake(source)
@@ -107,6 +113,7 @@ class ObservacionesTests(TransactionTestCase):
         self.assertEqual(list(a.observaciones.order_by('publicacion_id').values_list('version_id', flat=True)),
                          list(returned.observaciones.order_by('publicacion_id').values_list('version_id', flat=True)))
 
+    @base.ventana_cumplida()
     def test_failed_pdf_preserves_html_and_pending_manifest_not_old_pdf(self):
         source = self.source()
         self.run_fake(source)
@@ -121,6 +128,7 @@ class ObservacionesTests(TransactionTestCase):
             self.assertEqual(observation.version.manifiesto['pendientes'][0]['estado'], 'inaccesible')
         self.assertTrue(run.incidencias.filter(codigo='BASE_INACCESIBLE', publicacion__isnull=False).exists())
 
+    @base.ventana_cumplida()
     def test_known_and_unknown_fiche_failure_no_empty_version(self):
         source = self.source()
         def network(url):
@@ -136,6 +144,7 @@ class ObservacionesTests(TransactionTestCase):
         self.assertEqual(Version.objects.count(), 2)
         self.assertEqual(run.accesos.filter(rol='ficha', publicacion__isnull=False).count(), 2)
 
+    @base.ventana_cumplida()
     def test_failed_robots_records_known_observations_without_versions(self):
         source = self.source()
         self.run_fake(source)

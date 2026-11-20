@@ -233,6 +233,7 @@ class PeriodicTests(TransactionTestCase):
         self.assertFalse(any(args[0][0].endswith('.zip') for args in calls.call_args_list))
         self.assertIsNone(publication.convocatoria_id)
 
+    @base.ventana_cumplida()
     def test_discovery_requires_audited_policy_and_preserves_history(self):
         self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_db')
         source = self.source()

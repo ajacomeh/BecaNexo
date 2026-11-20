@@ -27,8 +27,8 @@ it.each(['/becas', '/becas/12'])('consulta anónima %s y enlaces de cuenta', asy
   expect(screen.getByRole('link', { name: 'Crear cuenta' })).toHaveAttribute('href', '/registro')
   expect(screen.queryByText('Gestionar convocatorias')).not.toBeInTheDocument()
   if (path.includes('12')) {
-    expect(screen.getByRole('link', { name: 'Ir al sitio oficial' })).toHaveAttribute('href', offer.url_oficial)
-    expect(screen.getByText('La postulación se realiza en la plataforma de la entidad oferente.')).toBeVisible()
+    expect(screen.getByRole('link', { name: 'Ver convocatoria oficial' })).toHaveAttribute('href', offer.url_oficial)
+    expect(screen.getByText('La postulación se realiza fuera de BecaNexo. La entidad oferente confirma los documentos y adjudica la beca.')).toBeVisible()
   }
 })
 

@@ -110,6 +110,7 @@ class RevisionTests(TransactionTestCase):
         with self.assertRaises(DatabaseError), transaction.atomic():
             Revision.objects.create(actor=self.actor, version=self.version, evidencia=wrong.documentos.first(), dimension='documental', decision='aprobada', motivo='Prueba', detalle={})
 
+    @base.ventana_cumplida()
     def test_history_no_inheritance_versions_documents_and_a_b_a(self):
         doc = self.version.documentos.first()
         data = self.payload(); data.update(dimension='documental', evidencia_id=doc.pk)

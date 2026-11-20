@@ -69,6 +69,7 @@ class ConsultaRastreoTests(TransactionTestCase):
         self.assertEqual(self.client.get(ROOT + 'publicaciones/999999999999999999999999/').status_code, 400)
         self.assertEqual(self.client.get(ROOT + 'publicaciones/999999/').status_code, 404)
 
+    @base.ventana_cumplida()
     def test_a_b_a_uses_observations_not_highest_version_id(self):
         def changed(url):
             if url in PAGES:
