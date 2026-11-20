@@ -1,11 +1,14 @@
 """Ventanas independientes para la captura extraordinaria, cerrada por defecto."""
 import json
+import uuid
 from datetime import datetime, timedelta, time, timezone as utc_timezone
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.db import connection, transaction
 from django.utils import timezone
 
-from .models import Acceso, Ejecucion, Incidencia
+from .models import Acceso, Ejecucion, Fuente, Incidencia, Revision
 from .web_launch import launch_root
 
 
@@ -55,13 +58,75 @@ def source_retry_due(source):
     return max(dates, default=None)
 
 
-def source_blocked(source):
-    # Respuestas de reducción de frecuencia quedan bloqueadas hasta revisión
-    # administrativa o una captura programada posterior sin tales respuestas.
-    # Sin una confirmación externa, una espera indefinida es más segura que
-    # interpretar un Retry-After desconocido como cinco minutos.
+UNLOCK_ACTION = 'desbloqueo_http_429_503'
+
+
+def blocking_access(source):
+    """Primer acceso 429/503 de la última ejecución no omitida, o None."""
     last = Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio', '-id').first()
-    return bool(last and Acceso.objects.filter(ejecucion=last, http_status__in=(429, 503)).exists())
+    if not last:
+        return None
+    return Acceso.objects.filter(ejecucion=last, http_status__in=(429, 503)).order_by('secuencia', 'id').first()
+
+
+def unlock_record(source, access):
+    return Revision.objects.filter(fuente=source, dimension='configuracion', decision='aplicada',
+                                   detalle__accion=UNLOCK_ACTION,
+                                   detalle__ejecucion_id=access.ejecucion_id).order_by('-id').first()
+
+
+def source_blocked(source):
+    # Una respuesta 429/503 bloquea la fuente de forma indefinida hasta que un
+    # administrador la revise y la desbloquee con motivo (unlock_source). Sin una
+    # confirmación externa, esperar es más seguro que interpretar un Retry-After
+    # desconocido. El desbloqueo no anula Retry-After ni la frecuencia (next_due).
+    access = blocking_access(source)
+    return bool(access and not unlock_record(source, access))
+
+
+def block_details(source):
+    access = blocking_access(source)
+    if not access or unlock_record(source, access):
+        return None
+    retry = source_retry_due(source)
+    return {'fuente_id': source.pk, 'fuente_nombre': source.nombre, 'http_status': access.http_status,
+            'bloqueado_en': access.fin, 'ejecucion_id': access.ejecucion_id,
+            'reintento_desde': retry}
+
+
+@transaction.atomic
+def unlock_source(source_id, actor_id, reason, key):
+    """Levanta, con auditoría, el bloqueo indefinido por HTTP 429/503 de una fuente."""
+    from .services import actor_admin
+    actor = actor_admin(actor_id)
+    reason = reason.strip() if isinstance(reason, str) else ''
+    if not 10 <= len(reason) <= 500 or not reason.isprintable():
+        raise ValidationError('Indica un motivo administrativo entre 10 y 500 caracteres.')
+    try:
+        key = uuid.UUID(str(key))
+    except ValueError:
+        raise ValidationError('Clave de acción inválida.') from None
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_advisory_xact_lock(742600, 3)')
+    previous = Revision.objects.filter(clave_accion=key).first()
+    if previous:
+        if (previous.actor_id != actor.pk or previous.fuente_id != source_id or previous.motivo != reason
+                or previous.detalle.get('accion') != UNLOCK_ACTION):
+            raise ValidationError('Clave de acción reutilizada con otro contenido.')
+        return previous, False
+    source = Fuente.objects.select_for_update().get(pk=source_id)
+    if Ejecucion.objects.filter(fuente=source, estado='en_curso').exists():
+        raise ValidationError('No se desbloquea una fuente con una ejecución en curso.')
+    access = blocking_access(source)
+    if not access or unlock_record(source, access):
+        raise ValidationError('La fuente no está bloqueada por una respuesta HTTP 429/503.')
+    retry = source_retry_due(source)
+    detail = {'accion': UNLOCK_ACTION, 'ejecucion_id': access.ejecucion_id, 'acceso_id': access.pk,
+              'http_status': access.http_status, 'bloqueado_en': access.fin.isoformat(),
+              'url': access.url_normalizada, 'reintento_desde': retry.isoformat() if retry else None}
+    row = Revision.objects.create(actor=actor, fuente=source, dimension='configuracion', decision='aplicada',
+                                  motivo=reason, detalle=detail, clave_accion=key)
+    return row, True
 
 
 def manual_window(source, exclude_key=None):

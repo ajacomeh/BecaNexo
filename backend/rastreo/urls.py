@@ -5,6 +5,7 @@ from . import api_control
 
 urlpatterns = [
     path('control/', api_control.ControlRastreo.as_view()),
+    path('fuentes/<int:pk>/desbloquear/', api_control.DesbloqueoFuente.as_view()),
     path('publicaciones/<int:publication>/propuesta/', api_propuestas.Propuestas.as_view()),
     path('propuestas/<int:pk>/', api_propuestas.Propuestas.as_view()),
     path('propuestas/<int:pk>/validar/', api_propuestas.ValidarPropuesta.as_view()),

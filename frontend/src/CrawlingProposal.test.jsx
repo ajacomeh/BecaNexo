@@ -52,6 +52,36 @@ it('permite aplicar un campo revisado al borrador vinculado sin crear otra convo
   }))
 })
 
+it('propone tipo, cobertura, gastos, bases y apertura con hora y los ofrece para aplicar', async () => {
+  const proposal = { id: 9, hash_propuesta: 'b'.repeat(64), version_id: 2, observacion_base_id: 3, revisiones: [],
+    datos: { tipo_beca: 4, cobertura_tipo: 'parcial', apertura: '2026-12-01T08:00:00-05:00' }, procedencia: [],
+    pendientes: { bloqueos: [], pendientes_publicacion: [], creacion_habilitada: false }, autor: { nombre: 'Administrador' } }
+  vi.spyOn(offersApi, 'get').mockImplementation(async (path) => {
+    if (path === 'gestion/rastreo/publicaciones/1/propuesta') return { results: [proposal], count: 1, page_size: 12,
+      borrador_automatico_id: 7, contexto: { version_id: 2, observacion_base_id: 3, revisiones: [] } }
+    if (path === 'gestion/instituciones') return { results: [], count: 0, page_size: 50 }
+    if (path === 'becas/catalogos') return { paises: [], tipos_requisito: [], tipos_beca: [{ id: 4, nombre: 'Socioeconómica' }] }
+    if (path === 'gestion/convocatorias/7') return { id: 7, version: 1, tipo_beca: null }
+    if (path.endsWith('/documentos')) return { results: [{ id: 8, evidencia_id: 8, rol: 'ficha_html' }], count: 1, page_size: 50 }
+    if (path.endsWith('/versiones/2')) return { datos_extraidos: {} }
+    throw new Error(`Ruta inesperada: ${path}`)
+  })
+  const write = vi.spyOn(offersApi, 'write').mockImplementation(async (_path, _method, body) => ({ ...proposal, ...body, id: 9 }))
+  render(<MemoryRouter><CrawlingProposal publication={1} /></MemoryRouter>)
+  await userEvent.click(await screen.findByRole('button', { name: 'Continuar propuesta' }))
+  expect(screen.getByLabelText('Tipo de beca')).toHaveValue('4')
+  expect(screen.getByLabelText('Apertura con hora confirmada (America/Guayaquil)')).toHaveValue('2026-12-01T08:00')
+  expect(screen.getByRole('checkbox', { name: /Tipo de beca: Pendiente → Socioeconómica/ })).toBeVisible()
+  expect(screen.getByRole('checkbox', { name: /Cobertura:/ })).toBeVisible()
+  await userEvent.type(screen.getByLabelText('Enlace de las bases'), 'https://example.org/bases.pdf')
+  await userEvent.type(screen.getByLabelText('Gastos no cubiertos'), 'Pasajes')
+  await userEvent.clear(screen.getByLabelText('Apertura con hora confirmada (America/Guayaquil)'))
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar propuesta' }))
+  await waitFor(() => expect(write).toHaveBeenCalled())
+  expect(write.mock.calls[0][2].datos).toEqual({ tipo_beca: 4, cobertura_tipo: 'parcial', apertura: '',
+    url_bases: 'https://example.org/bases.pdf', gastos_no_cubiertos: 'Pasajes' })
+})
+
 it('guarda propuesta incompleta, consulta historial y valida sin crear convocatoria', async () => {
   const write = setup()
   await userEvent.click(await screen.findByRole('button', { name: 'Crear propuesta' }))

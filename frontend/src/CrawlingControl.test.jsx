@@ -16,11 +16,35 @@ const ready = { fuente_id: 1, politica_version: 'siau-nacionales/3', frecuencia_
   ultima_ejecucion: { id: 5, estado: 'finalizada', origen: 'programada' } }
 function open() { render(<MemoryRouter><CrawlingControl /></MemoryRouter>) }
 
+it('muestra el bloqueo HTTP 429 y lo levanta con motivo y clave estable al reintentar', async () => {
+  const block = { fuente_id: 1, fuente_nombre: 'SIAU', http_status: 429, bloqueado_en: '2026-11-19T15:00:00Z',
+    ejecucion_id: 8, reintento_desde: '2026-11-19T15:03:00Z' }
+  const get = vi.spyOn(offersApi, 'get').mockResolvedValueOnce({ ...ready, puede_iniciar: false, bloqueo_fuente: true, bloqueos: [block] })
+    .mockResolvedValue({ ...ready, bloqueos: [] })
+  const write = vi.spyOn(offersApi, 'write').mockRejectedValueOnce(new Error('Fallo sintético')).mockResolvedValue({ creado: true })
+  open()
+  expect(await screen.findByText(/por una respuesta HTTP 429/)).toBeVisible()
+  expect(screen.getByText(/La fuente requiere revisión tras una respuesta HTTP 429\/503/)).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Levantar bloqueo' }))
+  expect(screen.getByRole('button', { name: 'Confirmar desbloqueo' })).toBeDisabled()
+  await userEvent.type(screen.getByLabelText(/Motivo del desbloqueo/), 'Revisé la respuesta de la fuente.')
+  await userEvent.click(screen.getByRole('button', { name: 'Confirmar desbloqueo' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Fallo sintético')
+  await userEvent.click(screen.getByRole('button', { name: 'Confirmar desbloqueo' }))
+  expect(await screen.findByRole('button', { name: 'Iniciar rastreo' })).toBeEnabled()
+  expect(screen.queryByText(/por una respuesta HTTP 429/)).not.toBeInTheDocument()
+  expect(write).toHaveBeenCalledTimes(2)
+  expect(write.mock.calls[0][0]).toBe('gestion/rastreo/fuentes/1/desbloquear')
+  expect(write.mock.calls[0][2]).toEqual({ motivo: 'Revisé la respuesta de la fuente.', clave_accion: write.mock.calls[1][2].clave_accion })
+  expect(get).toHaveBeenCalledTimes(2)
+})
+
 it('muestra frecuencia, historial y deshabilita el botón antes de la próxima ventana', async () => {
   const get = vi.spyOn(offersApi, 'get').mockResolvedValue({ ...ready, proxima_ejecucion: '2026-11-11T19:43:41Z', puede_iniciar: false })
   open()
   expect(await screen.findByRole('heading', { name: 'Rastreo' })).toBeVisible()
-  expect(screen.getByText('Publicaciones detectadas').nextSibling).toHaveTextContent('5')
+  // El encabezado se muestra antes que el estado; se espera a las métricas cargadas.
+  expect((await screen.findByText('Publicaciones detectadas')).nextSibling).toHaveTextContent('5')
   expect(screen.getByText('Borradores automáticos').nextSibling).toHaveTextContent('1')
   await userEvent.click(screen.getByText('Configuración y detalles técnicos'))
   expect(screen.getByText(/SIAU · Activa y autorizada · Política: siau-nacionales\/3 · Frecuencia: 1440 minutos/)).toBeVisible()

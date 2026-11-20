@@ -19,6 +19,9 @@ from .models import Acceso, Ejecucion, Publicacion, Revision
 from .services import enable_discovery, enable_national_discovery, run_manual, set_paginated_discovery, summary
 from .siau_ajax import AJAX_INDEX, ajax_request, grid_config, robots_allow_ajax
 from .descubrimiento import NationalIndexLinks, national_ficha_content
+from .web_frequency import unlock_source
+from datetime import timedelta
+from django.utils import timezone
 
 
 PAGE = 'https://siau.senescyt.gob.ec/oferta-de-becas-nacionales-educacion-continua-prueba/'
@@ -273,7 +276,15 @@ class AjaxPaginationTests(TransactionTestCase):
 
         with patch('convocatorias.siau_red.Downloader.once', side_effect=self.network), patch(
                 'convocatorias.siau_red.Downloader.post_once', side_effect=post):
-            runs = [run_manual(source.pk, self.actor.pk, uuid.uuid4()) for _ in range(4)]
+            runs = [run_manual(source.pk, self.actor.pk, uuid.uuid4()) for _ in range(2)]
+            # Tras el 503 la fuente queda bloqueada hasta el desbloqueo administrativo.
+            self.assertEqual(run_manual(source.pk, self.actor.pk, uuid.uuid4()).estado, 'omitida')
+            self.assertEqual(observed, [2, 3])
+            unlock_source(source.pk, self.actor.pk, 'Revisé la respuesta 503 de la fuente.', uuid.uuid4())
+            later = timezone.now() + timedelta(minutes=5)
+            for offset in (0, 1):
+                with patch('rastreo.services.timezone.now', return_value=later + timedelta(minutes=offset)):
+                    runs.append(run_manual(source.pk, self.actor.pk, uuid.uuid4()))
         self.assertEqual(observed, [2, 3, 3, 2])
         runs[1].refresh_from_db()
         self.assertEqual(runs[1].estado, 'fallida')
@@ -318,9 +329,20 @@ class AjaxPaginationTests(TransactionTestCase):
             run = run_manual(source.pk, self.actor.pk, uuid.uuid4())
         self.assertTrue(run.incidencias.filter(codigo='REINTENTO_FUENTE').exists())
         self.assertEqual(run.accesos.get(metodo='POST').parametros_publicos['pagina'], 2)
+        later = timezone.now() + timedelta(days=2)
         with patch('convocatorias.siau_red.Downloader.once', side_effect=self.network), patch(
                 'convocatorias.siau_red.Downloader.post_once', return_value=(200, {'content-type': 'text/html'}, card())):
-            following = run_manual(source.pk, self.actor.pk, uuid.uuid4())
+            # Ni el paso del tiempo levanta el bloqueo: exige revisión administrativa.
+            with patch('rastreo.services.timezone.now', return_value=later):
+                blocked = run_manual(source.pk, self.actor.pk, uuid.uuid4())
+            self.assertEqual(blocked.estado, 'omitida')
+            self.assertTrue(blocked.incidencias.filter(codigo='OMITIDA', detalle__contains='429/503').exists())
+            row, created = unlock_source(source.pk, self.actor.pk, 'Revisé la respuesta 429 de la fuente.', uuid.uuid4())
+            self.assertTrue(created)
+            self.assertEqual((row.actor_id, row.dimension, row.detalle['http_status'], row.detalle['ejecucion_id']),
+                             (self.actor.pk, 'configuracion', 429, run.pk))
+            with patch('rastreo.services.timezone.now', return_value=later + timedelta(minutes=1)):
+                following = run_manual(source.pk, self.actor.pk, uuid.uuid4())
         self.assertEqual(following.accesos.get(metodo='POST').parametros_publicos['pagina'], 2)
 
     @base.ventana_cumplida()

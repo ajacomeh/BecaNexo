@@ -14,7 +14,7 @@ from .services import next_due, supported_policy
 from .portal_fuentes import PORTALES, portal_for_source
 from convocatorias.siau_red import AccessError
 from convocatorias.models import BorradorRastreo
-from .web_frequency import extraordinary_enabled, manual_window, source_blocked
+from .web_frequency import block_details, extraordinary_enabled, manual_window, source_blocked, unlock_source
 from .web_launch import LaunchBusy, launch_lock, marker_path, result_path, start_worker
 
 
@@ -34,6 +34,7 @@ class ControlRastreo(AuthView):
         permitted = []
         invalid_log = False
         blocked = False
+        block_rows = []
         for source in sources:
             if not source.activa or source.aprobada_publicacion_automatica:
                 continue
@@ -57,6 +58,8 @@ class ControlRastreo(AuthView):
                 invalid_log = True
                 continue
             blocked = blocked or source_block
+            if source_block:
+                block_rows.append(block_details(source))
             if due:
                 windows.append(due)
             if not source_block and (not due or due <= now):
@@ -112,7 +115,8 @@ class ControlRastreo(AuthView):
                 'proxima_ejecucion': proxima,
                 'proxima_manual': proxima, 'intervalo_manual_seg': 300 if extraordinaria and selected and selected.adaptador == 'siau' else None,
                 'rastreo_extraordinario_habilitado': bool(extraordinaria and selected and selected.adaptador == 'siau'),
-                'bloqueo_fuente': blocked, 'registro_invalido': invalid_log,
+                'bloqueo_fuente': blocked, 'bloqueos': [row for row in block_rows if row],
+                'registro_invalido': invalid_log,
                 'ejecucion_activa': activa.pk if activa else None,
                 'inicio_pendiente': inicio_pendiente, 'requiere_revision': requiere_revision,
                 'ultimo_inicio_web': resultado_web, 'puede_iniciar': puede_iniciar,
@@ -142,3 +146,22 @@ class ControlRastreo(AuthView):
         except OSError:
             return Response({'detail': 'No se pudo iniciar el proceso local; verifica el entorno del servidor.'}, status=503)
         return Response({'estado': 'iniciando', 'clave': str(key), 'fuente_id': state['fuente_id']}, status=202)
+
+
+class DesbloqueoFuente(AuthView):
+    """Levanta el bloqueo por HTTP 429/503 con motivo y auditoría; no inicia ninguna captura."""
+    permission_classes = [AdministradorActivo]
+    http_method_names = ['post', 'options']
+
+    def post(self, request, pk):
+        if not isinstance(request.data, dict) or set(request.data) != {'motivo', 'clave_accion'}:
+            return Response({'detail': 'Indica motivo y clave de acción.'}, status=400)
+        if not Fuente.objects.filter(pk=pk).exists():
+            return Response({'detail': 'Fuente inexistente.'}, status=404)
+        try:
+            row, created = unlock_source(pk, request.user.pk, request.data['motivo'], request.data['clave_accion'])
+        except ValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)}, status=400)
+        return Response({'revision_id': row.pk, 'fuente_id': row.fuente_id, 'creado': created,
+                         'detalle': row.detalle, 'motivo': row.motivo, 'actor_id': row.actor_id},
+                        status=201 if created else 200)

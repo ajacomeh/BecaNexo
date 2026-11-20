@@ -1,13 +1,13 @@
 """Snapshots de trabajo administrativos. Nunca escribe en el catálogo ni accede a red."""
 import hashlib
 import json
-from datetime import date
+from datetime import date, datetime
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 from convocatorias.serializers import safe_url, ConvocatoriaSerializer
-from convocatorias.models import Institucion, Convocatoria
+from convocatorias.models import COBERTURAS, Institucion, Convocatoria, TipoBeca
 from perfiles.models import Pais
 from .models import Publicacion, Version, Observacion, Revision, Propuesta, PropuestaRevision
 from .revisiones import vigentes, ConflictoRevision
@@ -72,11 +72,34 @@ class Datos(Cerrado):
     apertura_original = text(500)
     cierre_original = text(500)
     cierre_dia = text(10)
+    tipo_beca = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    cobertura_tipo = serializers.ChoiceField(choices=[value for value, _label in COBERTURAS], required=False, allow_blank=True)
+    gastos_no_cubiertos = text(5000)
+    url_bases = text(2048)
+    apertura = text(40)
     opciones = Candidato(many=True, required=False, max_length=50)
     beneficios = Candidato(many=True, required=False, max_length=50)
     requisitos = Candidato(many=True, required=False, max_length=100)
 
     validate_url_oficial = staticmethod(safe_url)
+    validate_url_bases = staticmethod(safe_url)
+
+    def validate_tipo_beca(self, value):
+        if value is not None and not TipoBeca.objects.filter(pk=value).exists():
+            raise serializers.ValidationError('Selecciona un tipo de beca existente.')
+        return value
+
+    def validate_apertura(self, value):
+        # Solo un instante explícito: si la fuente indica únicamente el día, se conserva en el literal.
+        if not value:
+            return value
+        try:
+            moment = datetime.fromisoformat(value)
+        except ValueError:
+            moment = None
+        if moment is None or 'T' not in value or moment.tzinfo is None:
+            raise serializers.ValidationError('Indica fecha, hora y zona horaria confirmadas (AAAA-MM-DDTHH:MM±HH:MM).')
+        return value
 
     def validate_cierre_dia(self, value):
         if not value:

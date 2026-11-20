@@ -16,7 +16,7 @@ from perfiles.models import Pais
 from notificaciones.models import Notificacion
 from . import tests as base
 from .auto_borradores import _candidate, _institution, classify_candidate, editable_candidates, pending_for_publication, latest_version, reevaluate_stored
-from .models import Incidencia, Publicacion, Version
+from .models import Incidencia, Propuesta, Publicacion, Version
 from .propuestas import guardar
 from .services import enable_discovery, enable_national_discovery, run_manual, summary
 from .test_periodico import NATIONAL_PAGE, national_index, national_ficha
@@ -524,6 +524,76 @@ class AutoDraftTests(TransactionTestCase):
         self.assertEqual(Evento.objects.filter(convocatoria=offer, actor=self.actor,
                                              accion='aplicar_propuesta_borrador').count(), 1)
         self.assertEqual(admin.post(path, body, format='json', HTTP_X_CSRFTOKEN=token).status_code, 400)
+
+    def _proposal_for_draft(self, publication, origin, datos, campos):
+        observation = publication.observaciones.filter(version=origin.version).order_by('-id').first()
+        evidence = origin.version.documentos.first()
+        return guardar(self.actor.pk, publication.pk, {
+            'clave_accion': str(uuid.uuid4()), 'version_id': origin.version_id,
+            'observacion_base_id': observation.pk, 'revisiones': [], 'datos': datos,
+            'procedencia': [{'campo': campo, 'evidencia_id': evidence.pk, 'localizador': 'Ficha sintética',
+                             'motivo': 'Transcripción revisada'} for campo in campos],
+        }, Propuesta.objects.filter(publicacion=publication, sucesora__isnull=True).values_list('pk', flat=True).first())[0]
+
+    def test_apply_proposal_additional_fields_are_validated_one_by_one(self):
+        from datetime import datetime
+        from convocatorias.models import TipoBeca
+        from .aplicar_propuesta import apply_proposal
+        from .models import Propuesta as _Propuesta  # noqa: F401  (disponible para _proposal_for_draft)
+        publication = self.capture()
+        origin = BorradorRastreo.objects.get(publicacion=publication)
+        offer = origin.convocatoria
+        kind = TipoBeca.objects.create(nombre='Tipo sintético')
+        offer.cierre_dia = None
+        offer.cierre = datetime.fromisoformat('2026-12-20T17:00:00-05:00')
+        offer.save(update_fields=['cierre_dia', 'cierre'])
+        datos = {'tipo_beca': kind.pk, 'cobertura_tipo': 'parcial',
+                 'gastos_no_cubiertos': 'Pasajes y seguro médico.', 'url_bases': 'https://example.org/bases.pdf',
+                 'apertura': '2026-12-01T08:00:00-05:00'}
+        proposal = self._proposal_for_draft(publication, origin, datos, list(datos))
+        offer.refresh_from_db()
+        apply_proposal(proposal.pk, self.actor.pk, offer.version, proposal.hash_propuesta, list(datos), 'Cotejado con la ficha.')
+        offer.refresh_from_db()
+        self.assertEqual(offer.tipo_beca_id, kind.pk)
+        self.assertEqual(offer.cobertura_tipo, 'parcial')
+        self.assertEqual(offer.gastos_no_cubiertos, 'Pasajes y seguro médico.')
+        self.assertEqual(offer.url_bases, 'https://example.org/bases.pdf')
+        self.assertEqual(offer.apertura, datetime.fromisoformat('2026-12-01T08:00:00-05:00'))
+        event = Evento.objects.filter(convocatoria=offer, accion='aplicar_propuesta_borrador').latest('id')
+        self.assertEqual(event.actor, self.actor)
+        self.assertEqual(event.cambios['despues']['tipo_beca'], kind.pk)
+        self.assertIsNone(event.cambios['antes']['tipo_beca'])
+        # Reaplicar los mismos valores no crea otro cambio.
+        with self.assertRaises(ValidationError):
+            apply_proposal(proposal.pk, self.actor.pk, offer.version, proposal.hash_propuesta, ['apertura'], 'Repetido.')
+
+    def test_apply_proposal_rejects_invalid_additional_values_without_changes(self):
+        from .aplicar_propuesta import apply_proposal
+        publication = self.capture()
+        origin = BorradorRastreo.objects.get(publicacion=publication)
+        for datos, campo in (({'tipo_beca': 999999}, 'tipo_beca'), ({'cobertura_tipo': 'gratuita'}, 'cobertura_tipo'),
+                             ({'url_bases': 'ftp://example.org/bases'}, 'url_bases'),
+                             ({'apertura': '2026-12-01'}, 'apertura'), ({'apertura': '2026-12-01T08:00:00'}, 'apertura')):
+            with self.subTest(campo=campo, valor=datos[campo]), self.assertRaises(ValidationError):
+                self._proposal_for_draft(publication, origin, datos, [campo])
+        offer = origin.convocatoria
+        offer.refresh_from_db()
+        offer.cierre_dia = None
+        from datetime import datetime
+        offer.cierre = datetime.fromisoformat('2026-12-01T08:00:00-05:00')
+        offer.save(update_fields=['cierre_dia', 'cierre'])
+        late = self._proposal_for_draft(publication, origin, {'apertura': '2026-12-02T08:00:00-05:00'}, ['apertura'])
+        offer.refresh_from_db()
+        version = offer.version
+        with self.assertRaises(ValidationError):
+            apply_proposal(late.pk, self.actor.pk, version, late.hash_propuesta, ['apertura'], 'Apertura posterior al cierre.')
+        offer.refresh_from_db()
+        self.assertIsNone(offer.apertura)
+        self.assertEqual(offer.version, version)
+        unsupported = self._proposal_for_draft(publication, origin, {'gastos_no_cubiertos': 'Pasajes.'}, [])
+        with self.assertRaises(ValidationError):
+            apply_proposal(unsupported.pk, self.actor.pk, version, unsupported.hash_propuesta, ['gastos_no_cubiertos'], 'Sin referencia.')
+        self.assertFalse(Evento.objects.filter(convocatoria=offer, accion='aplicar_propuesta_borrador').exists())
 
     def test_joint_lifecycle_keeps_draft_private_until_admin_reviews_new_version_and_publishes(self):
         from datetime import timedelta
