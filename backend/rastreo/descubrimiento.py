@@ -128,6 +128,22 @@ def national_ficha_content(content, *, include_all_becas=False):
             and any('REQUISITOS GENERALES' in line.upper() for line in lines))
 
 
+def national_ficha_flexible(content, *, include_all_becas=False):
+    """Alternativa cuando la ficha cambió de plantilla: exige el mismo título admitido y texto
+    suficiente, sin los marcadores POSTULA HASTA / REQUISITOS GENERALES. La estructura
+    incompleta queda como marca visible del borrador, no como rechazo."""
+    parser = FichaHTML()
+    try:
+        parser.feed(content.decode('utf-8-sig'))
+    except UnicodeError:
+        return False
+    parser.flush()
+    lines = parser.lines
+    if not lines or len(' '.join(lines[1:]).strip()) < 40:
+        return False
+    return bool(re.search(r'\bbecas?\b', lines[0].casefold())) if include_all_becas else national_title(lines[0])
+
+
 def candidate_ficha_content(content, index_title):
     """Reconoce una ficha individual respaldada por el índice, aun con campos ausentes."""
     parser = FichaHTML()

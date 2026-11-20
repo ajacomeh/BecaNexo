@@ -121,6 +121,19 @@ it('identifica fuente, estado, última ejecución y borradores en el panel', asy
   expect(screen.getByText(/siau-nacionales\/3/)).toBeVisible()
 })
 
+it('muestra en la bandeja el borrador con su confianza o el motivo claro de descarte', async () => {
+  const draft = { ...publication, situacion: { tipo: 'borrador', convocatoria_id: 22, confianza: 'media', motivo: null } }
+  const discarded = { ...publication, id: 2, titulo: 'Beca extranjera', situacion: { tipo: 'descartada', convocatoria_id: null,
+    confianza: 'baja', motivo: 'Descartada: oferente extranjero (Universidad extranjera), sin entidad ecuatoriana.' } }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes') ? list([{ id: 1, nombre: 'SIAU prueba' }]) : list([draft, discarded]))
+  open()
+  expect(await screen.findByText('Borrador privado', { selector: '.status-pill' })).toBeVisible()
+  expect(screen.getByText(/Borrador privado #22 · Confianza media/)).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Abrir borrador' })).toHaveAttribute('href', '/gestion/convocatorias/22')
+  expect(screen.getByText('Descartada', { selector: '.status-pill' })).toBeVisible()
+  expect(screen.getByText('Descartada: oferente extranjero (Universidad extranjera), sin entidad ecuatoriana.')).toBeVisible()
+})
+
 it('limpia los filtros de publicaciones y mantiene el acceso al detalle', async () => {
   const get = vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes') ? list([{ id: 1, nombre: 'SIAU prueba' }]) : list([publication]))
   open()

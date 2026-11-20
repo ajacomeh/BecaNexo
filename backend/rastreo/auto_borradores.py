@@ -19,6 +19,85 @@ def _literal(value, limit):
     return text.strip() if isinstance(text, str) and len(text.strip()) <= limit else ''
 
 
+def _texto(value):
+    """Texto literal completo, sin descartar contenido largo."""
+    text = (value.get('texto_original') or value.get('original') or '') if isinstance(value, dict) else ''
+    return text.strip() if isinstance(text, str) else ''
+
+
+# Palabras con las que empieza el nombre de una entidad que puede ofrecer o coofrecer una beca.
+_ENTIDAD = (r'(?:ministerio|secretar[ií]a|subsecretar[ií]a|universidad|escuela\s+polit[eé]cnica|instituto|fundaci[oó]n|'
+            r'gobierno|prefectura|municipio|municipalidad|gad|alcald[ií]a|banco|corporaci[oó]n|consejo|agencia|embajada|'
+            r'organizaci[oó]n|asociaci[oó]n|colegio|centro|senescyt|ifth|minedec|funiber|oea)')
+_ROL = (r'(?:otorgad[ao]s?|ofrecid[ao]s?|coofrecid[ao]s?|financiad[ao]s?|auspiciad[ao]s?|patrocinad[ao]s?)\s+por|'
+        r'en\s+(?:convenio|alianza|coordinaci[oó]n|cooperaci[oó]n)\s+con|con\s+el\s+(?:apoyo|auspicio|financiamiento)\s+de')
+_MARCA_EC = r'\b(?:del\s+ecuador|de\s+ecuador|ecuatorian[oa]s?|senescyt|ifth|minedec)\b'
+_MARCA_EXTRANJERA = (r'\b(?:europ\w*|americana|norteamerican\w*|iberoamerican\w*|espana|argentina|brunei|darussalam|corea|korea|'
+                     r'japon|china|estados\s+unidos|reino\s+unido|alemania|francia|italia|mexico|chile|colombia|peru|brasil|'
+                     r'indonesia|oea|fulbright|daad|chevening)\b')
+
+
+def _ecuadorian_institution(name):
+    normal = _normal(name)
+    for institution in Institucion.objects.select_related('pais').filter(pais__codigo='EC'):
+        aliases = {_normal(institution.nombre)}
+        acronym = re.search(r'\(([A-Z0-9]{2,12})\)\s*$', institution.nombre)
+        base = re.sub(r'\s*\([A-Z0-9]{2,12}\)\s*$', '', institution.nombre).strip()
+        if base != institution.nombre and len(base) >= 20:
+            aliases.add(_normal(base))
+        if any(alias and alias in normal for alias in aliases) or (acronym and re.search(rf'\b{acronym[1]}\b', name)):
+            return institution
+    return None
+
+
+def _named_entities(data):
+    """Entidades nombradas como oferente o cooferente, separadas en ecuatorianas y extranjeras.
+
+    Solo cuenta una entidad concreta (ministerio, universidad, fundación...) en un papel de
+    oferta: «otorgada por», «en convenio con», un oferente declarado o un segmento del título.
+    Una mención de Ecuador o de ecuatorianos como destinatarios no es una entidad.
+    """
+    ecuadorian, foreign, unknown = [], [], []
+
+    def add(name):
+        name = ' '.join(str(name).split())
+        # El nombre termina antes de datos de la convocatoria: nivel, año, cohorte, semestre o intake.
+        name = re.split(r'\s+(?:\d|\(?\d|[1-4](?:er|do|ro|to)\b|intake\b|cohorte\b|semestre\b|convocatoria\b|'
+                        r'cuarto\s+nivel\b|tercer\s+nivel\b)', name, maxsplit=1, flags=re.I)[0]
+        name = name.strip(' .,;:–-')[:160]
+        if not name or not re.match(_ENTIDAD, _normal(name)):
+            return
+        if _ecuadorian_institution(name) or re.search(_MARCA_EC, _normal(name)):
+            target = ecuadorian
+        elif re.search(_MARCA_EXTRANJERA, _normal(name)):
+            target = foreign
+        else:
+            target = unknown
+        if name not in target:
+            target.append(name)
+
+    for row in data.get('oferentes') or []:
+        if isinstance(row, dict) and row.get('rol') in ('oferente', 'cooferente') and isinstance(row.get('nombre'), str):
+            if row.get('pais_codigo') == 'EC':
+                if row['nombre'].strip() not in ecuadorian:
+                    ecuadorian.append(row['nombre'].strip())
+            elif row.get('pais_codigo'):
+                if row['nombre'].strip() not in foreign:
+                    foreign.append(row['nombre'].strip())
+            else:
+                add(row['nombre'])
+    # entidad_html es una mención en la descripción, sin papel de oferente: no cuenta por sí sola.
+    title = _texto(data.get('titulo'))
+    # Los segmentos posteriores al primero suelen nombrar a la entidad o al cooferente.
+    for segment in re.split(r'\s+[–—-]\s+', title)[1:]:
+        add(segment)
+    text = '\n'.join(_texto(data.get(key)) for key in ('titulo', 'descripcion', 'requisitos', 'postulacion_y_documentos'))
+    for match in re.finditer(rf'(?:{_ROL})\s+(?:el|la|los|las)?\s*([^\n.;:,()]{{4,160}})', text, re.I):
+        candidate = re.split(r'\s+(?:para|que|con\s+el\s+fin|a\s+trav[eé]s)\s+', match[1], maxsplit=1, flags=re.I)[0]
+        add(candidate)
+    return ecuadorian, foreign, unknown
+
+
 def _normal(value):
     return ' '.join(unicodedata.normalize('NFD', value).casefold().split()).translate(
         str.maketrans('', '', ''.join(chr(x) for x in range(0x300, 0x370))))
@@ -70,60 +149,78 @@ def _offerer_evidence(data):
 
 
 def classify_candidate(publication, version, *, allow_partial=False):
-    """Clasificación editorial; pendiente nunca equivale a fuera de alcance."""
-    def result(state, reason, **details):
-        return {'estado': state, 'motivo': reason, 'oferente': details.get('oferente', 'desconocido'),
+    """Clasificación al crear el borrador: exige solo lo necesario para revisarlo.
+
+    Crea borrador con confianza alta (oferente ecuatoriano verificado y destinatarios
+    confirmados) o media (entidad ecuatoriana concreta nombrada como oferente o cooferente,
+    o beca nacional de SIAU). Sin esa evidencia, o con oferente solo extranjero, no crea
+    borrador y deja el motivo en lenguaje claro. Lo demás queda como marca visible y se
+    exige al publicar (pending_for_publication). El lugar de estudio no interviene.
+    """
+    marks = []
+
+    def result(state, reason, confidence=None, **details):
+        return {'estado': state, 'motivo': reason, 'confianza': confidence if state == 'apta' else 'baja',
+                'marcas': list(dict.fromkeys(marks)) if state == 'apta' else [],
+                'oferente': details.get('oferente', 'desconocido'),
                 'oferente_mencionado': details.get('oferente_mencionado', ''),
                 'elegibilidad': details.get('elegibilidad', 'no_especificada'),
                 'naturaleza': details.get('naturaleza', 'sin_confirmar'),
                 'datos_esenciales': details.get('datos_esenciales', False)}
     data = version.datos_extraidos or {}
-    title = _literal(data.get('titulo'), 250)
+    full_title = _texto(data.get('titulo'))
+    title = full_title[:250]
+    if len(full_title) > 250:
+        marks.append('Título truncado a 250 caracteres; el texto completo está en la ficha.')
     adapter = publication.fuente.adaptador
+    portal_names = []
     if data.get('tipo_oportunidad') in ('pagina_informativa', 'categoria_general', 'noticia'):
-        return result('fuera_alcance', 'Contenido informativo sin beca individual identificable.', naturaleza='informativa')
+        return result('fuera_alcance', 'Descartada: contenido informativo sin una beca individual identificable.', naturaleza='informativa')
     if adapter == 'siau':
         if not re.search(r'\bbecas?\b', _normal(title)):
-            return result('fuera_alcance', 'La ficha no identifica una beca individual.', naturaleza='sin_confirmar')
+            return result('fuera_alcance', 'Descartada: la ficha no identifica una beca individual.', naturaleza='sin_confirmar')
     elif adapter.startswith('portal_ec:'):
         from .portal_fuentes import portal_for_source, admitted_url
         try:
             portal = portal_for_source(publication.fuente)
         except Exception:
-            return result('pendiente', 'Fuente institucional sin política auditada.')
+            return result('pendiente', 'Sin borrador: la fuente institucional no tiene una política auditada.')
         section_base = publication.url_original if portal.generico else portal.indice
         section_identity = (portal.secciones_en_indice and (portal.generico or publication.url_original == portal.indice)
                             and re.fullmatch(re.escape(section_base) + r'#becanexo-[0-9a-f]{20}', publication.url_normalizada))
         if not re.search(r'\bbecas?\b', _normal(title)):
-            return result('fuera_alcance', 'La ficha no describe una beca identificable.', naturaleza='informativa')
+            return result('fuera_alcance', 'Descartada: la ficha no describe una beca identificable.', naturaleza='informativa')
         if not (section_identity or admitted_url(portal, publication.url_normalizada)):
-            return result('pendiente', 'No se confirmó una ficha de beca del portal institucional.')
-        if portal.generico and data.get('vigencia_al_consultar') == 'vencida':
-            return result('pendiente', 'Cierre vencido; conservar evidencia sin crear un borrador nuevo.')
+            return result('pendiente', 'Sin borrador: no se confirmó una ficha de beca del portal institucional.')
+        if data.get('vigencia_al_consultar') == 'vencida':
+            marks.append('Cierre vencido al consultar: solo puede publicarse como convocatoria histórica.')
         if not (data.get('cierre') or {}).get('fecha'):
-            return result('pendiente', 'Fecha de cierre de la ficha institucional pendiente de verificación.')
-        if Version.objects.filter(datos_extraidos__titulo__texto_original=title,
-                                  datos_extraidos__cierre__fecha=data['cierre']['fecha'],
-                                  publicacion__fuente__adaptador__startswith='portal_ec:').exclude(publicacion=publication).exists():
-            return result('pendiente', 'Título y cierre coinciden con otra fuente; revisión de posible duplicado.')
+            marks.append('Fecha de cierre no encontrada en la ficha.')
+        elif Version.objects.filter(datos_extraidos__titulo__texto_original=full_title,
+                                    datos_extraidos__cierre__fecha=data['cierre']['fecha'],
+                                    publicacion__fuente__adaptador__startswith='portal_ec:').exclude(publicacion=publication).exists():
+            marks.append('Posible duplicado: el mismo título y cierre constan en otra fuente.')
+        # El portal es la web oficial de la entidad registrada: se nombra como oferente por confirmar.
+        portal_names.append(portal.institucion or publication.fuente.nombre)
     else:
-        return result('fuera_alcance', 'Adaptador sin clasificación de becas autorizada.')
+        return result('fuera_alcance', 'Descartada: adaptador sin clasificación de becas autorizada.')
     if not version.documentos.filter(rol='ficha_html').exists():
-        return result('pendiente', 'Ficha nacional sin evidencia HTML completa.')
-    if not allow_partial and data.get('seccion_completa') is not True:
-        return result('pendiente', 'Ficha nacional sin evidencia HTML completa.')
-    if not allow_partial and (not _literal(data.get('requisitos'), 5000) or not _literal(data.get('cierre'), 500)):
-        return result('pendiente', 'No se verificaron requisitos y cierre de la oportunidad.')
-    if allow_partial and not _literal(data.get('descripcion'), 15000):
-        return result('pendiente', 'La ficha no aporta descripción suficiente para identificar una beca individual.')
-    scope = ' '.join(_normal(_literal(data.get(key), 15000)) for key in ('titulo', 'descripcion', 'requisitos', 'postulacion_y_documentos'))
+        return result('pendiente', 'Sin borrador: no se conservó la ficha HTML que permite revisarla.')
+    if data.get('seccion_completa') is not True:
+        marks.append('Estructura de ficha distinta o incompleta; revisa la ficha archivada.')
+    if not _texto(data.get('requisitos')):
+        marks.append('Requisitos no encontrados en la ficha.')
+    if not _texto(data.get('cierre')):
+        marks.append('Cierre no encontrado en la ficha.')
+    if not _texto(data.get('descripcion')):
+        marks.append('Descripción no encontrada en la ficha.')
+    scope = ' '.join(_normal(_texto(data.get(key))) for key in ('titulo', 'descripcion', 'requisitos', 'postulacion_y_documentos'))
     offerer, mentioned, offerer_reason = _offerer_evidence(data)
     details = {'oferente': offerer, 'oferente_mencionado': mentioned,
                'naturaleza': 'beca_individual', 'datos_esenciales': bool(
-                   data.get('seccion_completa') and _literal(data.get('requisitos'), 5000)
-                   and _literal(data.get('cierre'), 500))}
+                   data.get('seccion_completa') and _texto(data.get('requisitos')) and _texto(data.get('cierre')))}
     if re.search(r'\b(?:no\s+(?:pueden|podran)\s+postular|no\s+se\s+admiten|se\s+excluye(?:n)?\s+a?)\s+(?:personas|ciudadan[oa]s?)?\s*ecuatorian[oa]s?\b', scope):
-        return result('fuera_alcance', 'La ficha excluye expresamente a ciudadanos ecuatorianos.',
+        return result('fuera_alcance', 'Descartada: la ficha excluye expresamente a ciudadanos ecuatorianos.',
                       elegibilidad='excluida', **details)
     recipient = 'confirmada' if re.search(
         r'\b(?:personas|estudiantes|postulantes|ciudadan[oa]s?(?:/[oa]s?)?)\s+ecuatorian[oa]s?(?:/[oa]s?)?\b|'
@@ -131,26 +228,36 @@ def classify_candidate(publication, version, *, allow_partial=False):
         r'\bcedula\s+de\s+ciudadania\s+ecuatoriana\b|'
         r'\becuatorian[oa]s?\s+(?:pueden|podran|deben)\s+postular\b', scope
     ) else 'no_especificada'
+    details['elegibilidad'] = recipient
+    if recipient != 'confirmada':
+        marks.append('Participación de ciudadanos ecuatorianos por confirmar en las bases.')
     if offerer == 'solo_extranjero':
-        return result('fuera_alcance', offerer_reason, elegibilidad=recipient, **details)
+        return result('fuera_alcance', f'Descartada: oferente extranjero ({mentioned}), sin entidad ecuatoriana.', **details)
+    if offerer == 'verificado_ec':
+        if recipient == 'confirmada':
+            return result('apta', 'Borrador privado con oferente ecuatoriano verificado y destinatarios confirmados.', 'alta', **details)
+        return result('apta', 'Borrador privado con oferente ecuatoriano verificado.', 'media', **details)
+    ecuadorian, foreign, unknown = _named_entities(data)
+    # Un portal institucional registrado y auditado pertenece a una entidad ecuatoriana.
+    ecuadorian = list(dict.fromkeys([name for name in portal_names if name] + ecuadorian))
+    if ecuadorian:
+        details.update(oferente='mencionado_ec', oferente_mencionado=' / '.join(ecuadorian))
+        if portal_names and ecuadorian == [name for name in portal_names if name]:
+            marks.append('Oferente inferido del portal institucional; confirma que la beca es propia.')
+        else:
+            marks.append(f'Oferente o cooferente ecuatoriano por verificar: {" / ".join(ecuadorian)}.')
+        return result('apta', 'Borrador privado: entidad ecuatoriana nombrada como oferente o cooferente.', 'media', **details)
     national_siau = adapter == 'siau' and bool(re.search(r'\bbecas?\s+nacionales?\b', _normal(title)))
-    if allow_partial and offerer != 'verificado_ec' and not national_siau:
-        return result('pendiente', 'La ficha parcial no acredita un oferente o cooferente ecuatoriano.',
-                      elegibilidad=recipient, **details)
-    if adapter == 'siau' and not re.search(r'\bbecas?\s+nacionales?\b', _normal(title)) and offerer != 'verificado_ec':
-        return result('pendiente', 'Ficha difundida por SIAU sin evidencia de oferente o cooferente ecuatoriano; revisar procedencia.',
-                      elegibilidad=recipient, **details)
-    if offerer != 'verificado_ec' and recipient != 'confirmada':
-        if national_siau:
-            return result('apta', 'Borrador privado de beca nacional; oferente y destinatarios pendientes de revisión.',
-                          elegibilidad=recipient, **details)
-        return result('pendiente', offerer_reason, elegibilidad=recipient, **details)
-    if offerer != 'verificado_ec':
-        return result('apta', 'Borrador privado: destinatarios ecuatorianos acreditados; oferente no identificado.',
-                      elegibilidad=recipient, **details)
-    return result('apta', 'Borrador privado sujeto a revisión editorial y confirmación de destinatarios.'
-                  if recipient == 'no_especificada' else 'Borrador privado con oferente ecuatoriano y destinatarios acreditados en la ficha.',
-                  elegibilidad=recipient, **details)
+    if national_siau:
+        marks.append('Oferente por identificar en las bases de la beca nacional.')
+        return result('apta', 'Borrador privado de beca nacional difundida por SIAU.', 'media', **details)
+    if foreign:
+        details.update(oferente='extranjero_nombrado', oferente_mencionado=' / '.join(foreign))
+        return result('fuera_alcance', f'Descartada: oferente extranjero ({" / ".join(foreign)}), sin entidad ecuatoriana.', **details)
+    if unknown:
+        return result('pendiente', f'Sin borrador: la entidad nombrada ({" / ".join(unknown)}) no consta como ecuatoriana. '
+                      'Regístrala en Entidades oferentes si corresponde y vuelve a evaluar la publicación.', **details)
+    return result('pendiente', 'Sin borrador: la ficha no nombra una entidad ecuatoriana como oferente o cooferente.', **details)
 
 
 def candidate_assessment(publication, version):
@@ -167,7 +274,7 @@ def editable_candidates(version):
     from .propuestas_documentales import proponer
     from .storage import StorageError, root_path, verify_file
     data = version.datos_extraidos or {}
-    requirements = _literal(data.get('requisitos'), 5000)
+    requirements = _texto(data.get('requisitos'))
     html = version.documentos.filter(rol='ficha_html').select_related('documento').first()
     document_id = html.documento_id if html else None
     suggestions = interpretar_requisitos(requirements, version_id=version.pk,
@@ -315,9 +422,10 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
     if assessment['estado'] != 'apta':
         return None, False, assessment['motivo']
     data = version.datos_extraidos
-    title = _literal(data.get('titulo'), 250)
-    description = _literal(data.get('descripcion'), 15000)
-    closure_original = _literal(data.get('cierre'), 500)
+    # Textos íntegros; solo el título se ajusta al límite del modelo y queda marcado.
+    title = _texto(data.get('titulo'))[:250]
+    description = _texto(data.get('descripcion'))
+    closure_original = _texto(data.get('cierre'))
     closure_day = None
     if closure_original and isinstance(data.get('cierre'), dict):
         try:
@@ -329,7 +437,7 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
         matches = [row for row in Institucion.objects.select_related('pais').filter(pais__codigo='EC')
                    if _normal(row.nombre) == _normal(assessment['oferente_mencionado'])]
         institution_suggestion = matches[0] if len(matches) == 1 else None
-    requirements = _literal(data.get('requisitos'), 5000)
+    requirements = _texto(data.get('requisitos'))
     pending = []
     pending.append('Identificar entidad oferente si la evidencia lo permite; no atribuir la fuente difusora.')
     if assessment['elegibilidad'] == 'no_especificada':
@@ -349,7 +457,7 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
                 'requisitos_originales': requirements,
                 'modalidad_mencionada': _literal((data.get('estudios') or {}).get('modalidad'), 60),
                 'destino_mencionado': _literal((data.get('estudios') or {}).get('destino'), 500),
-                'beneficio_original': _literal(data.get('beneficio'), 5000),
+                'beneficio_original': _texto(data.get('beneficio')),
                 'url_publicacion': publication.url_original,
                 'candidatos_editables': editable_candidates(version),
                 'clasificacion_inicial': assessment}
@@ -364,6 +472,94 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
     return origin, True, assessment['motivo'] if assessment['elegibilidad'] == 'no_especificada' else None
 
 
+def _classify_for_publication(publication, version, *, allow_partial=False):
+    """Regla de publicación vigente (sin cambios): la versión actual debe acreditar una beca en alcance.
+
+    Se conserva tal cual estaba antes de relajar la creación de borradores, para que
+    pending_for_publication siga exigiendo exactamente lo mismo al publicar.
+    """
+    def result(state, reason, **details):
+        return {'estado': state, 'motivo': reason, 'oferente': details.get('oferente', 'desconocido'),
+                'oferente_mencionado': details.get('oferente_mencionado', ''),
+                'elegibilidad': details.get('elegibilidad', 'no_especificada'),
+                'naturaleza': details.get('naturaleza', 'sin_confirmar'),
+                'datos_esenciales': details.get('datos_esenciales', False)}
+    data = version.datos_extraidos or {}
+    title = _literal(data.get('titulo'), 250)
+    adapter = publication.fuente.adaptador
+    if data.get('tipo_oportunidad') in ('pagina_informativa', 'categoria_general', 'noticia'):
+        return result('fuera_alcance', 'Contenido informativo sin beca individual identificable.', naturaleza='informativa')
+    if adapter == 'siau':
+        if not re.search(r'\bbecas?\b', _normal(title)):
+            return result('fuera_alcance', 'La ficha no identifica una beca individual.', naturaleza='sin_confirmar')
+    elif adapter.startswith('portal_ec:'):
+        from .portal_fuentes import portal_for_source, admitted_url
+        try:
+            portal = portal_for_source(publication.fuente)
+        except Exception:
+            return result('pendiente', 'Fuente institucional sin política auditada.')
+        section_base = publication.url_original if portal.generico else portal.indice
+        section_identity = (portal.secciones_en_indice and (portal.generico or publication.url_original == portal.indice)
+                            and re.fullmatch(re.escape(section_base) + r'#becanexo-[0-9a-f]{20}', publication.url_normalizada))
+        if not re.search(r'\bbecas?\b', _normal(title)):
+            return result('fuera_alcance', 'La ficha no describe una beca identificable.', naturaleza='informativa')
+        if not (section_identity or admitted_url(portal, publication.url_normalizada)):
+            return result('pendiente', 'No se confirmó una ficha de beca del portal institucional.')
+        if portal.generico and data.get('vigencia_al_consultar') == 'vencida':
+            return result('pendiente', 'Cierre vencido; conservar evidencia sin crear un borrador nuevo.')
+        if not (data.get('cierre') or {}).get('fecha'):
+            return result('pendiente', 'Fecha de cierre de la ficha institucional pendiente de verificación.')
+        if Version.objects.filter(datos_extraidos__titulo__texto_original=title,
+                                  datos_extraidos__cierre__fecha=data['cierre']['fecha'],
+                                  publicacion__fuente__adaptador__startswith='portal_ec:').exclude(publicacion=publication).exists():
+            return result('pendiente', 'Título y cierre coinciden con otra fuente; revisión de posible duplicado.')
+    else:
+        return result('fuera_alcance', 'Adaptador sin clasificación de becas autorizada.')
+    if not version.documentos.filter(rol='ficha_html').exists():
+        return result('pendiente', 'Ficha nacional sin evidencia HTML completa.')
+    if not allow_partial and data.get('seccion_completa') is not True:
+        return result('pendiente', 'Ficha nacional sin evidencia HTML completa.')
+    if not allow_partial and (not _literal(data.get('requisitos'), 5000) or not _literal(data.get('cierre'), 500)):
+        return result('pendiente', 'No se verificaron requisitos y cierre de la oportunidad.')
+    if allow_partial and not _literal(data.get('descripcion'), 15000):
+        return result('pendiente', 'La ficha no aporta descripción suficiente para identificar una beca individual.')
+    scope = ' '.join(_normal(_literal(data.get(key), 15000)) for key in ('titulo', 'descripcion', 'requisitos', 'postulacion_y_documentos'))
+    offerer, mentioned, offerer_reason = _offerer_evidence(data)
+    details = {'oferente': offerer, 'oferente_mencionado': mentioned,
+               'naturaleza': 'beca_individual', 'datos_esenciales': bool(
+                   data.get('seccion_completa') and _literal(data.get('requisitos'), 5000)
+                   and _literal(data.get('cierre'), 500))}
+    if re.search(r'\b(?:no\s+(?:pueden|podran)\s+postular|no\s+se\s+admiten|se\s+excluye(?:n)?\s+a?)\s+(?:personas|ciudadan[oa]s?)?\s*ecuatorian[oa]s?\b', scope):
+        return result('fuera_alcance', 'La ficha excluye expresamente a ciudadanos ecuatorianos.',
+                      elegibilidad='excluida', **details)
+    recipient = 'confirmada' if re.search(
+        r'\b(?:personas|estudiantes|postulantes|ciudadan[oa]s?(?:/[oa]s?)?)\s+ecuatorian[oa]s?(?:/[oa]s?)?\b|'
+        r'\bciudadan[oa]s?\s+del\s+ecuador\b|\bnacionalidad\s+ecuatoriana\b|'
+        r'\bcedula\s+de\s+ciudadania\s+ecuatoriana\b|'
+        r'\becuatorian[oa]s?\s+(?:pueden|podran|deben)\s+postular\b', scope
+    ) else 'no_especificada'
+    if offerer == 'solo_extranjero':
+        return result('fuera_alcance', offerer_reason, elegibilidad=recipient, **details)
+    national_siau = adapter == 'siau' and bool(re.search(r'\bbecas?\s+nacionales?\b', _normal(title)))
+    if allow_partial and offerer != 'verificado_ec' and not national_siau:
+        return result('pendiente', 'La ficha parcial no acredita un oferente o cooferente ecuatoriano.',
+                      elegibilidad=recipient, **details)
+    if adapter == 'siau' and not re.search(r'\bbecas?\s+nacionales?\b', _normal(title)) and offerer != 'verificado_ec':
+        return result('pendiente', 'Ficha difundida por SIAU sin evidencia de oferente o cooferente ecuatoriano; revisar procedencia.',
+                      elegibilidad=recipient, **details)
+    if offerer != 'verificado_ec' and recipient != 'confirmada':
+        if national_siau:
+            return result('apta', 'Borrador privado de beca nacional; oferente y destinatarios pendientes de revisión.',
+                          elegibilidad=recipient, **details)
+        return result('pendiente', offerer_reason, elegibilidad=recipient, **details)
+    if offerer != 'verificado_ec':
+        return result('apta', 'Borrador privado: destinatarios ecuatorianos acreditados; oferente no identificado.',
+                      elegibilidad=recipient, **details)
+    return result('apta', 'Borrador privado sujeto a revisión editorial y confirmación de destinatarios.'
+                  if recipient == 'no_especificada' else 'Borrador privado con oferente ecuatoriano y destinatarios acreditados en la ficha.',
+                  elegibilidad=recipient, **details)
+
+
 def pending_for_publication(offer, origin):
     """Solo bloqueos materiales de procedencia, alcance y revisión vigente."""
     errors = []
@@ -374,7 +570,7 @@ def pending_for_publication(offer, origin):
     if not origin.version.documentos.filter(rol='ficha_html').exists():
         errors.append('No existe ficha HTML preservada para verificar la fuente.')
     current = latest_version(origin.publicacion)
-    assessment = classify_candidate(origin.publicacion, current) if current else None
+    assessment = _classify_for_publication(origin.publicacion, current) if current else None
     if not assessment or assessment['estado'] != 'apta':
         errors.append('La ficha vigente no acredita una beca dentro del alcance.')
     if not assessment or assessment['elegibilidad'] != 'confirmada':

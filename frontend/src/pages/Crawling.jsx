@@ -12,6 +12,16 @@ const prefix = 'gestion/rastreo'
 const labels = { finalizada: 'Descarga finalizada', parcial: 'Descarga parcial', fallida: 'Descarga fallida', en_curso: 'En curso', omitida: 'Omitida', nueva: 'Primera observación', sin_cambios: 'Sin cambios', cambio_bytes: 'Cambio de evidencia sin diferencia relevante detectada', cambio_relevante: 'Cambio relevante o de PDF', fallo: 'Fallo de acceso', reutilizado: 'Documento ya almacenado', descargado: 'Documento nuevo almacenado', error: 'Error', bloqueado: 'Acceso bloqueado', redirigido: 'Redirección', REVISION_DOCUMENTAL_PENDIENTE: 'Revisión documental pendiente', PDF_CAMBIADO: 'PDF cambiado; requiere revisión', titulo: 'Título', descripcion: 'Descripción', entidad_html: 'Entidad mencionada en HTML', beneficio: 'Beneficio', estudios: 'Estudios mencionados', requisitos: 'Requisitos', cierre: 'Cierre declarado en la fuente', fecha_publicacion: 'Fecha de publicación declarada', texto_original: 'Texto original', postulacion_y_documentos: 'Postulación externa y documentos', completa: 'Extracción HTML completa', advertencias: 'Advertencias' }
 const label = (value) => labels[value] || String(value).replaceAll('_', ' ')
 const date = (value) => value ? new Date(value).toLocaleString('es-EC') : 'No registrada'
+const situationLabels = { borrador: 'Borrador privado', integrada: 'Borrador integrado', descartada: 'Descartada',
+  sin_borrador: 'Sin borrador', sin_version: 'Sin versión', apta_sin_borrador: 'Apta para borrador' }
+const situationLabel = (situation) => situationLabels[situation?.tipo] || 'Detectada'
+
+function SituationNote({ situation }) {
+  if (situation?.convocatoria_id) {
+    return <p className="profile-note">Borrador privado #{situation.convocatoria_id}{situation.confianza && ` · Confianza ${situation.confianza}`} · <Link to={`/gestion/convocatorias/${situation.convocatoria_id}`}>Abrir borrador</Link></p>
+  }
+  return <p className="profile-note">{situation?.motivo || 'No es una convocatoria aprobada del catálogo.'}</p>
+}
 
 function Remote({ path, params = {}, children }) {
   const [state, setState] = useState({ loading: true })
@@ -66,7 +76,7 @@ function Publications() {
     event.preventDefault()
     setFilters({ q: query, ...(source ? { fuente: source } : {}) })
   }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" value={query} onChange={event => setQuery(event.target.value)} /></label><SourceFilter value={source} onChange={setSource} /><div className="crawl-filter-actions"><Button icon="search" type="submit">Buscar</Button>{(query || source || filters.q || filters.fuente) && <Button icon="clear" className="button-light" type="button" onClick={() => { setQuery(''); setSource(''); setFilters({}) }}>Limpiar</Button>}</div></form>
-    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article className="crawl-publication"><div className="crawl-publication-heading"><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><span className="status-pill">Detectada</span></div><p className="crawl-publication-source">{p.fuente.nombre}</p><p className="crawl-publication-url"><Origin url={p.url_original} /></p><dl className="crawl-publication-dates"><div><dt>Primera detección</dt><dd>{date(p.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(p.ultima_deteccion)}</dd></div></dl><div className="crawl-publication-footer"><p className="profile-note">No es una convocatoria aprobada del catálogo.</p><Link className="secondary-link" to={`publicaciones/${p.id}`}><Icon name="detail" /><span>Abrir publicación</span></Link></div></article>} />
+    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article className="crawl-publication"><div className="crawl-publication-heading"><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><span className={`status-pill situation-${p.situacion?.tipo || 'detectada'}`}>{situationLabel(p.situacion)}</span></div><p className="crawl-publication-source">{p.fuente.nombre}</p><p className="crawl-publication-url"><Origin url={p.url_original} /></p><dl className="crawl-publication-dates"><div><dt>Primera detección</dt><dd>{date(p.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(p.ultima_deteccion)}</dd></div></dl><div className="crawl-publication-footer"><SituationNote situation={p.situacion} /><Link className="secondary-link" to={`publicaciones/${p.id}`}><Icon name="detail" /><span>Abrir publicación</span></Link></div></article>} />
   </>
 }
 

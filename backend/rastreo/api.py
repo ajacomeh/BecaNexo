@@ -2,7 +2,7 @@
 import hashlib
 from urllib.parse import urlsplit
 
-from django.db.models import OuterRef, Subquery, Q, Count
+from django.db.models import F, OuterRef, Subquery, Q, Count
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
@@ -26,11 +26,19 @@ def identified(model, pk):
     return get_object_or_404(model, pk=pk)
 
 
+DECISION_CODES = ('CANDIDATO_FUERA_ALCANCE', 'CANDIDATO_PENDIENTE')
+
+
 def latest_publications():
     last = Observacion.objects.filter(publicacion_id=OuterRef('pk'), version__isnull=False).order_by('-observada_en', '-id')
+    decision = Incidencia.objects.filter(publicacion_id=OuterRef('pk'), codigo__in=DECISION_CODES).order_by('-detectada_en', '-id')
     return Publicacion.objects.select_related('fuente').annotate(
         version_observada_id=Subquery(last.values('version_id')[:1]),
-        titulo_observado=Subquery(last.values('version__datos_extraidos__titulo__texto_original')[:1]))
+        titulo_observado=Subquery(last.values('version__datos_extraidos__titulo__texto_original')[:1]),
+        borrador_convocatoria_id=F('borrador_automatico__convocatoria_id'),
+        borrador_confianza=F('borrador_automatico__datos_iniciales__clasificacion_inicial__confianza'),
+        decision_codigo=Subquery(decision.values('codigo')[:1]),
+        decision_motivo=Subquery(decision.values('detalle')[:1]))
 
 
 def publication_data(p):
@@ -38,7 +46,36 @@ def publication_data(p):
     return {'id': p.pk, 'fuente': {'id': p.fuente_id, 'nombre': p.fuente.nombre},
             'titulo': title if isinstance(title, str) and title.strip() else urlsplit(p.url_original).path or p.url_original,
             'url_original': p.url_original, 'primera_deteccion': p.primera_deteccion, 'ultima_deteccion': p.ultima_deteccion,
-            'version_observada_id': p.version_observada_id, 'convocatoria_id': p.convocatoria_id}
+            'version_observada_id': p.version_observada_id, 'convocatoria_id': p.convocatoria_id,
+            'situacion': publication_situation(p)}
+
+
+def publication_situation(p, classify=False):
+    """Situación editorial visible: borrador con su confianza o motivo claro de que no lo tenga.
+
+    En la lista usa solo valores anotados en la misma consulta; el detalle (classify=True)
+    recalcula la clasificación vigente con la última versión observada.
+    """
+    if p.borrador_convocatoria_id:
+        return {'tipo': 'borrador', 'convocatoria_id': p.borrador_convocatoria_id,
+                'confianza': p.borrador_confianza, 'motivo': None}
+    if p.convocatoria_id:
+        return {'tipo': 'integrada', 'convocatoria_id': p.convocatoria_id, 'confianza': None, 'motivo': None}
+    if not p.version_observada_id:
+        return {'tipo': 'sin_version', 'convocatoria_id': None, 'confianza': None,
+                'motivo': 'Sin borrador: todavía no hay una versión conservada de la ficha.'}
+    if classify:
+        from .auto_borradores import classify_candidate
+        result = classify_candidate(p, Version.objects.get(pk=p.version_observada_id))
+        kind = 'descartada' if result['estado'] == 'fuera_alcance' else 'sin_borrador' if result['estado'] != 'apta' else 'apta_sin_borrador'
+        return {'tipo': kind, 'convocatoria_id': None, 'confianza': result['confianza'],
+                'motivo': result['motivo'] if kind != 'apta_sin_borrador'
+                else 'Apta para borrador; se creará en la próxima captura con borradores automáticos habilitados.'}
+    if p.decision_codigo:
+        return {'tipo': 'descartada' if p.decision_codigo == 'CANDIDATO_FUERA_ALCANCE' else 'sin_borrador',
+                'convocatoria_id': None, 'confianza': 'baja', 'motivo': p.decision_motivo}
+    return {'tipo': 'sin_borrador', 'convocatoria_id': None, 'confianza': None,
+            'motivo': 'Sin borrador todavía; abre la publicación para ver su clasificación.'}
 
 
 def execution_data(e):
@@ -99,6 +136,7 @@ class Publicaciones(ReadOnly):
             parametros(request, set())
             publication = identified(latest_publications(), pk)
             result = publication_data(publication)
+            result['situacion'] = publication_situation(publication, classify=True)
             if publication.version_observada_id:
                 from .auto_borradores import classify_candidate
                 version = Version.objects.get(pk=publication.version_observada_id)

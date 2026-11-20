@@ -292,6 +292,12 @@
 .state-cerrada, .state-pausada { background: #f4ecea; color: #9b3b24; }
 .state-abierta { background: #e4f5ef; color: #086e50; }
 .state-cierre_hoy { background: #fff4dd; color: #765016; }
+.offer-card-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.confidence-alta { background: #e4f5ef; color: #086e50; }
+.confidence-media { background: #fff4dd; color: #765016; }
+.situation-descartada { background: #f4ecea; color: #9b3b24; }
+.situation-borrador { background: #e4f5ef; color: #086e50; }
+.offer-readiness details ul { margin: 6px 0 0; padding-left: 18px; }
 .results-count { margin: 28px 0 18px; color: #53647e; }
 .pagination { display: flex; gap: 24px; align-items: center; justify-content: center; margin: 28px 0; }
 .pagination button { width: auto; min-width: 0; flex: 0 1 auto; padding: 12px 16px; }

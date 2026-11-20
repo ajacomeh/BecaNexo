@@ -120,16 +120,18 @@ def capture(execution, source, portal):
                 if portal.generico and observation.resultado != 'sin_cambios':
                     from .auto_borradores import candidate_assessment
                     admitted, reason = candidate_assessment(publication, observation.version)
-                    incident(execution, 'CANDIDATO_ACEPTADO' if admitted else 'CANDIDATO_PENDIENTE',
+                    incident(execution, 'CANDIDATO_ACEPTADO' if admitted else
+                             'CANDIDATO_FUERA_ALCANCE' if (reason or '').startswith('Descartada') else 'CANDIDATO_PENDIENTE',
                              (reason or 'Ficha con evidencia suficiente para borrador privado.') if admitted else (reason or 'Revisión editorial pendiente.'),
                              publication=publication, severity='aviso')
                 if observation.version_id and getattr(settings, 'RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS', False):
                     try:
                         from .auto_borradores import prepare_automatic_draft
-                        _, _, reason = prepare_automatic_draft(publication.pk, observation.version_id)
+                        origin, _, reason = prepare_automatic_draft(publication.pk, observation.version_id)
                         if reason and observation.resultado != 'sin_cambios':
-                            incident(execution, 'BORRADOR_REVISION_PENDIENTE', reason,
-                                     publication=publication, severity='aviso')
+                            code = ('BORRADOR_REVISION_PENDIENTE' if origin else
+                                    'CANDIDATO_FUERA_ALCANCE' if reason.startswith('Descartada') else 'CANDIDATO_PENDIENTE')
+                            incident(execution, code, reason, publication=publication, severity='aviso')
                     except Exception as exc:
                         incident(execution, 'BORRADOR_AUTO_FALLIDO', type(exc).__name__, publication=publication)
             except SourceBackoff:

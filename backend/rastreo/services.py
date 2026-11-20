@@ -18,7 +18,7 @@ from convocatorias.siau_extraccion import EXTRACTOR_VERSION, extract_html
 from .models import Fuente, Ejecucion, Acceso, Incidencia, Revision, Publicacion, CandidatoIndice, FRECUENCIA_MINIMA_MIN
 from .observaciones import identity, observe, normalize_url
 from .storage import prepare_document, register_document, StorageError, root_path
-from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, NATIONAL_FICHA, NationalIndexLinks, candidate_url, index_pages, national_index_pages, national_ficha_content, candidate_ficha_content
+from .descubrimiento import BASE, MAX_BASES, MAX_FICHAS, NATIONAL_FICHA, NationalIndexLinks, candidate_url, index_pages, national_index_pages, national_ficha_content, national_ficha_flexible, candidate_ficha_content
 from .siau_ajax import AJAX_INDEX, MAX_INDEX_PAGES, ajax_request, grid_config, robots_allowed, robots_allow_ajax
 from .portal_fuentes import PORTALES, POLITICA_VERSION, GENERIC_POLICY_VERSION, generic_portal, portal_for_source, links as portal_links, extract_portal
 
@@ -465,10 +465,12 @@ class PersistentDownloader(Downloader):
                     incident(self.execution, 'INDICE_ESTRUCTURA',
                              'Contrato AJAX público fuera de los límites admitidos.', access)
                     raise AccessError('Índice nacional fuera del contrato AJAX.') from None
+            all_becas = self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/4'
             if (not self.portal and self.page_url == url and url not in PAGES and self.execution.configuracion_snapshot['politica_version'] in ('siau-nacionales/3', 'siau-nacionales/4')
                     and not (candidate_ficha_content(content, self.candidate.titulo_publico) if self.candidate
-                             else national_ficha_content(content, include_all_becas=
-                                 self.execution.configuracion_snapshot['politica_version'] == 'siau-nacionales/4'))):
+                             else (national_ficha_content(content, include_all_becas=all_becas)
+                                   # Plantilla distinta con el mismo título admitido: se conserva y se marca.
+                                   or national_ficha_flexible(content, include_all_becas=all_becas)))):
                 access = self.record(url, entry, status, 'bloqueado', error='FICHA_FUERA_ALCANCE')
                 incident(self.execution, 'FICHA_FUERA_ALCANCE', 'La ficha no conserva la estructura nacional anunciada en el índice.', access, 'aviso')
                 raise AccessError('Ficha fuera del alcance nacional verificado.')
@@ -804,8 +806,10 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                             from .auto_borradores import prepare_automatic_draft
                             _origin, _created, review_reason = prepare_automatic_draft(publication.pk, observed.version_id)
                             if review_reason and observed.resultado != 'sin_cambios':
-                                incident(execution, 'BORRADOR_REVISION_PENDIENTE', review_reason,
-                                         severity='aviso', publication=publication)
+                                # Sin borrador: el motivo queda visible en la bandeja de rastreo.
+                                code = ('BORRADOR_REVISION_PENDIENTE' if _origin else
+                                        'CANDIDATO_FUERA_ALCANCE' if review_reason.startswith('Descartada') else 'CANDIDATO_PENDIENTE')
+                                incident(execution, code, review_reason, severity='aviso', publication=publication)
                         except Exception as exc:
                             # Una incidencia editorial no elimina la versión ni sus documentos.
                             incident(execution, 'BORRADOR_AUTO_FALLIDO', type(exc).__name__, publication=publication)

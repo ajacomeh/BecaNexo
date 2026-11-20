@@ -16,6 +16,26 @@ const filterCatalogs = { ...catalogs, niveles: [{ valor: 'maestria', nombre: 'Ma
 const adminListing = { count: 1, page: 1, page_size: 12, results: [{ id: 4, estado: 'borrador', titulo: 'Convocatoria sintética', institucion: { nombre: 'Entidad ficticia' }, beneficios: [], opciones: [], cierre: null }] }
 
 describe('convocatorias', () => {
+  it('muestra confianza y pasos pendientes del borrador, y filtra y ordena por confianza', async () => {
+    const draft = { ...adminListing.results[0], revision: 'pendiente',
+      origen_automatico: { publicacion_id: 3, confianza: 'media', marcas: ['Oferente por identificar en las bases de la beca nacional.'] },
+      diagnostico: { faltan: 2, pendientes_publicacion: ['Asigna una institución oferente ecuatoriana antes de publicar.', 'Añade al menos una opción activa.'] } }
+    const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path === 'becas/catalogos' ? filterCatalogs : { ...adminListing, results: [draft] })
+    render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)
+    const user = userEvent.setup()
+    expect(await screen.findByText('Confianza media')).toBeVisible()
+    expect(screen.getByText('Faltan 2 pasos para publicar')).toBeVisible()
+    await user.click(screen.getByText('Qué falta revisar'))
+    expect(screen.getByText('Añade al menos una opción activa.')).toBeVisible()
+    expect(screen.getByText('Oferente por identificar en las bases de la beca nacional.')).toBeVisible()
+    await user.selectOptions(screen.getByLabelText('Ordenar por'), 'confianza')
+    await waitFor(() => expect(get).toHaveBeenCalledWith('gestion/convocatorias', { orden: 'confianza' }))
+    await user.click(await screen.findByText('Más filtros'))
+    await user.selectOptions(screen.getByLabelText('Confianza del borrador del rastreo'), 'media')
+    await user.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+    await waitFor(() => expect(get).toHaveBeenCalledWith('gestion/convocatorias', { confianza: 'media', orden: 'confianza' }))
+  })
+
   it('resume las opciones y muestra cierres con día o instante sin inventar horas', async () => {
     const makeOffer = (id, options, dates = {}) => ({
       id, titulo: `Convocatoria ${id}`, estado: id === 14 ? 'cerrada' : id === 16 ? 'borrador' : 'abierta',

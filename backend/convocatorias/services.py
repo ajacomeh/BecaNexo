@@ -21,17 +21,21 @@ def postulables():
     )
 
 
-def detalle(obj, publico=False):
+def detalle(obj, publico=False, con_diagnostico=False):
     data = dict(s.ConvocatoriaSerializer(obj).data)
     data["institucion"] = s.InstitucionSerializer(obj.institucion).data if obj.institucion_id else None
     if not publico:
-        origin = m.BorradorRastreo.objects.filter(convocatoria=obj).first()
+        origin = m.BorradorRastreo.objects.filter(convocatoria=obj).select_related("publicacion__fuente", "version").first()
         if origin:
             from rastreo.auto_borradores import pending_for_publication, review_notes
+            confianza, marcas = confianza_borrador(origin)
         data["origen_automatico"] = ({"publicacion_id": origin.publicacion_id, "version_id": origin.version_id,
                                         "pendientes_iniciales": origin.pendientes_iniciales,
                                         "bloqueos_actuales": pending_for_publication(obj, origin),
-                                        "observaciones": review_notes(obj, origin)} if origin else None)
+                                        "observaciones": review_notes(obj, origin),
+                                        "confianza": confianza, "marcas": marcas} if origin else None)
+        if con_diagnostico:
+            data["diagnostico"] = diagnostico(obj)
     data["tipo_beca_nombre"] = obj.tipo_beca.nombre if obj.tipo_beca else None
     opciones = obj.opciones.filter(activa=True) if publico else obj.opciones.all()
     data["opciones"] = s.OpcionSerializer(opciones, many=True).data
@@ -66,10 +70,25 @@ def touch(obj):
     obj.save(update_fields=["version", "actualizado_en", "revision"])
 
 
-@transaction.atomic
-def publicar(obj):
-    era_publica = obj.activa and obj.revision == "validada" and (
-        bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC")
+def confianza_borrador(origin):
+    """Confianza y marcas registradas al crear el borrador; los antiguos se clasifican al consultar."""
+    clasificacion = (origin.datos_iniciales or {}).get("clasificacion_inicial") or {}
+    if not clasificacion.get("confianza"):
+        from rastreo.auto_borradores import classify_candidate
+        clasificacion = classify_candidate(origin.publicacion, origin.version)
+    return clasificacion.get("confianza") or "baja", clasificacion.get("marcas") or []
+
+
+def diagnostico(obj):
+    """Lo que falta para publicar, con los mismos controles de publicar(), sin escribir nada."""
+    if obj.revision == "validada":
+        return {"pendientes_publicacion": [], "faltan": 0}
+    pendientes = errores_publicacion(obj, estricto=False)
+    return {"pendientes_publicacion": pendientes, "faltan": len(pendientes)}
+
+
+def errores_publicacion(obj, estricto=True):
+    """Controles de publicación. Con estricto=True un requisito inválido lanza su error, como siempre."""
     errors = []
     from rastreo.integracion import estado_publicacion_integrada
     origen = estado_publicacion_integrada(obj)
@@ -95,7 +114,10 @@ def publicar(obj):
         serializer = s.RequisitoSerializer(r, data=s.RequisitoSerializer(r).data, context={"convocatoria": obj})
         payload = dict(serializer.initial_data); payload.pop("id")
         serializer = s.RequisitoSerializer(r, data=payload, context={"convocatoria": obj})
-        serializer.is_valid(raise_exception=True)
+        if estricto:
+            serializer.is_valid(raise_exception=True)
+        elif not serializer.is_valid():
+            errors.append(f"Corrige el requisito «{r.texto_original[:80]}»: no cumple su contrato.")
     for opcion in opciones:
         for destino in list(opcion.paises.all()) or [None]:
             reglas = [r for r in requisitos if r.opcion_estudio_id in (None, opcion.pk) and
@@ -116,7 +138,15 @@ def publicar(obj):
             key = " ".join(b.concepto.casefold().split())
             if key in conceptos: errors.append(f"Resuelve el beneficio superpuesto '{b.concepto}' en la opción {opcion.pk}; registra el resultado por opción.")
             conceptos.add(key)
-    if errors: raise ValidationError({"detail": " ".join(dict.fromkeys(errors))})
+    return list(dict.fromkeys(errors))
+
+
+@transaction.atomic
+def publicar(obj):
+    era_publica = obj.activa and obj.revision == "validada" and (
+        bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC")
+    errors = errores_publicacion(obj)
+    if errors: raise ValidationError({"detail": " ".join(errors)})
     obj.revision = "validada"
     obj.activa = True
     obj.version += 1
