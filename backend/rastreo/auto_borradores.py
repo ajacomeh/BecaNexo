@@ -279,12 +279,14 @@ def candidatos_de_datos(data, version_id, document_id=None, texto=''):
     `texto` es el texto conservado de la ficha: completa valores que el maquetado partió en dos líneas.
     """
     from convocatorias.models import NIVELES_OPCION
+    from perfiles.models import MODALIDADES
     from .estructura_semantica import interpretar_requisitos, candidatos_adicionales
     from .estudios import opciones_candidatas
     requirements = _texto(data.get('requisitos'))
     suggestions = interpretar_requisitos(requirements, version_id=version_id,
         url=(data.get('requisitos') or {}).get('url'), documento_id=document_id)
-    options, pending_options = opciones_candidatas(data, texto, version_id, {value for value, _label in NIVELES_OPCION})
+    options, pending_options = opciones_candidatas(data, texto, version_id, {value for value, _label in NIVELES_OPCION},
+                                                     [value for value, _label in MODALIDADES])
     fields = candidatos_adicionales(data, version_id=version_id, documento_id=document_id)
     return {'requisitos': suggestions, 'opciones': options, 'opciones_pendientes': pending_options, 'otros_campos': fields}
 

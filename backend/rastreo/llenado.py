@@ -156,8 +156,17 @@ def _https_limpio(url):
             and not parts.fragment and (not parts.query or bool(re.fullmatch(r't=\d+', parts.query))))
 
 
+def limpiar_url(url):
+    """Quita espacios y la puntuación de frase que suele quedar pegada al final de un enlace."""
+    url = (url or '').strip()
+    while url and (url[-1] in '.,;:!?»"\'' or (url[-1] == ')' and url.count('(') < url.count(')'))):
+        url = url[:-1]
+    return url
+
+
 def _urls(items):
-    return list(dict.fromkeys(row['url'] for row in items or [] if isinstance(row, dict) and isinstance(row.get('url'), str) and row['url']))
+    return list(dict.fromkeys(limpiar_url(row['url']) for row in items or []
+                              if isinstance(row, dict) and isinstance(row.get('url'), str) and row['url'].strip()))
 
 
 def campos_generales(found, evidencia):
@@ -169,11 +178,10 @@ def campos_generales(found, evidencia):
     def add(campo, valor, literal, seccion):
         out.append({'campo': campo, 'valor': valor, 'literal': literal, 'seccion': seccion,
                     'documento_id': evidencia.get('documento_id')})
-    postulation = _urls(data.get('enlaces_postulacion'))
-    if len(postulation) == 1 and _https_limpio(postulation[0]):
-        add('url_oficial', postulation[0], 'Enlace de postulación de la ficha', 'Enlaces de la ficha')
-    elif evidencia.get('url_ficha') and _https_limpio(evidencia['url_ficha']):
-        add('url_oficial', evidencia['url_ficha'], 'URL de la ficha de origen', 'Ficha de origen')
+    # El enlace oficial es la ficha que describe la beca; el enlace de postulación suele ser un inicio de sesión.
+    ficha = limpiar_url(evidencia.get('url_ficha'))
+    if ficha and _https_limpio(ficha):
+        add('url_oficial', ficha, 'URL de la ficha de origen', 'Ficha de origen')
     bases = _urls(data.get('enlaces_bases'))
     if len(bases) == 1 and _https_limpio(bases[0]):
         add('url_bases', bases[0], 'Enlace «BASES» de la ficha', 'Enlaces de la ficha')
@@ -215,57 +223,133 @@ def _base(nombre):
     return _normal(re.sub(r'\s*\([A-Z0-9]{2,12}\)\s*$', '', nombre or ''))
 
 
-def entidad_oferente(datos):
-    """Entidad oferente ecuatoriana de la ficha: asignar una registrada, crear una nueva o nada.
+def _plano(texto):
+    """Minúsculas sin tildes y sin signos, carácter a carácter: conserva las posiciones del texto original."""
+    salida = []
+    for caracter in texto or '':
+        base = ''.join(c for c in unicodedata.normalize('NFD', caracter.casefold()) if unicodedata.category(c) != 'Mn')
+        salida.append(base if len(base) == 1 and base.isalnum() else ' ')
+    return ''.join(salida)
 
-    Devuelve {'accion': 'asignar'|'crear'|None, ...}. Solo actúa con un único candidato con papel claro de
-    oferente o cooferente; con varios candidatos, coincidencias dudosas o sin evidencia ecuatoriana no hace nada.
+
+def _alias_regex(alias):
+    palabras = _plano(alias).split()
+    return r'\s+'.join(re.escape(palabra) for palabra in palabras) if palabras else None
+
+
+_VERBO = r'(?:otorgad[ao]s?|ofrecid[ao]s?|coofrecid[ao]s?|impulsad[ao]s?|financiad[ao]s?|convocad[ao]s?|ejecutad[ao]s?|promovid[ao]s?)'
+_ACCION = (r'(?:ofrece|otorga|coofrece|convoca|impulsa|concede|financia|'
+           r'tiene\s+por\s+(?:objetivo|objeto)\s+(?:otorgar|conceder|la\s+concesion|el\s+otorgamiento))')
+
+
+def entidad_en_documentos(datos, texto, documento_id, registradas):
+    """Entidad registrada que un documento de la misma versión nombra con papel de oferente o impulsora.
+
+    Revisa la ficha y, cuando existan, los fragmentos de las bases en PDF. Devuelve las coincidencias
+    [{institucion, literal, seccion, documento_id, pagina}] sin deducir nada por defecto.
     """
-    from .auto_borradores import _MARCA_EC, _named_entities, _texto
-    from convocatorias.models import Institucion
-    ecuatorianas, extranjeras, desconocidas = _named_entities(datos)
-    nombres = list(dict.fromkeys(ecuatorianas + extranjeras + desconocidas))
-    # Un título «Beca … Universidad X – Ministerio Y» nombra dos entidades: con más de un candidato no se asigna nada.
-    segmentos = re.split(r'\s+[–—-]\s+', _texto(datos.get('titulo')))
-    if len(segmentos) > 1 and re.search(r'\b(?:universidad|escuela\s+polit|instituto|fundaci)', _normal(segmentos[0])):
-        nombres.append('(otra entidad en el título)')
-    if len(nombres) != 1 or nombres[0] not in ecuatorianas:
-        motivo = ('La ficha no nombra una entidad ecuatoriana con papel de oferente.' if not nombres
-                  else 'La ficha nombra una entidad extranjera; no se asigna ninguna.' if extranjeras and len(nombres) == len(extranjeras)
-                  else 'La ficha nombra varias entidades o una sin evidencia de ser ecuatoriana; no se asigna ninguna.')
-        return {'accion': None, 'motivo': motivo}
-    nombre = nombres[0]
+    fuentes = []
+    for clave, etiqueta in (('titulo', 'Título'), ('descripcion', 'Descripción'), ('requisitos', 'Requisitos'),
+                            ('postulacion_y_documentos', 'Postulación')):
+        valor = datos.get(clave)
+        if isinstance(valor, dict) and isinstance(valor.get('texto_original'), str):
+            fuentes.append((valor['texto_original'], etiqueta, documento_id, None))
+    if texto:
+        fuentes.append((texto, 'Ficha de origen', documento_id, None))
+    for documento in (datos.get('evidencia_pdf') or {}).get('documentos', []):
+        for fragmento in documento.get('fragmentos', []):
+            procedencia = fragmento.get('procedencia') or {}
+            fuentes.append((fragmento.get('texto_original') or '', 'Bases en PDF',
+                            procedencia.get('documento_id') or documento.get('documento_id'), procedencia.get('pagina')))
+    encontradas = {}
+    for institucion in registradas:
+        alias = {institucion.nombre, re.sub(r'\s*\([A-Z0-9]{2,12}\)\s*$', '', institucion.nombre)}
+        sigla = _sigla(institucion.nombre)
+        if sigla and len(sigla) >= 4:
+            alias.add(sigla)
+        for nombre in alias:
+            expresion = _alias_regex(nombre)
+            if not expresion or len(_plano(nombre).strip()) < 4:
+                continue
+            patron = re.compile(rf'(?:{_VERBO}\s+por\s+(?:el\s+|la\s+)?{expresion}\b|iniciativa\s+(?:del|de\s+la)\s+{expresion}\b|'
+                                rf'a\s+cargo\s+del\s+{expresion}\b|\b{expresion}\s+{_ACCION}\b)')
+            for contenido, seccion, documento, pagina in fuentes:
+                encontrado = patron.search(_plano(contenido))
+                if encontrado and institucion.pk not in encontradas:
+                    inicio, fin = encontrado.span()
+                    encontradas[institucion.pk] = {
+                        'institucion': institucion, 'literal': contenido[max(0, inicio - 30):fin + 40].strip(),
+                        'seccion': seccion, 'documento_id': documento, 'pagina': pagina}
+    return list(encontradas.values())
+
+
+def _resolver(nombre, datos, registradas):
+    """Resuelve el nombre de una única candidata ecuatoriana: asignar una registrada, crear una nueva o nada."""
+    from .auto_borradores import _MARCA_EC, _ecuadorian_institution
     declaradas = {(row.get('nombre') or '').strip() for row in datos.get('oferentes') or []
                   if isinstance(row, dict) and row.get('pais_codigo') == 'EC'}
-    registradas = list(Institucion.objects.select_related('pais').filter(pais__codigo='EC'))
     base = _base(nombre)
     # Sigla del candidato: entre paréntesis o tras un guion final («Ministerio X – SIGLA»).
     encontrada = re.search(r'(?:\(([A-Z0-9]{2,12})\)|[–—-]\s*([A-Z0-9]{3,12}))\s*$', nombre)
     siglas = (encontrada[1] or encontrada[2]) if encontrada else None
     coincidencias = [row for row in registradas if _normal(row.nombre) == _normal(nombre) or _base(row.nombre) == base
-                     or (siglas and _sigla(row.nombre) == siglas) or (_sigla(row.nombre) and _normal(_sigla(row.nombre)) == _normal(nombre))]
-    texto = {'Título': _texto(datos.get('titulo')), 'Descripción': _texto(datos.get('descripcion')),
-             'Requisitos': _texto(datos.get('requisitos')), 'Postulación': _texto(datos.get('postulacion_y_documentos'))}
-    seccion, literal = 'Oferentes declarados', nombre
-    for key, value in texto.items():
-        position = value.lower().find(nombre.lower()) if nombre else -1
-        if position >= 0:
-            seccion, literal = key, value[max(0, position - 40):position + len(nombre) + 40].strip()
-            break
-    informe = {'nombre': nombre, 'literal': literal, 'seccion': seccion}
+                     or (siglas and _sigla(row.nombre) == siglas)
+                     or (_sigla(row.nombre) and _normal(_sigla(row.nombre)) == _normal(nombre))]
     if len(coincidencias) > 1:
-        return {'accion': None, 'motivo': 'Varias entidades registradas podrían coincidir; no se asigna ninguna.', **informe}
+        return {'accion': None, 'motivo': 'Varias entidades registradas podrían coincidir; no se asigna ninguna.'}
     if coincidencias:
-        return {'accion': 'asignar', 'institucion': coincidencias[0], **informe}
-    from .auto_borradores import _ecuadorian_institution
+        return {'accion': 'asignar', 'institucion': coincidencias[0]}
     if _ecuadorian_institution(nombre):
-        return {'accion': None, 'motivo': 'El nombre solo coincide en parte con una entidad registrada; no se duplica ni se asigna.', **informe}
+        return {'accion': None, 'motivo': 'El nombre solo coincide en parte con una entidad registrada; no se duplica ni se asigna.'}
     if not (re.search(_MARCA_EC, _normal(nombre)) or nombre in declaradas):
-        return {'accion': None, 'motivo': 'Sin evidencia directa de que la entidad sea ecuatoriana.', **informe}
+        return {'accion': None, 'motivo': 'Sin evidencia directa de que la entidad sea ecuatoriana.'}
     limpio = re.sub(r'\s+', ' ', re.split(r'\s+(?:20\d{2}|intake|cohorte)\b', nombre, maxsplit=1, flags=re.I)[0]).strip(' .,;:–-')[:200]
     plano = _normal(limpio)
     sector = 'publico' if _PUBLICO.match(plano) else 'privado' if _PRIVADO.search(plano) else None
-    return {'accion': 'crear', 'sector': sector or 'privado', 'sector_por_defecto': sector is None, **informe, 'nombre': limpio}
+    return {'accion': 'crear', 'nombre': limpio, 'sector': sector or 'privado', 'sector_por_defecto': sector is None}
+
+
+def entidad_oferente(datos, texto='', documento_id=None):
+    """Entidad oferente ecuatoriana de la ficha: asignar una registrada, crear una nueva o nada.
+
+    Las entidades extranjeras y el lugar de estudio no cuentan. Con una única candidata ecuatoriana con
+    papel claro de oferente o cooferente se asigna o crea; con dos o más distintas, o ninguna, no se hace nada.
+    Si la ficha no nombra al oferente («esta Cartera de Estado»), solo se asigna una entidad registrada que un
+    documento de la misma versión nombre explícitamente como oferente o impulsora.
+    """
+    from .auto_borradores import _named_entities, _texto
+    from convocatorias.models import Institucion
+    ecuatorianas = _named_entities(datos)[0]
+    registradas = list(Institucion.objects.select_related('pais').filter(pais__codigo='EC'))
+    candidatas = list(dict.fromkeys(ecuatorianas))
+    resoluciones = [(nombre, _resolver(nombre, datos, registradas)) for nombre in candidatas]
+    claves = {r['institucion'].pk if r.get('institucion') else _normal(r.get('nombre') or n)
+              for n, r in resoluciones if r['accion']}
+    if len(candidatas) > 1 and (len(claves) > 1 or any(r['accion'] is None for _n, r in resoluciones)):
+        return {'accion': None, 'motivo': 'La ficha nombra varias entidades ecuatorianas como oferentes; no se asigna ninguna.'}
+    if candidatas:
+        nombre, resolucion = resoluciones[0]
+        if resolucion['accion'] is None:
+            return resolucion
+        textos = {'Título': _texto(datos.get('titulo')), 'Descripción': _texto(datos.get('descripcion')),
+                  'Requisitos': _texto(datos.get('requisitos')), 'Postulación': _texto(datos.get('postulacion_y_documentos'))}
+        seccion, literal = 'Oferentes declarados', nombre
+        for clave, valor in textos.items():
+            posicion = valor.lower().find(nombre.lower())
+            if posicion >= 0:
+                seccion, literal = clave, valor[max(0, posicion - 40):posicion + len(nombre) + 40].strip()
+                break
+        return {**resolucion, 'nombre': resolucion.get('nombre') or nombre, 'literal': literal, 'seccion': seccion,
+                'documento_id': documento_id, 'pagina': None}
+    en_documentos = entidad_en_documentos(datos, texto, documento_id, registradas)
+    if len(en_documentos) == 1:
+        encontrada = en_documentos[0]
+        return {'accion': 'asignar', 'institucion': encontrada['institucion'], 'nombre': encontrada['institucion'].nombre,
+                'literal': encontrada['literal'], 'seccion': encontrada['seccion'],
+                'documento_id': encontrada['documento_id'], 'pagina': encontrada['pagina']}
+    if len(en_documentos) > 1:
+        return {'accion': None, 'motivo': 'Los documentos nombran varias entidades registradas como oferentes; no se asigna ninguna.'}
+    return {'accion': None, 'motivo': 'Ni la ficha ni sus documentos nombran una entidad ecuatoriana con papel de oferente.'}
 
 
 def _vacio(offer, campo):
@@ -313,10 +397,12 @@ def completar_borrador(offer, evidencia, registro):
     values, accepted = {}, []
     generales = campos_generales(found, evidencia)
     if 'institucion' not in written and offer.institucion_id is None:
-        entidad = entidad_oferente(evidencia['datos'])
+        entidad = entidad_oferente(evidencia['datos'], evidencia.get('texto') or '', evidencia.get('documento_id'))
         if entidad['accion']:
             entry = {'campo': 'institucion', 'literal': entidad['literal'], 'seccion': entidad['seccion'],
-                     'documento_id': evidencia.get('documento_id'), 'nombre': entidad['nombre']}
+                     'documento_id': entidad.get('documento_id') or evidencia.get('documento_id'), 'nombre': entidad['nombre']}
+            if entidad.get('pagina'):
+                entry['pagina'] = entidad['pagina']
             nueva = None
             if entidad['accion'] == 'asignar':
                 entry['valor'] = entidad['institucion'].pk
@@ -349,7 +435,7 @@ def completar_borrador(offer, evidencia, registro):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         for item in accepted:
-            entry = {key: item[key] for key in ('campo', 'valor', 'literal', 'seccion', 'documento_id', 'nombre',
+            entry = {key: item[key] for key in ('campo', 'valor', 'literal', 'seccion', 'documento_id', 'nombre', 'pagina',
                                                 'entidad_creada', 'sector', 'sector_por_defecto') if key in item}
             registro['campos'].append(entry)
             resumen['campos'].append({'campo': item['campo'], 'valor': item['valor']})

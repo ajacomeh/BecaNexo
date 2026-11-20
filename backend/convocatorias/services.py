@@ -110,6 +110,9 @@ def errores_publicacion(obj, estricto=True):
             for r in reglas:
                 codigo = r.tipo_requisito.codigo
                 if codigo in ("ACREDITACION", "DOCUMENTO", "OTRO"): continue
+                # Varias condiciones académicas sin relación definida ya dan «desconocido» en la comparación
+                # (no se mezclan títulos distintos); no hace falta bloquear la publicación por ello.
+                if codigo in ("FORMACION", "TITULO_AREA", "PROMEDIO") and r.relacion_formacion == "pendiente": continue
                 discriminante = (r.valor_estructurado or {}).get("codigo_idioma") if codigo == "IDIOMA" else (r.valor_estructurado or {}).get("area") if codigo == "EXPERIENCIA" else None
                 if codigo in ("FORMACION", "TITULO_AREA", "PROMEDIO"):
                     discriminante = r.grupo_formacion if r.relacion_formacion == "misma_formacion" else r.pk if r.relacion_formacion == "independiente" else None

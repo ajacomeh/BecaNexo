@@ -94,7 +94,7 @@ def _niveles_de_oferta(studies):
     return [x for x in expressions if x], statements[0], []
 
 
-def opciones_candidatas(data, texto, version_id, niveles_catalogo):
+def opciones_candidatas(data, texto, version_id, niveles_catalogo, modalidades_catalogo=()):
     """Opciones de estudio candidatas y pendientes (con motivo) para una ficha."""
     studies = data.get('estudios') or {}
 
@@ -123,7 +123,11 @@ def opciones_candidatas(data, texto, version_id, niveles_catalogo):
     for expression in unmapped:
         pending.append({'campo': 'modalidad', 'texto_original': expression,
                         'motivo': f'Modalidad «{expression}» sin equivalente exacto en el catálogo de modalidades.'})
-    if unspecified and not modalities:
+    todas = False
+    if unspecified and not modalities and levels and modalidades_catalogo:
+        # «Todas las modalidades» junto a niveles enumerados: una opción por nivel y por cada modalidad del catálogo.
+        modalities, todas = list(modalidades_catalogo), True
+    elif unspecified and not modalities:
         pending.append({'campo': 'modalidad', 'texto_original': modality_text,
                         'motivo': 'La ficha indica «Todas las modalidades» sin enumerarlas; no se deducen modalidades.'})
     options = []
@@ -136,6 +140,6 @@ def opciones_candidatas(data, texto, version_id, niveles_catalogo):
                 options.append({
                     'nivel': level, 'modalidad': modality, 'destino_original': destination, 'validado': False,
                     'procedencia': {'version_id': version_id, 'enunciado': statement[:300],
-                                    'modalidad_original': modality_text[:200],
+                                    'modalidad_original': modality_text[:200], 'todas_las_modalidades': todas,
                                     'campos': ['estudios.niveles_mencionados', 'estudios.modalidad', 'estudios.destino']}})
     return options, pending

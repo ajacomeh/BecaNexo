@@ -80,17 +80,22 @@ class EstudiosTests(SimpleTestCase):
         self.assertEqual((pending[0]['campo'], pending[0]['texto_original']), ('nivel', 'maestrías tecnológicas'))
         self.assertIn('sin equivalente exacto', pending[0]['motivo'])
 
-    def test_tecnico_y_tecnologico_sueltos_no_se_deducen_y_todas_las_modalidades_no_se_expande(self):
+    def test_todas_las_modalidades_junto_a_niveles_enumerados_se_expande_a_las_del_catalogo(self):
         enunciado = 'becas para estudios de tercer nivel técnico, tecnológico o de grado en instituciones del país'
         data = datos('Todas las modalidades', mentions=menciones(enunciado, 'técnico', 'tecnológico', 'grado'))
+        modalidades = ('presencial', 'semipresencial', 'virtual', 'hibrida')
+        options, pending = opciones_candidatas(data, 'Modalidad: Todas las modalidades', 5, CATALOGO, modalidades)
+        self.assertEqual([(o['nivel'], o['modalidad']) for o in options], [('grado', m) for m in modalidades])
+        self.assertTrue(all(o['procedencia']['todas_las_modalidades'] and o['procedencia']['enunciado'] == enunciado for o in options))
+        # técnico y tecnológico sueltos no tienen equivalente exacto: quedan pendientes, no se deducen.
+        self.assertEqual([(p['campo'], p['texto_original']) for p in pending], [('nivel', 'técnico'), ('nivel', 'tecnológico')])
+        # Sin catálogo de modalidades disponible, no se deduce nada.
         options, pending = opciones_candidatas(data, 'Modalidad: Todas las modalidades', 5, CATALOGO)
         self.assertEqual(options, [])
-        self.assertEqual([(p['campo'], p['texto_original']) for p in pending],
-                         [('nivel', 'técnico'), ('nivel', 'tecnológico'), ('modalidad', 'Todas las modalidades')])
         self.assertIn('sin enumerarlas', pending[-1]['motivo'])
         # Con modalidad enumerada, solo el nivel exacto genera opción.
         data = datos('Presencial', mentions=menciones(enunciado, 'técnico', 'tecnológico', 'grado'))
-        options, pending = opciones_candidatas(data, '', 5, CATALOGO)
+        options, pending = opciones_candidatas(data, '', 5, CATALOGO, modalidades)
         self.assertEqual([(o['nivel'], o['modalidad']) for o in options], [('grado', 'presencial')])
         self.assertEqual([p['texto_original'] for p in pending], ['técnico', 'tecnológico'])
 

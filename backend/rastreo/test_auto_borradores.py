@@ -451,9 +451,9 @@ class AutoDraftTests(TransactionTestCase):
         self.assertIsInstance(response.data['para_publicar'], list)
         self.assertEqual(set(response.data['evidencia']), {'campos', 'registros'})
         self.assertNotIn('candidatos_editables', response.data)
-        # El enlace oficial es el de postulación de la ficha (evidencia directa), distinto de la URL de la ficha.
-        postulacion = [item['url'] for item in response.data['enlaces_origen']['postulacion']]
-        self.assertEqual([origin.convocatoria.url_oficial], postulacion)
+        # El enlace oficial es la ficha de origen, no el enlace de postulación (inicio de sesión de otra plataforma).
+        self.assertEqual(origin.convocatoria.url_oficial, publication.url_original)
+        self.assertNotIn(origin.convocatoria.url_oficial, [item['url'] for item in response.data['enlaces_origen']['postulacion']])
 
     def test_relevant_new_version_hides_validated_offer_until_admin_confirmation(self):
         publication = self.capture()

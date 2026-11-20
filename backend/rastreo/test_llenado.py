@@ -228,7 +228,8 @@ class LlenadoAutomaticoTests(TransactionTestCase):
         casos = {
             'extranjera': 'Becas otorgadas por Universidad de Zaragoza para estudios de posgrado.',
             'sin_evidencia': 'Becas otorgadas por Fundación Horizonte Austral para estudios.',
-            'varias': 'Becas otorgadas por Universidad Politécnica del Ecuador en convenio con Universidad de Zaragoza.',
+            'varias_ecuatorianas': 'Becas otorgadas por Universidad Politécnica del Ecuador en convenio con '
+                                   'Universidad Técnica del Ecuador.',
             'solo_destinatarios': 'Becas para ciudadanos ecuatorianos que estudien en universidades de Ecuador.',
         }
         for nombre, texto in casos.items():
@@ -257,3 +258,69 @@ class LlenadoAutomaticoTests(TransactionTestCase):
         llenar_origen(origin, version)
         offer.refresh_from_db()
         self.assertEqual((offer.institucion_id, Institucion.objects.count()), (existente.pk, antes))
+
+    def test_una_ecuatoriana_con_extranjeras_nombradas_se_crea_y_el_titulo_con_ministerio_no_es_ambiguo(self):
+        origin = self.borrador(oferente=False)
+        offer = origin.convocatoria
+        offer.institucion = None
+        offer.save(update_fields=['institucion'])
+        version = latest_version(origin.publicacion)
+        version.datos_extraidos['titulo']['texto_original'] = (
+            'Programa de Becas para Mujeres Ecuatorianas Universidad Europea – Ministerio de Gobierno del Ecuador')
+        version.datos_extraidos['descripcion']['texto_original'] = 'Becas para estudiar en la Universidad Europea.'
+        version.datos_extraidos['oferentes'] = []
+        antes = Institucion.objects.count()
+        llenar_origen(origin, version)
+        offer.refresh_from_db()
+        self.assertEqual(Institucion.objects.count(), antes + 1)
+        self.assertEqual(offer.institucion.nombre, 'Ministerio de Gobierno del Ecuador')
+        self.assertEqual(offer.institucion.sector, 'publico')
+
+    def test_cartera_de_estado_solo_se_asigna_si_un_documento_nombra_a_la_entidad_con_papel_de_oferente(self):
+        origin = self.borrador(oferente=False)
+        offer = origin.convocatoria
+        offer.institucion = None
+        offer.save(update_fields=['institucion'])
+        minedec = Institucion.objects.create(nombre='Ministerio de Educación, Deporte y Cultura del Ecuador (MINEDEC)',
+                                             sector='publico', pais=self.pais_ec())
+        version = self.con_texto(origin, 'No mantener una beca otorgada por esta Cartera de Estado.')
+        llenar_origen(origin, version)
+        offer.refresh_from_db()
+        self.assertIsNone(offer.institucion_id, 'MINEDEC no se asigna por defecto')
+        # Un fragmento de las bases en PDF de la misma versión la nombra como impulsora del programa.
+        version.datos_extraidos['evidencia_pdf'] = {'documentos': [{'documento_id': 77, 'fragmentos': [{
+            'texto_original': 'El programa es impulsado por el Ministerio de Educación, Deporte y Cultura del Ecuador (MINEDEC).',
+            'procedencia': {'documento_id': 77, 'pagina': 3}}]}]}
+        origin.datos_iniciales = {k: v for k, v in origin.datos_iniciales.items() if k != 'llenado_automatico'}
+        origin.save(update_fields=['datos_iniciales'])
+        llenar_origen(origin, version)
+        offer.refresh_from_db()
+        self.assertEqual(offer.institucion_id, minedec.pk)
+        entrada = next(c for c in origin.datos_iniciales['llenado_automatico']['campos'] if c['campo'] == 'institucion')
+        self.assertEqual((entrada['documento_id'], entrada['pagina'], entrada['seccion']), (77, 3, 'Bases en PDF'))
+        self.assertIn('impulsado por el Ministerio', entrada['literal'])
+
+    def test_enlace_oficial_es_la_ficha_y_las_urls_cargadas_no_conservan_puntuacion_final(self):
+        from .llenado import campos_generales, limpiar_url
+        self.assertEqual(limpiar_url('https://pusak.example/cas/login.'), 'https://pusak.example/cas/login')
+        self.assertEqual(limpiar_url(' https://a.example/bases.pdf; '), 'https://a.example/bases.pdf')
+        self.assertEqual(limpiar_url('https://a.example/x_(y)'), 'https://a.example/x_(y)')
+        self.assertEqual(limpiar_url('https://a.example/x)'), 'https://a.example/x')
+        evidencia = {'url_ficha': 'https://siau.example/beca/.', 'documento_id': 5, 'datos': {
+            'enlaces_postulacion': [{'url': 'https://pusak.example/cas/login.'}],
+            'enlaces_bases': [{'url': 'https://siau.example/uploads/bases.pdf.'}]}}
+        campos = {c['campo']: c['valor'] for c in campos_generales({}, evidencia)}
+        self.assertEqual(campos['url_oficial'], 'https://siau.example/beca/')
+        self.assertEqual(campos['url_bases'], 'https://siau.example/uploads/bases.pdf')
+        # Sin ficha utilizable no se usa el enlace de postulación como sustituto.
+        evidencia['url_ficha'] = ''
+        self.assertNotIn('url_oficial', {c['campo'] for c in campos_generales({}, evidencia)})
+
+    def test_el_borrador_creado_carga_la_ficha_como_enlace_oficial_y_las_bases_como_antes(self):
+        origin = self.borrador(oferente=False)
+        offer = origin.convocatoria
+        self.assertEqual(offer.url_oficial, origin.publicacion.url_original)
+        self.assertNotIn('/cas/login', offer.url_oficial)
+        self.assertFalse(offer.url_oficial.endswith('.'))
+        self.assertTrue(offer.url_bases.startswith('https://'))
+        self.assertFalse(offer.url_bases.endswith('.'))

@@ -159,3 +159,14 @@ class PublicacionDirectaTests(TransactionTestCase):
         self.assertEqual(errores_publicacion(offer, estricto=False), [])
         self.assertEqual(self.publicar(self.admin(), offer).status_code, 200)
         self.assertTrue(publicas().filter(pk=offer.pk).exists())
+
+    def test_varias_condiciones_academicas_sin_relacion_no_bloquean_y_la_comparacion_queda_en_desconocido(self):
+        origin = self.borrador()
+        offer = self.completar(origin)
+        formacion = TipoRequisito.objects.get(codigo='FORMACION')
+        for texto in ('Ser bachiller', 'Estar matriculada en una carrera de tercer nivel'):
+            Requisito.objects.create(convocatoria=offer, tipo_requisito=formacion, texto_original=texto, operador='>=',
+                                     valor_estructurado={'nivel_minimo': 'bachillerato'}, modo_comprobacion='dato_declarado',
+                                     obligatorio=True, validado=False, activo=True)
+        pendientes = errores_publicacion(offer, estricto=False)
+        self.assertFalse(any('Unifica' in texto for texto in pendientes), pendientes)
