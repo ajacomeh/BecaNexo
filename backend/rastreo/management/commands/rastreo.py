@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
@@ -7,7 +8,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rastreo.models import Fuente, Ejecucion, Publicacion, Version, VersionDocumento, Observacion
 from rastreo.observaciones import differences
-from rastreo.services import configure, enable_discovery, enable_national_discovery, revert_national_discovery, set_paginated_discovery, set_frequency, run_manual, run_candidate, run_scheduled, next_due, recover, summary, register_portal, register_generic_portal, verify_generic_access, set_portal_active
+from rastreo.services import configure, enable_discovery, enable_national_discovery, revert_national_discovery, set_paginated_discovery, set_frequency, run_manual, run_candidate, run_scheduled, cerrar_programadas_interrumpidas, next_due, recover, resumen_corrida, summary, register_portal, register_generic_portal, verify_generic_access, set_portal_active
 from rastreo.storage import integrity_report, StorageError
 
 
@@ -15,7 +16,7 @@ class Command(BaseCommand):
     help = 'Rastreo local de confianza: configurar, activar, desactivar, ejecutar, resumen, recuperar, integridad.'
 
     def add_arguments(self, parser):
-        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'registrar-portal', 'registrar-portal-generico', 'verificar-portal-generico', 'activar-portal', 'desactivar-portal', 'habilitar-descubrimiento', 'habilitar-nacionales', 'revertir-nacionales', 'habilitar-paginacion', 'revertir-paginacion', 'configurar-frecuencia', 'ejecutar', 'procesar-candidato', 'programado', 'estado-programacion', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
+        parser.add_argument('accion', choices=['configurar', 'activar', 'desactivar', 'registrar-portal', 'registrar-portal-generico', 'verificar-portal-generico', 'activar-portal', 'desactivar-portal', 'habilitar-descubrimiento', 'habilitar-nacionales', 'revertir-nacionales', 'habilitar-paginacion', 'revertir-paginacion', 'configurar-frecuencia', 'ejecutar', 'procesar-candidato', 'programado', 'estado-programacion', 'corridas-programadas', 'resumen', 'recuperar', 'integridad', 'publicaciones', 'versiones', 'documentos', 'observaciones', 'diferencias'])
         parser.add_argument('--actor-id', type=int)
         parser.add_argument('--motivo')
         parser.add_argument('--clave', help='UUID idempotente; obligatorio al ejecutar.')
@@ -89,9 +90,12 @@ class Command(BaseCommand):
                     sources = sources.filter(pk=options['fuente_id'])
                 result = []
                 for source in sources:
+                    # Una corrida programada que murió (equipo apagado, tope de la tarea) no debe bloquear la fuente.
+                    cerradas = cerrar_programadas_interrumpidas(source.pk)
                     due = next_due(source)
                     if due and due > timezone.now():
-                        result.append({'fuente_id': source.pk, 'estado': 'no_corresponde_aun', 'proxima_ejecucion': due})
+                        result.append({'fuente_id': source.pk, 'estado': 'no_corresponde_aun', 'proxima_ejecucion': due,
+                                       'interrumpidas_cerradas': cerradas})
                     else:
                         result.append(summary(run_scheduled(source.pk)))
             elif action == 'estado-programacion':
@@ -108,6 +112,20 @@ class Command(BaseCommand):
                           'ejecuciones_en_curso': Ejecucion.objects.filter(fuente=source, estado='en_curso').count(),
                           'ultima_ejecucion': {'id': last.pk, 'estado': last.estado, 'inicio': last.inicio} if last else None,
                           'proxima_ejecucion': next_due(source)}
+            elif action == 'corridas-programadas':
+                # Solo lectura: las últimas corridas de la tarea programada y si la captura de la fuente está atrasada.
+                if not options['fuente_id']:
+                    raise ValidationError('--fuente-id obligatorio.')
+                source = Fuente.objects.get(pk=options['fuente_id'])
+                now = timezone.now()
+                due = next_due(source)
+                last = Ejecucion.objects.filter(fuente=source).exclude(estado='omitida').order_by('-inicio', '-id').first()
+                late = bool(due and now > due + timedelta(hours=2))
+                result = {'fuente_id': source.pk, 'ahora': now, 'frecuencia_min': source.frecuencia_min, 'proxima_ejecucion': due,
+                          'atrasada': late, 'horas_de_atraso': round((now - due).total_seconds() / 3600, 1) if late else 0,
+                          'ultima_captura': {'ejecucion_id': last.pk, 'origen': last.origen, 'estado': last.estado, 'inicio': last.inicio} if last else None,
+                          'corridas_programadas': [resumen_corrida(row) for row in
+                                                   Ejecucion.objects.filter(fuente=source, origen='programada').order_by('-inicio', '-id')[:10]]}
             elif action == 'resumen':
                 result = summary(Ejecucion.objects.get(pk=options['ejecucion_id']))
             elif action == 'recuperar':

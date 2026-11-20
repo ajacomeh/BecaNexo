@@ -10,7 +10,7 @@ from usuarios.api import AuthView
 from .api import AdministradorActivo
 from convocatorias.siau_red import INDEX
 from .models import Ejecucion, Fuente, Publicacion
-from .services import next_due, supported_policy
+from .services import next_due, resumen_corrida, supported_policy
 from .portal_fuentes import PORTALES, portal_for_source
 from convocatorias.siau_red import AccessError
 from convocatorias.models import BorradorRastreo
@@ -27,6 +27,9 @@ class ControlRastreo(AuthView):
         sources = list(Fuente.objects.order_by('id'))
         ultima = Ejecucion.objects.order_by('-inicio', '-id').select_related('fuente').first()
         activa = Ejecucion.objects.filter(estado='en_curso').first()
+        # Resultado de la última corrida de la tarea programada (también si fue omitida), con su resumen legible.
+        programada = Ejecucion.objects.filter(origen='programada').order_by('-inicio', '-id').first()
+        ultima_programada = resumen_corrida(programada) if programada else None
         extraordinaria = extraordinary_enabled()
         now = timezone.now()
         available = []
@@ -120,6 +123,7 @@ class ControlRastreo(AuthView):
                 'ejecucion_activa': activa.pk if activa else None,
                 'inicio_pendiente': inicio_pendiente, 'requiere_revision': requiere_revision,
                 'ultimo_inicio_web': resultado_web, 'puede_iniciar': puede_iniciar,
+                'ultima_programada': ultima_programada,
                 'ultima_ejecucion': ({'id': ultima.pk, 'estado': ultima.estado, 'origen': ultima.origen,
                                       'inicio': ultima.inicio, 'fin': ultima.fin,
                                       'fuente': ultima.fuente.nombre} if ultima else None)}

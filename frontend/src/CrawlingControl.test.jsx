@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { offersApi } from './api/client'
@@ -156,4 +156,23 @@ it('señala un marcador antiguo para revisión sin ofrecer otro inicio', async (
   open()
   expect(await screen.findByText(/más de dos minutos sin cierre/)).toBeVisible()
   expect(screen.getByRole('button', { name: 'Iniciar rastreo' })).toBeDisabled()
+})
+
+it('muestra el resultado de la última corrida programada y, si no la hay, lo indica', async () => {
+  const corrida = { ejecucion_id: 12, origen: 'programada', estado: 'finalizada', inicio: '2026-11-21T15:46:08Z', fin: '2026-11-21T15:47:30Z',
+    peticiones: 9, publicaciones_observadas: 5, versiones_nuevas: 1, candidatos_nuevos: 2, borradores_creados: 1, incidencias_total: 3, motivo: null }
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ ...ready, ultima_programada: corrida })
+  open()
+  const line = (await screen.findByText(/Última corrida programada:/)).closest('p')
+  expect(within(line).getByRole('link', { name: '#12' })).toHaveAttribute('href', '/gestion/rastreo/ejecuciones/12')
+  for (const text of ['finalizada', '9 peticiones', '5 fichas observadas', '2 candidatos nuevos', '1 borradores creados', '3 incidencias']) expect(line).toHaveTextContent(text)
+  expect(line).not.toHaveTextContent('Motivo')
+  cleanup()
+  vi.mocked(offersApi.get).mockResolvedValue({ ...ready, ultima_programada: { ...corrida, ejecucion_id: 13, estado: 'omitida', peticiones: 0, motivo: 'Existe una ejecución pendiente de recuperación explícita.' } })
+  open()
+  expect(await screen.findByText(/Motivo: Existe una ejecución pendiente de recuperación explícita\./)).toBeVisible()
+  cleanup()
+  vi.mocked(offersApi.get).mockResolvedValue({ ...ready, ultima_programada: null })
+  open()
+  expect(await screen.findByText(/aún no hay corridas programadas/)).toBeVisible()
 })

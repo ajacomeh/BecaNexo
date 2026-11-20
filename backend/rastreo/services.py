@@ -551,25 +551,89 @@ class PersistentDownloader(Downloader):
             raise AccessError('Página AJAX no verificable.') from exc
 
 
-def summary(execution):
-    execution.refresh_from_db()
+def _borradores_creados(execution):
     from convocatorias.models import BorradorRastreo
-    created = BorradorRastreo.objects.filter(
+    return BorradorRastreo.objects.filter(
         version__observacion__ejecucion=execution,
         creada_en__gte=execution.inicio,
         creada_en__lte=execution.fin,
     ).distinct().count() if execution.fin else 0
+
+
+def resumen_corrida(execution):
+    """Resumen compacto y legible de una corrida: fecha, peticiones, candidatos nuevos y borradores creados."""
+    from zoneinfo import ZoneInfo
+    execution.refresh_from_db()
+    fin = execution.fin or timezone.now()
+    nuevas = Publicacion.objects.filter(fuente_id=execution.fuente_id, primera_deteccion__gte=execution.inicio,
+                                        primera_deteccion__lte=fin).count() if execution.estado != 'omitida' else 0
+    codigos = {}
+    for codigo in execution.incidencias.values_list('codigo', flat=True):
+        codigos[codigo] = codigos.get(codigo, 0) + 1
+    peticiones = execution.accesos.count()
+    borradores = _borradores_creados(execution)
+    local = execution.inicio.astimezone(ZoneInfo('America/Guayaquil'))
+    partes = [local.strftime('%Y-%m-%d %H:%M') + ' (Ecuador)', execution.estado,
+              f'{peticiones} {"petición" if peticiones == 1 else "peticiones"}',
+              f'{execution.publicaciones_observadas} fichas observadas', f'{execution.versiones_nuevas} versiones nuevas',
+              f'{nuevas} {"candidato nuevo" if nuevas == 1 else "candidatos nuevos"}',
+              f'{borradores} {"borrador creado" if borradores == 1 else "borradores creados"}',
+              f'{sum(codigos.values())} incidencias']
+    if execution.estado == 'omitida' and execution.error_resumen:
+        partes.append(f'motivo: {execution.error_resumen}')
+    return {'ejecucion_id': execution.pk, 'origen': execution.origen, 'estado': execution.estado, 'inicio': execution.inicio,
+            'fin': execution.fin, 'peticiones': peticiones, 'publicaciones_observadas': execution.publicaciones_observadas,
+            'versiones_nuevas': execution.versiones_nuevas, 'candidatos_nuevos': nuevas, 'borradores_creados': borradores,
+            'incidencias_total': sum(codigos.values()), 'incidencias_por_codigo': codigos,
+            'motivo': execution.error_resumen if execution.estado in ('omitida', 'fallida') else None, 'texto': ' · '.join(partes)}
+
+
+def summary(execution):
+    execution.refresh_from_db()
+    created = _borradores_creados(execution)
     return {'id': execution.pk, 'clave': str(execution.clave_idempotencia), 'estado': execution.estado,
             'accesos': execution.accesos.count(), 'documentos_distintos': execution.accesos.exclude(documento=None).values('documento').distinct().count(),
             'incidencias': list(execution.incidencias.values('id', 'codigo', 'gravedad', 'detalle')),
             'publicaciones_observadas': execution.publicaciones_observadas, 'versiones_nuevas': execution.versiones_nuevas,
             'observaciones_sin_cambios': execution.observaciones_sin_cambios,
-            'convocatorias_creadas': created, 'revision_documental': 'pendiente'}
+            'convocatorias_creadas': created, 'revision_documental': 'pendiente',
+            'resumen': resumen_corrida(execution)}
+
+
+INTERRUMPIDA_MINUTOS = 10
+
+
+def _cerrar_interrumpidas(source):
+    """Cierra las corridas programadas que quedaron «en curso» porque el proceso murió (apagado del equipo, tope de la tarea).
+
+    Se llama con la exclusión de la fuente ya obtenida: un trabajador vivo la conservaría, así que lo que sigue en
+    curso no tiene proceso. Solo corridas programadas (sin actor) y con latido más antiguo que el margen; las manuales
+    siguen exigiendo la recuperación explícita y auditada. La corrida cerrada sigue consumiendo la ventana de frecuencia.
+    """
+    limite = timezone.now() - timedelta(minutes=INTERRUMPIDA_MINUTOS)
+    cerradas = []
+    for execution in Ejecucion.objects.select_for_update().filter(fuente=source, estado='en_curso', origen='programada'):
+        if (execution.latido_en or execution.inicio) > limite:
+            continue
+        incident(execution, 'INTERRUMPIDA', 'Corrida programada interrumpida; cerrada automáticamente con la exclusión comprobada.')
+        Ejecucion.objects.filter(pk=execution.pk).update(estado='fallida', fin=timezone.now(), error_resumen='Interrumpida; exclusión comprobada.')
+        cerradas.append(execution.pk)
+    return cerradas
 
 
 def run_manual(source_id, actor_id, key, manual_context=None):
     actor_admin(actor_id)
     return _run(source_id, actor_id, key, 'manual', manual_context)
+
+
+def cerrar_programadas_interrumpidas(source_id):
+    """Cierra (con la exclusión de la fuente) las corridas programadas que quedaron en curso sin proceso vivo."""
+    adapter = Fuente.objects.only('adaptador').get(pk=source_id).adaptador
+    with exclusion(source_id, global_lock=not adapter.startswith('portal_ec:')) as locked:
+        if not locked:
+            return []
+        with transaction.atomic():
+            return _cerrar_interrumpidas(Fuente.objects.select_for_update().get(pk=source_id))
 
 
 def run_scheduled(source_id, key=None):
@@ -613,6 +677,8 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
     with exclusion(source_id, global_lock=not adapter.startswith('portal_ec:')) as locked:
         with transaction.atomic():
             source = Fuente.objects.select_for_update().get(pk=source_id)
+            if origin == 'programada' and locked:
+                _cerrar_interrumpidas(source)
             # Serializa creación incluso para invocaciones omitidas.
             existing = Ejecucion.objects.filter(clave_idempotencia=key).first()
             if existing:
