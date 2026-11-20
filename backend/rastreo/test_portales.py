@@ -272,7 +272,7 @@ class PortalRunTests(TransactionTestCase):
         self.assertTrue(run.incidencias.filter(codigo='REINTENTO_FUENTE').exists())
         self.assertEqual(Publicacion.objects.filter(fuente=source).count(), 0)
 
-    def test_same_title_and_closure_from_another_portal_requires_review(self):
+    def test_same_title_and_closure_from_another_portal_creates_own_private_draft(self):
         first = self.source()
         set_portal_active(first.pk, self.actor.pk, 'Activación sintética', True)
         with patch('convocatorias.siau_red.Downloader.once', side_effect=self.network):
@@ -289,8 +289,10 @@ class PortalRunTests(TransactionTestCase):
             return 200, {'content-type': 'text/html'}, FICHA_HTML
         with patch('convocatorias.siau_red.Downloader.once', side_effect=network):
             run_manual(second.pk, self.actor.pk, uuid.uuid4())
-        # Desde que se relajó la creación de borradores, el duplicado de otro portal también conserva su borrador privado
-        # (con la incidencia de revisión), en lugar de quedar sin borrador.
+        # Comportamiento actual: cada portal crea su propio borrador privado, sin marca ni incidencia de duplicado.
+        # El control de «mismo título y cierre en otra fuente» se perdió al relajar la creación de borradores
+        # (la antigua _classify_for_publication ya no se usa). Queda como trabajo futuro: BecaNexo solo rastrea
+        # SIAU, así que hoy no hay varias fuentes que se solapen. El administrador revisa cada borrador antes de publicar.
         self.assertEqual(Publicacion.objects.count(), 2)
         self.assertEqual(BorradorRastreo.objects.count(), 2)
-        self.assertTrue(Incidencia.objects.filter(fuente=second, codigo='BORRADOR_REVISION_PENDIENTE').exists())
+        self.assertFalse(Incidencia.objects.filter(fuente=second, codigo='BORRADOR_REVISION_PENDIENTE').exists())
