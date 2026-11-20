@@ -490,7 +490,7 @@ Comprobación documental realizada: 15 secciones numeradas, tres bloques Mermaid
 | Coincidencia declarada | Resultado de comparar declaraciones con reglas, no certificación ni probabilidad de beca |
 | API simulada | Respuestas controladas por pruebas; no acredita por sí sola integración con PostgreSQL |
 
-## 15. Resumen para estudiar con ChatGPT
+## 15. Resumen para estudio
 
 BecaNexo combina una SPA React con un monolito Django de cinco aplicaciones y PostgreSQL. Vite sirve el frontend local y envía `/api` al backend. Las sesiones y CSRF protegen operaciones; los permisos efectivos se validan en Django. El usuario administra su información declarada y favoritos, y consulta ofertas públicas. El administrador mantiene catálogo y requisitos por servicios independientes del rastreo.
 
