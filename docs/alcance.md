@@ -19,9 +19,9 @@ El sistema no tramitará postulaciones ni adjudicará becas. No utilizará APIs 
 ## Decisiones técnicas
 
 - Backend en Django 5.2 y Django REST Framework, organizado como monolito modular.
-- PostgreSQL local; futuro frontend en React, Vite y Tailwind CSS, preparando Node 24 LTS antes de implementarlo.
+- PostgreSQL local; frontend en React, Vite y Tailwind CSS, con Node 24 LTS.
 - Autenticación prevista mediante sesiones, con protección CSRF y comprobación de entradas y permisos en el servidor. Contraseñas protegidas mediante hashing de Django.
 - Modelo de datos e interfaces ya diseñados, pendientes de incorporación antes de implementar los modelos de negocio.
 - Tablas de negocio en mayúsculas y con prefijos por categoría, incluido `CAT_` para catálogos. Las diferencias entre el ER y las tablas auxiliares requeridas por Django se documentarán expresamente.
 
-La primera etapa se limita a configuración y documentación. No incluye modelos, migraciones, endpoints ni frontend, ni cambios de datos o credenciales.
+Estado actual: el sistema incluye los modelos, la API y el frontend; el rastreo de SIAU funciona con captura manual y corrida programada diaria; cada ficha en alcance genera un borrador privado con llenado automático, y la publicación es una acción del administrador con «Validar y publicar». Nada se publica automáticamente.

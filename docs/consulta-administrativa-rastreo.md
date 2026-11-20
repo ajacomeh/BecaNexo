@@ -45,7 +45,7 @@ Pruebas y respaldo de esta etapa: [avance](avance.md). Modelo efectivo: [supleme
 
 ## Registro histórico: etapa de solo consulta
 
-Implementada el 28/10/2026 sobre el commit 8ee1fc7. Primera etapa de **solo consulta**: no inicia rastreos, modifica fuentes, aprueba documentos, resuelve incidencias ni crea/vincula/publica convocatorias. No modifica modelos ni añade migraciones.
+Implementada el 28/10/2026 sobre el commit 8ee1fc7 como etapa inicial de **solo consulta**: entonces no iniciaba rastreos, no modificaba fuentes, no aprobaba documentos, no resolvía incidencias ni creaba, vinculaba o publicaba convocatorias. Hoy el panel también inicia capturas manuales, el rastreo tiene corrida programada diaria, las fichas en alcance generan borradores privados con llenado automático y la publicación se hace con «Validar y publicar». No modifica modelos ni añade migraciones.
 
 ## Rutas de interfaz
 

@@ -260,7 +260,7 @@ Todos estos endpoints parten de `/api/gestion/rastreo/`, requieren administrador
 
 ```mermaid
 flowchart TD
-    A[Comando manual y administrador real] --> B[run_manual - fuente y exclusión]
+    A[Captura manual del administrador o corrida programada] --> B[run_manual o run_scheduled - fuente y exclusión]
     B --> C[Robots y recursos SIAU autorizados]
     C --> D[Accesos y documentos privados]
     C --> E[extract_html - extracción técnica]
@@ -460,7 +460,7 @@ Comprobación documental realizada: 15 secciones numeradas, tres bloques Mermaid
 
 ### Diferencias entre documentación histórica y código actual
 
-- AGENTS conserva la expresión «frontend futuro» y la restricción de la primera etapa: el repositorio actual ya contiene React y módulos posteriores. Se trata de contexto histórico, no de ausencia del frontend.
+- Algunos documentos de las etapas iniciales conservan restricciones ya superadas, como «frontend futuro» o la prohibición de crear modelos: el repositorio actual ya contiene React y los módulos posteriores. Son contexto histórico.
 - El modelo v0.6 por sí solo no describe todas las tablas de rastreo ni la ampliación editorial; deben leerse los suplementos y migraciones. No se modificó el modelo histórico para ocultar esa evolución.
 - `propuesta-persistencia-rastreo.md` contiene nombres/diseños futuros; no todas sus tablas son modelos existentes. En particular, propuesta de cambio e integración canónica no son funciones terminadas.
 - Las reglas de publicación automática previstas son más exigentes que el servicio manual actual. No deben atribuirse retroactivamente a `services.publicar` ni considerarse activadas por aprobar una dimensión de revisión.
@@ -494,7 +494,7 @@ Comprobación documental realizada: 15 secciones numeradas, tres bloques Mermaid
 
 BecaNexo combina una SPA React con un monolito Django de cinco aplicaciones y PostgreSQL. Vite sirve el frontend local y envía `/api` al backend. Las sesiones y CSRF protegen operaciones; los permisos efectivos se validan en Django. El usuario administra su información declarada y favoritos, y consulta ofertas públicas. El administrador mantiene catálogo y requisitos por servicios independientes del rastreo.
 
-La comparación actual evalúa requisitos explícitos por opción y destino. Explica coincidencias, incumplimientos e incertidumbre; no calcula afinidad semántica ni certifica documentación. El rastreo captura un conjunto limitado de recursos SIAU mediante comando manual, conserva documentos, versiones y observaciones, y permite revisión administrativa con evidencia exacta e historial inmutable. Revisar no publica ni integra automáticamente una oferta.
+La comparación actual evalúa requisitos explícitos por opción y destino. Explica coincidencias, incumplimientos e incertidumbre; no calcula afinidad semántica ni certifica documentación. El rastreo captura un conjunto limitado de recursos SIAU mediante captura manual desde el panel o la corrida programada diaria, conserva documentos, versiones y observaciones, y permite revisión administrativa con evidencia exacta e historial inmutable. Cada ficha en alcance genera un borrador privado con llenado automático; nada se publica solo: el administrador publica con «Validar y publicar».
 
 Para estudiar, recorrer primero configuración y rutas, después cliente/contexto de sesión, modelos y permisos, y finalmente comparación, evidencia y revisiones. Formular preguntas sobre símbolos concretos, por ejemplo:
 

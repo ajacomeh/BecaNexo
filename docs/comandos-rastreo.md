@@ -52,7 +52,7 @@ $claveEjecucion = [guid]::NewGuid().ToString()
 
 La ejecución programada usa `origen=programada`, actor nulo, bloqueo PostgreSQL de origen/fuente e índice único de ejecución activa. Si todavía no vence `frecuencia_min`, responde `no_corresponde_aun` sin nueva petición ni fila. Cuando vence, registra accesos, observaciones sin cambios, nuevas versiones o incidencias y estados `finalizada`, `parcial` o `fallida`. Una interrupción dura exige `rastreo recuperar` con administrador real; no se reutiliza evidencia incompleta como aprobada. La CLI no publica, vincula ni crea convocatorias.
 
-Para Windows 11 se preparó `scripts/rastreo-programado.ps1`. **Estado actual: la tarea `BecaNexo-Rastreo-SIAU` está habilitada.** El primer disparo quedó en cola mientras el portátil funcionaba con batería y la tarea se deshabilitó; un segundo disparo, autorizado tras conectar corriente externa, terminó correctamente con `no_corresponde_aun` por la frecuencia de 1440 minutos, sin nueva ejecución de rastreo. Para sus disparos periódicos deben permanecer Windows encendido, corriente externa y la sesión de `DESKTOP-705DGCE\Lenovo` iniciada; no hace falta abrir el navegador. Queda pendiente observar una ejecución automática real cuando venza la frecuencia. La condición `DisallowStartIfOnBatteries=True` sigue vigente; el registro operativo del Programador continúa desactivado, pero el segundo resultado quedó en el registro local del script y `LastTaskResult=0`. El respaldo conjunto posterior a la ejecución real ID 4 es `D:\Respaldos_BecaNexo\becanexo_pre_programacion_20261107T132831Z_019f6b41`, verificado con 16 referencias. Para comprobaciones inocuas desde la cuenta ejecutora, sin escribir ni descargar:
+Para Windows 11 se preparó `scripts/rastreo-programado.ps1`. **Estado actual: la tarea `BecaNexo-Rastreo-SIAU` está habilitada.** El primer disparo quedó en cola mientras el portátil funcionaba con batería y la tarea se deshabilitó; un segundo disparo, autorizado tras conectar corriente externa, terminó correctamente con `no_corresponde_aun` por la frecuencia de 1440 minutos, sin nueva ejecución de rastreo. Para sus disparos periódicos deben permanecer Windows encendido, corriente externa y la sesión de `DESKTOP-705DGCE\Lenovo` iniciada; no hace falta abrir el navegador. Queda pendiente observar una ejecución automática real cuando venza la frecuencia. Desde el 20/11/2026 `DisallowStartIfOnBatteries` y `StopIfGoingOnBatteries` están en falso; el registro operativo del Programador continúa desactivado, pero el segundo resultado quedó en el registro local del script y `LastTaskResult=0`. El respaldo conjunto posterior a la ejecución real ID 4 es `D:\Respaldos_BecaNexo\becanexo_pre_programacion_20261107T132831Z_019f6b41`, verificado con 16 referencias. Para comprobaciones inocuas desde la cuenta ejecutora, sin escribir ni descargar:
 
 ```powershell
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "D:\Proyectos\BecaNexo\scripts\rastreo-programado.ps1" -Comprobar -FuenteId 1 -BaseEsperada becanexo_db
@@ -80,6 +80,33 @@ Pruebas aisladas reproducibles: `.\.venv\Scripts\python.exe backend/manage.py te
 Esta sección conserva el procedimiento histórico de los bloques 1 y 2 para la política cerrada de seis URLs. Desde la raíz del proyecto en PowerShell. No hay publicación, usuarios ficticios ni acceso autenticado a PUSAK. `previsualizar_siau` sigue escribiendo únicamente salidas locales ignoradas, sin ORM de rastreo. El descubrimiento está habilitado por política y la programación de Windows fue habilitada en el bloque 8.
 
 La CLI es una operación local de confianza. `--actor-id` **atribuye** la operación; no es autenticación web. Debe corresponder a un administrador activo existente. Para esta verificación el usuario autorizó seleccionar su cuenta por coincidencia exacta de correo: ID 1. No se modificó la cuenta ni se usó su contraseña.
+
+## Corrida programada: modos, revisión y cierre de interrumpidas
+
+`scripts/rastreo-programado.ps1` tiene tres modos, con `-FuenteId 1 -BaseEsperada becanexo_db` por defecto. Los tres rechazan otra base, una fuente inactiva, una política distinta de `siau-indice/2` o `siau-nacionales/3` y la publicación automática habilitada.
+
+```powershell
+# Solo lectura: estado de la programación (base, política, frecuencia, última y próxima ejecución).
+# Sale con 4 si hay una ejecución en curso.
+powershell -NoProfile -File .\scripts\rastreo-programado.ps1 -Comprobar
+# Lo que lanza la tarea cada hora: solo captura si venció la ventana de la fuente.
+powershell -NoProfile -File .\scripts\rastreo-programado.ps1 -Ejecutar
+# Solo lectura: últimas corridas programadas, atraso y últimas 5 líneas del registro local.
+# Sale con 5 si la captura está atrasada.
+powershell -NoProfile -File .\scripts\rastreo-programado.ps1 -Revisar
+```
+
+`-Revisar` usa el comando de solo lectura `corridas-programadas`, que también puede consultarse directamente:
+
+```powershell
+.\.venv\Scripts\python.exe backend\manage.py rastreo corridas-programadas --fuente-id 1
+```
+
+Devuelve `proxima_ejecucion`, `atrasada` (verdadero cuando pasaron más de 2 horas desde la hora prevista), `horas_de_atraso`, la última captura que no fue omitida y el resumen de las 10 últimas corridas programadas.
+
+**Cierre automático de interrumpidas.** Antes de cada corrida programada, con la exclusión de la fuente ya obtenida, se cierran como `fallida` las corridas programadas que siguen «en curso» sin latido en los últimos 10 minutos (`INTERRUMPIDA_MINUTOS`), con la incidencia `INTERRUMPIDA`. Un proceso vivo conservaría la exclusión, así que lo que sigue en curso ya no tiene proceso. Solo afecta a corridas programadas, sin actor; las manuales siguen exigiendo `recuperar`. La corrida cerrada consume la ventana de frecuencia.
+
+**Resumen de cada corrida.** El resultado de `programado` y de `resumen` incluye `resumen` con `peticiones`, `publicaciones_observadas`, `versiones_nuevas`, `candidatos_nuevos`, `borradores_creados`, `incidencias_total`, `incidencias_por_codigo`, `motivo` (en corridas omitidas o fallidas) y un `texto` legible. El script guarda una línea por corrida en `%LOCALAPPDATA%\BecaNexo\rastreo\programador.jsonl`; el resultado «no corresponde aún» se registra solo una vez por día. Códigos de salida de `-Ejecutar`: 0 finalizada o todavía no corresponde, 1 fallida, 3 parcial, 4 omitida, 2 error operativo y 5 estado desconocido.
 
 ## Configuración y comandos
 
