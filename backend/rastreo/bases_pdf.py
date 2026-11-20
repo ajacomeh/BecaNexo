@@ -118,5 +118,6 @@ def cronograma_de_bases(documentos):
 def fragmentos_para_entidad(documentos):
     """Párrafos de las bases en el formato que usa la asignación de entidad (`entidad_en_documentos`)."""
     return {'documentos': [{'documento_id': d['documento_id'], 'fragmentos': [
-        {'texto_original': p['texto'], 'procedencia': {'documento_id': d['documento_id'], 'pagina': p['pagina']}}
+        {'texto_original': p['texto'], 'seccion_bases': p.get('seccion_bases'), 'titulo_seccion': p.get('titulo_seccion') or '',
+         'procedencia': {'documento_id': d['documento_id'], 'pagina': p['pagina']}}
         for p in d['parrafos'] if not p['encabezado']]} for d in _documentos_con_parrafos(documentos)]}

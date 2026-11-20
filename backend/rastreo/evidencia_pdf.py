@@ -49,7 +49,11 @@ _CONECTORES = {'de', 'del', 'el', 'la', 'los', 'las', 'y', 'e', 'o', 'u', 'en', 
 _ELEMENTO = re.compile(r'^(?:\d{1,2}[.)]|[a-z][.)]|[•·●▪\-–])\s+')
 _ENCABEZADO_MAYOR = re.compile(r'^[A-Z]\.\s+[A-ZÁÉÍÓÚÑ]')
 # Encabezado mayor de las bases («E. REQUISITOS PARA LA POSTULACIÓN») → sección reconocida.
-_SECCIONES = (('obligaciones', r'^obligaciones\b'), ('requisitos', r'^requisitos?\b'),
+_SECCIONES = (('obligaciones', r'^obligaciones\b'), ('seguimiento', r'^seguimiento\b'),
+              ('sanciones', r'^(?:suspension|sanciones)\b'), ('informacion', r'^(?:informacion adicional|base legal|disposicion)'),
+              ('requisitos', r'^requisitos?\b'),
+              # Adjudicación y contrato van antes que «financiamiento»: «Elaboración del contrato de financiamiento».
+              ('adjudicacion', r'\b(?:proceso de otorgamiento|adjudicacion)\b'), ('contrato', r'^(?:elaboracion|suscripcion)\b'),
               ('financiamiento', r'\b(?:financiamiento|cobertura|rubros?|beneficios?)\b'),
               ('cronograma', r'\b(?:cronograma|calendario|convocatoria)\b'), ('documentos', r'^document'),
               ('objeto', r'^(?:objetivo|objeto)\b'))
@@ -77,6 +81,7 @@ def _parrafos(pages):
     """
     paragraphs = []
     section = None
+    section_title = ''
     subsection = ''
     for page in pages:
         if page['estado'] != 'texto':
@@ -102,10 +107,12 @@ def _parrafos(pages):
                 close()
                 if _ENCABEZADO_MAYOR.match(line):
                     section, subsection = _seccion_de_encabezado(line), ''
+                    section_title = re.sub(r'^[A-Z]\.\s+', '', line).strip(' :.')
+                    section_title = re.sub(r'(?<=[A-ZÁÉÍÓÚÑ])\s*\d{1,2}$', '', section_title).strip(' :.')
                 else:
                     subsection = line
                 current = {'texto': line, 'pagina': page['pagina'], 'seccion_bases': section, 'subseccion': subsection,
-                           'elemento': False, 'encabezado': True}
+                           'titulo_seccion': section_title, 'elemento': False, 'encabezado': True}
                 continue
             if current and not current['encabezado'] and not _ELEMENTO.match(line):
                 previous = current['texto'].rstrip()
@@ -118,7 +125,7 @@ def _parrafos(pages):
                     continue
             close()
             current = {'texto': line, 'pagina': page['pagina'], 'seccion_bases': section, 'subseccion': subsection,
-                       'elemento': bool(_ELEMENTO.match(line)), 'encabezado': False}
+                       'titulo_seccion': section_title, 'elemento': bool(_ELEMENTO.match(line)), 'encabezado': False}
         close()
     return paragraphs
 

@@ -279,26 +279,61 @@ _ACCION = (r'(?:ofrece|otorga|coofrece|convoca|impulsa|concede|financia|'
            r'tiene\s+por\s+(?:objetivo|objeto)\s+(?:otorgar|conceder|la\s+concesion|el\s+otorgamiento))')
 
 
+# Secciones de las bases en PDF donde una mención no acredita al oferente: condiciones de postulación,
+# documentación de respaldo, verificaciones, obligaciones, seguimiento, sanciones e información adicional.
+SECCIONES_SIN_ROL = frozenset({'requisitos', 'obligaciones', 'documentos', 'seguimiento', 'sanciones', 'informacion'})
+# Secciones donde nombrar a la entidad que adjudica, firma el contrato o emite la beca acredita su papel.
+SECCIONES_DE_ADJUDICACION = frozenset({'adjudicacion', 'contrato'})
+_PROHIBICION = re.compile(r'\bno\s+(?:mantener|constar|haber|contar|estar|figurar|tener)\b|\bse\s+verificara\b|\bse\s+reserva\s+el\s+derecho\b')
+
+
+def _frases(texto):
+    return [frase.strip() for frase in re.split(r'(?<=[.;:?!])\s+', texto or '') if frase.strip()]
+
+
+def _patron_de_adjudicacion(expresion):
+    """La entidad adjudica, suscribe el contrato de financiamiento o emite la beca (una frase, sin deducir nada)."""
+    return re.compile(
+        rf'(?:persona\s+adjudicataria\s+se\s+convierte\s+en\s+persona\s+becaria\s+de\s+la\s+beca\s+(?:del|de\s+la)\s+{expresion}\b|'
+        rf'\bsuscrib\w+\s+con\b.{{0,500}}?\b{expresion}\b.{{0,250}}?\bel\s+contrato\s+de\s+financiamiento|'
+        rf'\b{expresion}\b.{{0,300}}?\badjudicara\w*|\badjudicara\w*\b.{{0,100}}?\b{expresion}\b)', re.S)
+
+
 def entidad_en_documentos(datos, texto, documento_id, registradas):
     """Entidad registrada que un documento de la misma versión nombra con papel de oferente o impulsora.
 
-    Revisa la ficha y, cuando existan, los fragmentos de las bases en PDF. Devuelve las coincidencias
-    [{institucion, literal, seccion, documento_id, pagina}] sin deducir nada por defecto.
+    Revisa la ficha y, cuando existan, los fragmentos de las bases en PDF con su sección. Dos evidencias:
+    1. Papel explícito («impulsado por», «otorgada por», «ofrece»…), en la ficha o en una sección de las bases
+       que no sea de requisitos, documentación, verificación, obligaciones, seguimiento, sanciones o información adicional.
+    2. Solo si no hay ninguna de la primera: nombrada en las secciones de adjudicación o de contrato como la que
+       adjudica, suscribe el contrato de financiamiento o emite la beca. No se usa si las bases o la ficha nombran
+       a una entidad extranjera como oferente.
+    Devuelve [{institucion, literal, seccion, documento_id, pagina}] sin deducir nada por defecto.
     """
+    from .auto_borradores import _named_entities
     fuentes = []
     for clave, etiqueta in (('titulo', 'Título'), ('descripcion', 'Descripción'), ('requisitos', 'Requisitos'),
                             ('postulacion_y_documentos', 'Postulación')):
         valor = datos.get(clave)
         if isinstance(valor, dict) and isinstance(valor.get('texto_original'), str):
-            fuentes.append((valor['texto_original'], etiqueta, documento_id, None))
+            fuentes.append({'contenido': valor['texto_original'], 'seccion': etiqueta, 'documento': documento_id, 'pagina': None, 'bases': None})
     if texto:
-        fuentes.append((texto, 'Ficha de origen', documento_id, None))
+        fuentes.append({'contenido': texto, 'seccion': 'Ficha de origen', 'documento': documento_id, 'pagina': None, 'bases': None})
+    pdf = False
     for documento in (datos.get('evidencia_pdf') or {}).get('documentos', []):
         for fragmento in documento.get('fragmentos', []):
             procedencia = fragmento.get('procedencia') or {}
-            fuentes.append((fragmento.get('texto_original') or '', 'Bases en PDF',
-                            procedencia.get('documento_id') or documento.get('documento_id'), procedencia.get('pagina')))
-    encontradas = {}
+            titulo = (fragmento.get('titulo_seccion') or '').strip().capitalize()
+            pdf = True
+            fuentes.append({'contenido': fragmento.get('texto_original') or '', 'seccion': f'Bases en PDF · {titulo}' if titulo else 'Bases en PDF',
+                            'documento': procedencia.get('documento_id') or documento.get('documento_id'), 'pagina': procedencia.get('pagina'),
+                            'bases': fragmento.get('seccion_bases') or 'sin_seccion'})
+    # Otra entidad nombrada como oferente en la ficha o en las bases, extranjera o sin evidencia de ser ecuatoriana
+    # (por ejemplo una universidad del exterior), impide la regla de adjudicación: adjudicar no la hace oferente.
+    textos_rol = '\n'.join(f['contenido'] for f in fuentes if f['bases'] is not None and f['bases'] not in SECCIONES_SIN_ROL)
+    ajenas = [*_named_entities(datos)[1:], *_named_entities({'descripcion': {'texto_original': textos_rol}})[1:]]
+    extranjera = any(ajenas)
+    por_rol, por_adjudicacion = {}, {}
     for institucion in registradas:
         alias = {institucion.nombre, re.sub(r'\s*\([A-Z0-9]{2,12}\)\s*$', '', institucion.nombre)}
         # «Ministerio X del Ecuador (SIGLA)» suele nombrarse en las bases sin el país: «Ministerio X».
@@ -312,14 +347,25 @@ def entidad_en_documentos(datos, texto, documento_id, registradas):
                 continue
             patron = re.compile(rf'(?:{_VERBO}\s+por\s+(?:el\s+|la\s+)?{expresion}\b|iniciativa\s+(?:del|de\s+la)\s+{expresion}\b|'
                                 rf'a\s+cargo\s+del\s+{expresion}\b|\b{expresion}\s+{_ACCION}\b)')
-            for contenido, seccion, documento, pagina in fuentes:
+            adjudica = _patron_de_adjudicacion(expresion)
+            for fuente in fuentes:
+                if fuente['bases'] in SECCIONES_SIN_ROL:
+                    continue
+                contenido = fuente['contenido']
                 encontrado = patron.search(_plano(contenido))
-                if encontrado and institucion.pk not in encontradas:
+                if encontrado and institucion.pk not in por_rol:
                     inicio, fin = encontrado.span()
-                    encontradas[institucion.pk] = {
-                        'institucion': institucion, 'literal': contenido[max(0, inicio - 30):fin + 40].strip(),
-                        'seccion': seccion, 'documento_id': documento, 'pagina': pagina}
-    return list(encontradas.values())
+                    por_rol[institucion.pk] = {'institucion': institucion, 'literal': contenido[max(0, inicio - 30):fin + 40].strip(),
+                                               'seccion': fuente['seccion'], 'documento_id': fuente['documento'], 'pagina': fuente['pagina']}
+                if fuente['bases'] in SECCIONES_DE_ADJUDICACION and not extranjera and institucion.pk not in por_adjudicacion:
+                    for frase in _frases(contenido):
+                        plano = _plano(frase)
+                        if not _PROHIBICION.search(plano) and adjudica.search(plano):
+                            por_adjudicacion[institucion.pk] = {
+                                'institucion': institucion, 'literal': ' '.join(frase.split())[:400], 'seccion': fuente['seccion'],
+                                'documento_id': fuente['documento'], 'pagina': fuente['pagina']}
+                            break
+    return list((por_rol or por_adjudicacion).values())
 
 
 def _resolver(nombre, datos, registradas):
