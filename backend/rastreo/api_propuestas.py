@@ -10,6 +10,7 @@ from .revisiones import vigentes
 from .integracion import crear_borrador, representar_aplicacion, resolver_pendiente, estado_publicacion_integrada
 from .models import Revision
 from .propuestas import digest
+from . import precarga
 from convocatorias.models import Convocatoria
 from convocatorias.services import detalle
 
@@ -100,6 +101,33 @@ class AplicarPropuestaBorrador(AuthView):
         return Response(apply_proposal(pk, request.user.pk, version, proposal_hash, fields, reason))
 
 
+class PrecargaBorrador(AuthView):
+    """Precarga asistida: crea registros inactivos desde la evidencia, a nombre del administrador."""
+    permission_classes = [AdministradorActivo]
+    http_method_names = ['post', 'options']
+
+    def post(self, request, pk):
+        parametros(request, set())
+        identified(Convocatoria, pk)
+        if not isinstance(request.data, dict) or set(request.data) != {'version_convocatoria', 'clave_accion'}:
+            raise serializers.ValidationError('Indica la versión del borrador y la clave de acción.')
+        offer_version = serializers.IntegerField(min_value=1).run_validation(request.data['version_convocatoria'])
+        changes, created = precarga.precargar(pk, request.user.pk, offer_version, request.data['clave_accion'])
+        return Response({'creados': changes['creados'], 'omitidos': changes['omitidos'],
+                         'version_fuente_id': changes['version_fuente_id']}, status=201 if created else 200)
+
+
+class ResolverPrecarga(AuthView):
+    permission_classes = [AdministradorActivo]
+    http_method_names = ['post', 'options']
+
+    def post(self, request, pk):
+        parametros(request, set())
+        identified(Convocatoria, pk)
+        row, created = precarga.resolver(pk, request.user.pk, request.data)
+        return Response(row, status=201 if created else 200)
+
+
 class OrigenBorrador(AuthView):
     permission_classes = [AdministradorActivo]
     http_method_names = ['get', 'post', 'options']
@@ -129,7 +157,8 @@ class OrigenBorrador(AuthView):
                     'version_convocatoria': offer.version,
                     'bloqueos_actuales': pending_for_publication(offer, auto),
                     'observaciones': review_notes(offer, auto),
-                    'pendientes_iniciales': auto.pendientes_iniciales})
+                    'pendientes_iniciales': auto.pendientes_iniciales,
+                    'precarga': precarga.estado(offer)})
             return Response({'aplicacion': None})
         source = applied.propuesta
         return Response({'aplicacion': representar_aplicacion(applied), 'publicacion_id': source.publicacion_id,

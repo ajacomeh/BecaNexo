@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { offersApi } from '../api/client'
 import Button from './Button'
@@ -75,7 +75,52 @@ function DocumentProposals({ proposals, onPrepare }) {
   </details>
 }
 
-export default function OriginPanel({ offer, onPrepare }) {
+const preloadKinds = { requisitos: 'Requisito', beneficios: 'Beneficio', opciones: 'Opción de estudio' }
+const preloadStates = { pendiente: 'Pendiente de revisión', aceptado: 'Aceptado', descartado: 'Descartado' }
+
+function Preload({ offerId, version, rows, onChanged }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
+  const key = useRef(null)
+  const pending = rows.filter((row) => row.estado === 'pendiente').length
+  async function preload() {
+    if (busy) return
+    setBusy(true); setError(''); setResult(null)
+    key.current ||= crypto.randomUUID()
+    try {
+      const response = await offersApi.write(`gestion/rastreo/convocatorias/${offerId}/precargar`, 'POST', { version_convocatoria: version, clave_accion: key.current })
+      key.current = null; setResult(response); await onChanged()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  async function decide(row, decision) {
+    if (busy) return
+    setBusy(true); setError('')
+    try {
+      await offersApi.write(`gestion/rastreo/convocatorias/${offerId}/precarga/resolver`, 'POST', { modelo: row.modelo, id: row.id, decision, version_convocatoria: version })
+      await onChanged()
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  return <section className="origin-preload" aria-labelledby="origin-preload-title"><h3 id="origin-preload-title">Propuestas precargadas</h3>
+    <p>Crea en el borrador, como registros inactivos y sin validar, los requisitos, beneficios y opciones extraídos con confianza alta o media. Los ambiguos quedan para revisión manual. Nada se publica.</p>
+    <Button type="button" busy={busy} disabled={busy} onClick={preload}>Precargar propuestas</Button>
+    <Message>{error}</Message>
+    {result && <p role="status">{result.creados.length ? `${result.creados.length === 1 ? 'Se creó 1 registro inactivo' : `Se crearon ${result.creados.length} registros inactivos`} para revisar.` : 'No hay propuestas nuevas para precargar.'}{result.omitidos.length > 0 && ` ${result.omitidos.length === 1 ? '1 candidato quedó' : `${result.omitidos.length} candidatos quedaron`} para revisión manual.`}</p>}
+    {result?.omitidos?.length > 0 && <details><summary>Candidatos no precargados ({result.omitidos.length})</summary><ul>{result.omitidos.map((row) => <li key={row.huella}><strong>{preloadKinds[row.modelo]}:</strong> {row.texto} <span className="small-note">({row.motivo})</span></li>)}</ul></details>}
+    {rows.length > 0 && <><p>{pending ? `${pending === 1 ? '1 pendiente' : `${pending} pendientes`} de revisión. Bloquean la publicación hasta que aceptes o descartes cada uno.` : 'Todas las propuestas precargadas están revisadas.'}</p>
+      <ul className="origin-candidate-list">{rows.map((row) => <li key={`${row.modelo}-${row.id}`} className="origin-candidate">
+        <p className="origin-candidate-text">{row.texto}</p>
+        <div className="origin-candidate-meta"><span>{preloadKinds[row.modelo]}</span><span>Confianza {row.confianza}</span><span>{preloadStates[row.estado]}</span></div>
+        {row.procedencia?.version_id && <p className="origin-candidate-source">Versión {row.procedencia.version_id}{row.procedencia.documento_id && ` · Documento ${row.procedencia.documento_id}`}{row.procedencia.campo && ` · Campo ${row.procedencia.campo}`}{row.procedencia.destino_original && ` · Destino literal: ${row.procedencia.destino_original}`}</p>}
+        {row.estado === 'pendiente' && <div className="origin-candidate-action">
+          <Button type="button" className="button-light" disabled={busy} onClick={() => decide(row, 'aceptar')}>{row.modelo === 'beneficios' ? 'Aceptar' : 'Aceptar y activar'}</Button>
+          <Button type="button" className="button-light" disabled={busy} onClick={() => decide(row, 'descartar')}>{row.modelo === 'beneficios' ? 'Descartar y eliminar' : 'Descartar'}</Button>
+        </div>}
+      </li>)}</ul></>}
+  </section>
+}
+
+export default function OriginPanel({ offer, onPrepare, onChanged }) {
   const [data, setData] = useState(null)
   const [documents, setDocuments] = useState([])
   const [error, setError] = useState('')
@@ -137,6 +182,8 @@ export default function OriginPanel({ offer, onPrepare }) {
     {data.cambio_relevante && !data.revision_confirmada && <form onSubmit={confirmVersion}><label htmlFor="origin-version-motive">Motivo de revisión de la nueva versión</label><textarea id="origin-version-motive" required maxLength={1000} value={motive} onChange={(e) => setMotive(e.target.value)} /><Button type="submit" disabled={busy} busy={busy}>Confirmar versión revisada</Button></form>}
     {error && <Message>{error}</Message>}{notice && <p role="status">{notice}</p>}
     <h3>Obligatorio antes de publicar</h3>{data.bloqueos_actuales.length ? <ul>{data.bloqueos_actuales.map((item) => <li key={item}>{item}</li>)}</ul> : <p>Los controles obligatorios de origen están completos. La publicación requiere confirmación administrativa.</p>}
+    <Preload offerId={offer.id} version={data.version_convocatoria} rows={data.precarga || []}
+      onChanged={async () => { setRetry((v) => v + 1); if (onChanged) await onChanged() }} />
     {!!data.observaciones?.length && <><h3>Datos complementarios por revisar</h3><ul>{data.observaciones.map((item) => <li key={item}>{item}</li>)}</ul></>}
     <h3>Evidencia y enlaces</h3><ul>
       <li>Publicación: {publicUrl(data.enlaces_origen?.publicacion) ? <a href={publicUrl(data.enlaces_origen.publicacion)} target="_blank" rel="noopener noreferrer">Abrir ficha de origen</a> : 'Sin enlace verificable'}</li>

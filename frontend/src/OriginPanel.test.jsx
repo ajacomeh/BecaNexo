@@ -12,6 +12,36 @@ const origin = { aplicacion: { propuesta_id: 3 }, publicacion_id: 4, version_id:
   estado: { bloqueos: [], pendientes: [{ id: 'SIN_OPCIONES:opciones', codigo: 'SIN_OPCIONES',
     campo: 'opciones', motivo: 'Falta una opción confirmada' }] }, resoluciones: [] }
 
+const automatic = { automatico: true, publicacion_id: 4, version_id: 5, datos_iniciales: {}, candidatos_editables: {},
+  enlaces_origen: {}, version_convocatoria: 3, bloqueos_actuales: ['Revisa 1 propuesta precargada (acepta o descarta cada una) antes de publicar.'],
+  observaciones: [], pendientes_iniciales: [] }
+
+it('precarga propuestas con clave estable y resuelve cada registro pendiente', async () => {
+  const rows = [{ modelo: 'beneficios', id: 21, texto: 'Cubre el 50 % de la matrícula.', confianza: 'alta', estado: 'pendiente', huella: 'h1',
+    procedencia: { version_id: 5, documento_id: 9, campo: 'beneficio' } },
+  { modelo: 'requisitos', id: 22, texto: 'Ser ciudadano ecuatoriano.', confianza: 'alta', estado: 'aceptado', huella: 'h2', procedencia: {} }]
+  vi.spyOn(offersApi, 'get').mockResolvedValueOnce({ ...automatic, precarga: [] }).mockResolvedValue({ ...automatic, precarga: rows })
+  const write = vi.spyOn(offersApi, 'write').mockRejectedValueOnce(new Error('Fallo sintético'))
+    .mockResolvedValueOnce({ creados: [rows[0]], omitidos: [{ modelo: 'requisitos', huella: 'h3', texto: 'No haber recibido otra beca.', motivo: 'Interpretación ambigua' }] })
+    .mockResolvedValue({ estado: 'descartado' })
+  const changed = vi.fn()
+  render(<MemoryRouter><OriginPanel offer={{ id: 7, version: 3 }} onChanged={changed} /></MemoryRouter>)
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'Precargar propuestas' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Fallo sintético')
+  await user.click(screen.getByRole('button', { name: 'Precargar propuestas' }))
+  expect(await screen.findByText(/Se creó 1 registro inactivo para revisar\. 1 candidato quedó para revisión manual\./)).toBeVisible()
+  expect(write.mock.calls[0][2].clave_accion).toBe(write.mock.calls[1][2].clave_accion)
+  expect(write.mock.calls[1]).toEqual(['gestion/rastreo/convocatorias/7/precargar', 'POST', { version_convocatoria: 3, clave_accion: write.mock.calls[1][2].clave_accion }])
+  expect(await screen.findByText('Cubre el 50 % de la matrícula.')).toBeVisible()
+  expect(screen.getByText(/1 pendiente de revisión/)).toBeVisible()
+  expect(screen.getAllByRole('button', { name: /Aceptar/ })).toHaveLength(1)
+  await user.click(screen.getByRole('button', { name: 'Descartar y eliminar' }))
+  await waitFor(() => expect(write).toHaveBeenLastCalledWith('gestion/rastreo/convocatorias/7/precarga/resolver', 'POST',
+    { modelo: 'beneficios', id: 21, decision: 'descartar', version_convocatoria: 3 }))
+  expect(changed).toHaveBeenCalledTimes(2)
+})
+
 it('conserva la justificación y la evidencia ante un error y permite reintentar', async () => {
   vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('/documentos')
     ? { count: 1, results: [{ evidencia_id: 8, rol: 'bases_pdf' }] } : origin)

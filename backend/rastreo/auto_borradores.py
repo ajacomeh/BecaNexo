@@ -398,6 +398,10 @@ def pending_for_publication(offer, origin):
                     errors.append('Sin oferente identificado, el enlace debe constar en la evidencia de origen.')
         except serializers.ValidationError:
             errors.append('El enlace oficial no es una URL HTTP/HTTPS válida.')
+    from .precarga import bloqueo_publicacion
+    pending_preload = bloqueo_publicacion(offer)
+    if pending_preload:
+        errors.append(pending_preload)
     return errors
 
 

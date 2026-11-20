@@ -140,7 +140,7 @@ export default function OfferEditor() {
         if (!id) navigate(`/gestion/convocatorias/${offer.id}`)
         else { setLoaded((old) => ({ ...old, offer })); setNotice('Cambios guardados. Publica de nuevo después de revisar.') }
       }} /></section>
-      {loaded.offer && <><OriginPanel offer={loaded.offer} onPrepare={(name, value) => {
+      {loaded.offer && <><OriginPanel offer={loaded.offer} onChanged={() => setRetry((value) => value + 1)} onPrepare={(name, value) => {
         if (loaded.offer.revision === 'validada') { setNotice('La convocatoria ya está validada; revisa su versión antes de incorporar evidencia nueva.'); return }
         if (name === 'general' && loaded.offer[value.campo]) { setNotice('Este campo ya tiene información; conserva la edición administrativa existente.'); return }
         if (name === 'requisitos' && loaded.offer.requisitos.some((row) => row.texto_original === value.texto_original)) { setNotice('Este requisito ya existe en el borrador.'); return }
