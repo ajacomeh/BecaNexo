@@ -285,7 +285,9 @@ it('añade y edita una formación', async () => {
   expect(career).toHaveValue('Software')
   await userEvent.clear(career); await userEvent.type(career, 'Informática')
   await userEvent.click(within(region).getByRole('button', { name: 'Guardar formación' }))
-  expect(await screen.findByText('Informática · En curso')).toBeInTheDocument()
+  // La fila separa el nombre (texto principal) de su estado (etiqueta).
+  expect(await within(region).findByText('Informática')).toBeInTheDocument()
+  expect(within(region).getByText('En curso')).toHaveClass('record-tag')
 })
 
 it('gestiona idioma y nivel declarado sin certificados', async () => {
@@ -341,4 +343,107 @@ it('permite reintentar un fallo de carga', async () => {
   mount()
   await userEvent.click(await screen.findByRole('button', { name: 'Reintentar carga' }))
   expect(await screen.findByLabelText('Ciudad de residencia')).toHaveValue('Quito')
+})
+
+// ---- Diseño de las pantallas del perfil: pestañas, indicador, filas con estado y chips ----
+const complete = () => ({ fecha_nacimiento: '2000-01-01', residencia: 1, dedicacion_disponible: 'parcial', disponible_traslado: true, disponible_extranjero: false })
+
+it('muestra pestañas entre las dos pantallas con una activa y cambia de pantalla', async () => {
+  mount('/perfil')
+  await screen.findByLabelText('Ciudad de residencia')
+  const tabs = within(screen.getByRole('navigation', { name: 'Secciones del perfil' }))
+  expect(tabs.getByRole('link', { name: 'Datos y formación' })).toHaveAttribute('aria-current', 'page')
+  expect(tabs.getByRole('link', { name: 'Idiomas y preferencias' })).not.toHaveAttribute('aria-current')
+  await userEvent.click(tabs.getByRole('link', { name: 'Idiomas y preferencias' }))
+  expect(await screen.findByRole('heading', { name: 'Idiomas, preferencias y disponibilidad' })).toBeInTheDocument()
+  const after = within(screen.getByRole('navigation', { name: 'Secciones del perfil' }))
+  expect(after.getByRole('link', { name: 'Idiomas y preferencias' })).toHaveAttribute('aria-current', 'page')
+  expect(after.getByRole('link', { name: 'Datos y formación' })).not.toHaveAttribute('aria-current')
+  // Se conservan los botones del final.
+  expect(screen.getByRole('link', { name: 'Volver a formación' })).toBeInTheDocument()
+})
+
+it('el indicador lista lo que falta con enlaces a su sección', async () => {
+  mount('/perfil')
+  const note = within(await screen.findByRole('complementary', { name: 'Datos pendientes del perfil' }))
+  expect(note.getByText(/Te faltan:/)).toBeInTheDocument()
+  expect(note.getByRole('link', { name: 'dedicación' })).toHaveAttribute('href', '/preferencias#disponibilidad')
+  expect(note.getByRole('link', { name: 'traslado' })).toHaveAttribute('href', '/preferencias#disponibilidad')
+  expect(note.getByRole('link', { name: 'formación académica' })).toHaveAttribute('href', '/perfil#formacion-academica')
+  expect(note.getByRole('link', { name: 'país de residencia' })).toHaveAttribute('href', '/perfil#datos-personales')
+})
+
+it('el indicador no se muestra cuando no falta nada', async () => {
+  profile = { ...profile, ...complete() }
+  lists.formaciones = [{ id: 1, nivel: 'grado', estado_estudios: 'en_curso', carrera: 'Software', titulo_obtenido: false }]
+  mount('/perfil')
+  await screen.findByLabelText('Ciudad de residencia')
+  expect(screen.queryByRole('complementary', { name: 'Datos pendientes del perfil' })).not.toBeInTheDocument()
+})
+
+it('en idiomas y preferencias el indicador sigue lo que se añade', async () => {
+  profile = { ...profile, ...complete() }
+  mount('/preferencias')
+  const note = within(await screen.findByRole('complementary', { name: 'Datos pendientes del perfil' }))
+  expect(note.getByRole('link', { name: 'idiomas' })).toHaveAttribute('href', '/preferencias#idiomas')
+  expect(note.getByRole('link', { name: 'preferencias de estudio' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Añadir idioma' }))
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Idioma', exact: true }), '1')
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar idioma' }))
+  await screen.findByText('Inglés · Nivel sin declarar')
+  const updated = within(screen.getByRole('complementary', { name: 'Datos pendientes del perfil' }))
+  expect(updated.queryByRole('link', { name: 'idiomas' })).not.toBeInTheDocument()
+  expect(updated.getByRole('link', { name: 'preferencias de estudio' })).toBeInTheDocument()
+})
+
+it('las filas muestran el nombre principal y su estado o fechas como texto secundario', async () => {
+  lists.formaciones = [{ id: 1, nivel: 'grado', estado_estudios: 'en_curso', carrera: 'Ingeniería de Software', titulo_obtenido: false }]
+  lists.experiencias = [{ id: 2, cargo: 'Analista', fecha_inicio: '2022-01-10', fecha_fin: '2023-02-01', actual: false }, { id: 3, cargo: 'Desarrolladora', fecha_inicio: '2023-03-01', fecha_fin: null, actual: true }]
+  mount('/perfil')
+  const education = within(await screen.findByRole('region', { name: 'Formación académica' }))
+  expect(education.getByText('Ingeniería de Software')).toHaveClass('record-title')
+  expect(education.getByText('En curso')).toHaveClass('record-tag')
+  expect(education.getByRole('button', { name: 'Editar formación: Ingeniería de Software · En curso' })).toBeInTheDocument()
+  expect(education.getByRole('button', { name: 'Eliminar formación: Ingeniería de Software · En curso' })).toBeInTheDocument()
+  const work = within(screen.getByRole('region', { name: 'Experiencia relevante' }))
+  expect(work.getByText('Analista')).toHaveClass('record-title')
+  expect(work.getByText('2022-01-10 — 2023-02-01')).toHaveClass('record-meta')
+  expect(work.getByText('2023-03-01 — Actualidad')).toBeInTheDocument()
+})
+
+it('muestra idiomas como chips con editar, quitar y confirmación de eliminación', async () => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value() { this.open = true } })
+  lists.idiomas = [{ id: 1, idioma: 1, nivel: 'B2' }]
+  mount('/preferencias')
+  const region = within(await screen.findByRole('region', { name: 'Idiomas declarados' }))
+  expect(region.getByText('Inglés · B2').closest('li')).toHaveClass('profile-chip')
+  expect(region.getByRole('button', { name: 'Editar idioma: Inglés · B2' })).toBeInTheDocument()
+  await userEvent.click(region.getByRole('button', { name: 'Eliminar idioma: Inglés · B2' }))
+  expect(await screen.findByRole('heading', { name: '¿Eliminar idioma?' })).toBeInTheDocument()
+  expect(lists.idiomas).toHaveLength(1)
+  await userEvent.click(screen.getByRole('button', { name: 'Confirmar eliminación' }))
+  await waitFor(() => expect(lists.idiomas).toHaveLength(0))
+  await waitFor(() => expect(region.queryByText('Inglés · B2')).not.toBeInTheDocument())
+  expect(region.getByText('Registro eliminado.')).toBeInTheDocument()
+  delete HTMLDialogElement.prototype.showModal
+})
+
+it('presenta el aviso inicial en un recuadro y la disponibilidad con sus tres selectores', async () => {
+  mount('/preferencias')
+  const notice = (await screen.findByText(/entidad oferente solicitará/)).closest('.info-box')
+  expect(notice).not.toBeNull()
+  expect(notice.querySelector('svg')).not.toBeNull()
+  const grid = screen.getByLabelText('¿Puedes trasladarte?').closest('.field-grid')
+  expect(grid).toHaveClass('field-grid-three')
+  expect(within(grid).getAllByRole('combobox')).toHaveLength(3)
+  expect(screen.getByText(/Tiempo real que puedes dedicar/)).toBeInTheDocument()
+})
+
+it('Sobre mi perfil es más alto y muestra el contador junto a la ayuda', async () => {
+  mount('/perfil')
+  const input = await screen.findByLabelText('Sobre mi perfil')
+  expect(Number(input.getAttribute('rows'))).toBeGreaterThanOrEqual(6)
+  const meta = input.parentElement.querySelector('.field-meta')
+  expect(meta).toContainElement(screen.getByText('0 / 1500 caracteres'))
+  expect(meta).toContainElement(screen.getByText(/Describe tus intereses académicos/))
 })

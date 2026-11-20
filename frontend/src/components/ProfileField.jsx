@@ -15,10 +15,12 @@ export default function ProfileField({ field, value, onChange, error, disabled }
     {field.options ? <select {...common}>
       <option value="">{field.placeholder || (field.required ? 'Selecciona una opción' : 'Sin declarar')}</option>
       {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-    </select> : field.type === 'textarea' ? <textarea {...common} rows={3} maxLength={field.maxLength} /> :
+    </select> : field.type === 'textarea' ? <textarea {...common} rows={field.rows || 3} maxLength={field.maxLength} /> :
       <input {...common} type={field.type || 'text'} step={field.type === 'number' ? '0.001' : undefined} maxLength={field.maxLength} />}
-    {field.hint && <p className="field-hint" id={`${id}-hint`}>{field.hint}</p>}
-    {field.counter && <p className="field-hint" id={`${id}-count`}>{(value || '').length} / {field.maxLength} caracteres</p>}
+    {field.counter ? <div className="field-meta">
+      {field.hint && <p className="field-hint" id={`${id}-hint`}>{field.hint}</p>}
+      <p className="field-hint field-count" id={`${id}-count`}>{(value || '').length} / {field.maxLength} caracteres</p>
+    </div> : field.hint && <p className="field-hint" id={`${id}-hint`}>{field.hint}</p>}
     {error && <p className="field-error" id={`${id}-error`}>{Array.isArray(error) ? error.join(' ') : error}</p>}
   </div>
 }

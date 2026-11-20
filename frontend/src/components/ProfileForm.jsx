@@ -3,7 +3,7 @@ import ProfileField from './ProfileField'
 import Message from './Message'
 import Button from './Button'
 
-export default function ProfileForm({ fields, initial = {}, onSubmit, onCancel, label = 'Guardar cambios', children }) {
+export default function ProfileForm({ fields, initial = {}, onSubmit, onCancel, label = 'Guardar cambios', children, gridClass }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((field) => [field.name,
     field.disabledWhen && initial[field.disabledWhen] === true ? '' : initial[field.name] == null ? (field.type === 'checkbox' ? 'false' : '') : String(initial[field.name])])) )
   const [errors, setErrors] = useState({})
@@ -27,7 +27,7 @@ export default function ProfileForm({ fields, initial = {}, onSubmit, onCancel, 
     finally { pending.current = false; setBusy(false) }
   }
   return <form noValidate onSubmit={submit} aria-busy={busy}>
-    <div className="field-grid">{children}{fields.map((field) => {
+    <div className={`field-grid${gridClass ? ` ${gridClass}` : ''}`}>{children}{fields.map((field) => {
       const inactive = field.disabledWhen && values[field.disabledWhen] === 'true'
       return <ProfileField key={field.name} field={inactive ? { ...field, hint: field.disabledHint } : field} value={values[field.name]} disabled={busy || inactive}
         onChange={(value) => {

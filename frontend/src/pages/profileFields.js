@@ -14,7 +14,7 @@ export function profileFields(c) {
       { name: 'residencia', label: 'País de residencia', options: catalog(c.paises), kind: 'id' },
       { name: 'provincia_residencia', label: 'Provincia de residencia' },
       { name: 'ciudad_residencia', label: 'Ciudad de residencia' },
-      { name: 'descripcion', label: 'Sobre mi perfil', type: 'textarea', wide: true, maxLength: 1500, counter: true,
+      { name: 'descripcion', label: 'Sobre mi perfil', type: 'textarea', wide: true, maxLength: 1500, counter: true, rows: 7,
         hint: 'Describe tus intereses académicos, experiencia relevante y objetivos de estudio. No incluyas contraseñas ni datos sensibles' },
     ],
     availability: [
@@ -44,4 +44,18 @@ export function profileFields(c) {
     areas: [{ ...area, label: 'Área de interés', required: true }],
     destinos: [{ name: 'pais', label: 'País de destino', options: catalog(c.paises), kind: 'id', required: true }],
   }
+}
+
+// Solo usa lo que la pantalla ya cargó: el perfil y las listas propias de cada pantalla (contadas en vivo).
+export function missingItems(profile, preferences, count) {
+  const items = []
+  if (profile.fecha_nacimiento == null) items.push({ label: 'fecha de nacimiento', to: '/perfil#datos-personales' })
+  if (profile.residencia == null) items.push({ label: 'país de residencia', to: '/perfil#datos-personales' })
+  if (!preferences && !count('formaciones')) items.push({ label: 'formación académica', to: '/perfil#formacion-academica' })
+  if (preferences && !count('idiomas')) items.push({ label: 'idiomas', to: '/preferencias#idiomas' })
+  if (preferences && !count('preferencias')) items.push({ label: 'preferencias de estudio', to: '/preferencias#preferencias' })
+  if (profile.dedicacion_disponible == null) items.push({ label: 'dedicación', to: '/preferencias#disponibilidad' })
+  if (profile.disponible_traslado == null) items.push({ label: 'traslado', to: '/preferencias#disponibilidad' })
+  if (profile.disponible_extranjero == null) items.push({ label: 'estudio en el extranjero', to: '/preferencias#disponibilidad' })
+  return items
 }
