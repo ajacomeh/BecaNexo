@@ -29,7 +29,8 @@ function CatalogBody({ user }) {
   const recommendationsCache = useRef(null)
   const userId = user?.rol === 'postulante' ? user.id : null
   const activeMode = userId == null ? 'all' : mode
-  const activeView = params.get('estado') || 'vigentes'
+  // Los estados que antes se elegían en «Más filtros» siguen funcionando por URL y marcan la pestaña que los contiene.
+  const activeView = { abierta: 'vigentes', cierre_hoy: 'vigentes', sin_fecha: 'todas' }[params.get('estado')] || params.get('estado') || 'vigentes'
   const changeView = view => {
     const next = Object.fromEntries(params)
     delete next.page
@@ -83,7 +84,7 @@ function CatalogBody({ user }) {
     <div className="catalog-modes" role="group" aria-label="Vigencia de las becas">
       {[["vigentes", "Vigentes"], ["proxima", "Próximas"], ["cerrada", "Cerradas"], ["todas", "Todas las publicadas"]].map(([value, label]) => <Button key={value} type="button" className={activeView === value ? 'catalog-mode-active' : 'button-light'} aria-pressed={activeView === value} onClick={() => changeView(value)}>{label}</Button>)}
     </div>
-    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={apply} onClear={clear} stateValues={['vigentes', 'proxima', 'cerrada', 'todas', 'abierta', 'cierre_hoy', 'sin_fecha']} allStateLabel="Vigentes (predeterminado)" />}
+    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={apply} onClear={clear} showState={false} />}
     {(!current || (!catalogs && !catalogError)) && !current?.error && <p role="status"><Icon name="loading" />Cargando catálogo…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => { setResult(null); setRetry(retry + 1) }}>Reintentar</Button></>}
     {!catalogs && catalogError && <><Message>{catalogError}</Message><Button icon="refresh" onClick={retryCatalogs}>Reintentar datos del catálogo</Button></>}

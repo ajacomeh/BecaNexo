@@ -2,10 +2,11 @@ import { useId, useState } from 'react'
 import Button from './Button'
 import { readable } from '../pages/catalogPresentation'
 
-export default function CatalogFilters({ params, catalogs, onApply, onClear, stateValues = ['abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'], activeCount = null, allStateLabel = 'Todos los estados' }) {
+export default function CatalogFilters({ params, catalogs, onApply, onClear, stateValues = ['abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'], activeCount = null, allStateLabel = 'Todos los estados', showState = true }) {
   const [values, setValues] = useState(() => Object.fromEntries(params))
   const id = useId()
-  const secondary = ['tipo_beca', 'estado'].filter(key => params.get(key)).length
+  // El catálogo público elige el estado con sus pestañas; aquí solo lo muestra la gestión de convocatorias.
+  const secondary = (showState ? ['tipo_beca', 'estado'] : ['tipo_beca']).filter(key => params.get(key)).length
   function select(name, label, empty, rows) {
     return <div className="field" key={name}><label htmlFor={`${id}-${name}`}>{label}</label><select id={`${id}-${name}`} name={name} value={values[name] || ''} onChange={e => setValues({ ...values, [name]: e.target.value })}><option value="">{empty}</option>{rows.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></div>
   }
@@ -17,7 +18,7 @@ export default function CatalogFilters({ params, catalogs, onApply, onClear, sta
     </div>
     <details><summary>Más filtros{secondary > 0 && ` · ${secondary} aplicados`}</summary><div className="catalog-filter-grid">
       {select('tipo_beca', 'Tipo de beca', 'Todos los tipos', catalogs.tipos_beca.map(r => [r.id, r.nombre]))}
-      {select('estado', 'Estado', allStateLabel, stateValues.map(v => [v, v === 'todas' ? 'Todas las publicadas' : v === 'vigentes' ? 'Vigentes' : v === 'proxima' ? 'Próxima apertura' : v === 'cierre_hoy' ? 'Cierra hoy; hora no informada' : v === 'sin_fecha' ? 'Fecha de cierre no informada' : readable(v)]))}    </div></details>
+      {showState && select('estado', 'Estado', allStateLabel, stateValues.map(v => [v, v === 'todas' ? 'Todas las publicadas' : v === 'vigentes' ? 'Vigentes' : v === 'proxima' ? 'Próxima apertura' : v === 'cierre_hoy' ? 'Cierra hoy; hora no informada' : v === 'sin_fecha' ? 'Fecha de cierre no informada' : readable(v)]))}    </div></details>
     <div className="form-actions"><Button icon="search" type="submit">Aplicar filtros</Button><Button icon="clear" className="button-light" type="button" onClick={() => { setValues({}); onClear() }}>Limpiar filtros</Button></div>
   </form></section>
 }

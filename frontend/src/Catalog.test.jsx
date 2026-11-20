@@ -123,17 +123,19 @@ it('filtra y muestra Híbrida como modalidad propia', async () => {
 it('aplica filtros, conserva secundarios al cerrar y limpia filtros, orden y página', async () => {
   setup('/becas?page=2&orden=titulo&estado=abierta')
   const u = userEvent.setup()
-  await screen.findByText('Más filtros · 1 aplicados')
-  await u.click(screen.getByText('Más filtros · 1 aplicados'))
+  // El estado se elige con las pestañas: no cuenta como filtro secundario de «Más filtros».
+  await screen.findByText('Más filtros')
+  await u.click(screen.getByText('Más filtros'))
   await u.selectOptions(screen.getByLabelText('Tipo de beca'), '1')
-  await u.click(screen.getByText('Más filtros · 1 aplicados'))
+  await u.click(screen.getByText('Más filtros'))
   await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'ingeniería')
   await u.selectOptions(screen.getByLabelText('Nivel'), 'grado')
   await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
   expect(screen.getByTestId('url').textContent).toContain('tipo_beca=1')
   expect(screen.getByTestId('url').textContent).toContain('orden=titulo')
   expect(screen.getByTestId('url').textContent).not.toContain('page=')
-  await screen.findByText('Más filtros · 2 aplicados')
+  expect(screen.getByTestId('url').textContent).toContain('estado=abierta')
+  await screen.findByText('Más filtros · 1 aplicados')
   await u.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
   expect(screen.getByTestId('url')).toBeEmptyDOMElement()
   expect(screen.getByLabelText('Nivel')).toHaveValue('')
@@ -211,8 +213,9 @@ it('conserva error y reintento sin mostrar resultados obsoletos', async () => {
   vi.mocked(offersApi.get).mockImplementation(async path => path === 'becas/catalogos' ? catalogs : { results: [], count: 0, page: 1, page_size: 12 })
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
   expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
-  const stateOptions = within(screen.getByLabelText('Estado')).getAllByRole('option', { hidden: true }).map(o => o.value)
-  expect(stateOptions).toEqual(['', 'vigentes', 'proxima', 'cerrada', 'todas', 'abierta', 'cierre_hoy', 'sin_fecha'])
+  // El estado solo se elige con las pestañas; «Más filtros» ya no lo repite.
+  expect(screen.queryByLabelText('Estado')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Vigentes', pressed: true })).toBeVisible()
 })
 
 it('muestra día de cierre sin inventar hora ni estado de apertura', () => {
