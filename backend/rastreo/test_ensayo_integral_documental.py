@@ -79,7 +79,8 @@ class EnsayoIntegralDocumental(TransactionTestCase):
         self.assertEqual(origin.version_id, first_version.pk)
         self.assertEqual(origin.publicacion_id, publication.pk)
         self.assertEqual(origin.convocatoria.estado, 'borrador')
-        self.assertIsNone(origin.convocatoria.institucion_id)
+        # El llenado asigna la entidad cuando la ficha nombra a una existente (el oferente ya no queda siempre vacío).
+        self.assertEqual(origin.convocatoria.institucion.nombre, 'Universidad Ecuatoriana Demo')
 
         editorial = editable_candidates(version)['otros_campos']
         self.assertEqual(editorial['evidencia_tabular']['estado'], 'extraida')
@@ -111,7 +112,8 @@ class EnsayoIntegralDocumental(TransactionTestCase):
             valor_estructurado={'descripcion': 'Acreditar condición según bases'})
         with self.assertRaises(ValidationError) as publication_error:
             publicar(origin.convocatoria)
-        self.assertIn('institución oferente ecuatoriana', str(publication_error.exception))
+        # La entidad ya la asignó el llenado; lo que falta para publicar es la opción de estudio activa.
+        self.assertIn('al menos una opción activa', str(publication_error.exception))
         self.assertFalse(publicas().filter(pk=origin.convocatoria_id).exists())
         self.assertEqual(APIClient().get(f'/api/becas/{origin.convocatoria_id}/').status_code, 404)
         client = APIClient()

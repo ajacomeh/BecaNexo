@@ -97,7 +97,8 @@ class CandidatePDFTests(TransactionTestCase):
         publication = Publicacion.objects.get(fuente=self.source, url_normalizada=self.candidate.url_normalizada)
         origin = BorradorRastreo.objects.get(publicacion=publication)
         offer = origin.convocatoria
-        self.assertEqual((offer.revision, offer.institucion_id), ('pendiente', None))
+        # El llenado asigna la entidad cuando la ficha nombra a una existente (el oferente ya no queda siempre vacío).
+        self.assertEqual((offer.revision, offer.institucion.nombre), ('pendiente', 'Universidad Ecuatoriana Demo'))
         self.assertEqual(origin.version.documentos.filter(rol='ficha_html').count(), 1)
         self.assertEqual(origin.version.documentos.filter(rol='bases_pdf').count(), 1)
         self.assertTrue(editable_candidates(origin.version)['otros_campos']['propuestas_documentales'])
@@ -108,7 +109,10 @@ class CandidatePDFTests(TransactionTestCase):
         token = admin.get('/api/auth/csrf/').data['csrfToken']
         evidence = admin.get(f'/api/gestion/rastreo/convocatorias/{offer.pk}/origen/')
         self.assertEqual(evidence.status_code, 200)
-        self.assertTrue(evidence.data['candidatos_editables']['otros_campos']['propuestas_documentales'])
+        # El origen ya no devuelve los candidatos editables (el llenado escribe los campos); entrega la evidencia visible.
+        # Las propuestas documentales se siguen comprobando arriba con editable_candidates.
+        self.assertTrue(evidence.data['automatico'])
+        self.assertEqual(set(evidence.data['evidencia']), {'campos', 'registros'})
         self.assertEqual(admin.post(f'/api/gestion/convocatorias/{offer.pk}/publicar/', {},
                                     format='json', HTTP_X_CSRFTOKEN=token).status_code, 400)
 
@@ -135,6 +139,9 @@ class CandidatePDFTests(TransactionTestCase):
             Preferencia.objects.create(perfil=profile, nivel='grado', modalidad='virtual')
             PreferenciaCorreo.objects.create(usuario=user, habilitada=True)
 
+        # El llenado deja sus requisitos sin validar y la comparación solo cuenta los validados; la revisión del
+        # administrador (o «Validar y publicar») los valida antes de comparar.
+        offer.requisitos.filter(activo=True).update(validado=True)
         eligible_result = evaluar_convocatoria(eligible, offer)['opciones'][0]['resultado']
         ineligible_result = evaluar_convocatoria(ineligible, offer)['opciones'][0]['resultado']
         self.assertEqual((eligible_result, ineligible_result), ('cumple', 'no_cumple'))

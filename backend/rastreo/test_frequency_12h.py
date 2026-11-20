@@ -87,7 +87,12 @@ class TwelveHourFrequencyTests(TransactionTestCase):
         network.assert_not_called()
 
     def test_concurrent_execution_does_not_start_another_capture(self):
-        active = self.previous(hours=13, state='en_curso')
+        # Una corrida en curso con latido reciente (dentro del margen de INTERRUMPIDA_MINUTOS) sigue siendo trabajo vivo y no se
+        # cierra; una sin latido reciente la cierra _cerrar_interrumpidas (ver test_corrida_programada).
+        started = self.now - timedelta(hours=13)
+        active = Ejecucion.objects.create(fuente=self.source_row, origen='programada', clave_idempotencia=uuid.uuid4(),
+            inicio=started, latido_en=self.now, estado='en_curso', configuracion_snapshot=snapshot(self.source_row.pk),
+            version_extractor='siau-html/2')
         with patch('rastreo.services.timezone.now', return_value=self.now), patch(
                 'convocatorias.siau_red.Downloader.once') as network:
             result = run_scheduled(self.source_row.pk)

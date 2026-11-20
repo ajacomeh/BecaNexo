@@ -86,7 +86,8 @@ class CandidateTransitionTests(TransactionTestCase):
         self.assertEqual(origin.version.documentos.filter(rol='ficha_html').count(), 1)
         self.assertEqual(origin.convocatoria.estado, 'borrador')
         self.assertFalse(publicas().filter(pk=origin.convocatoria_id).exists())
-        self.assertIsNone(origin.convocatoria.institucion_id)
+        # El llenado asigna la entidad cuando la ficha nombra a una existente (el oferente ya no queda siempre vacío).
+        self.assertEqual(origin.convocatoria.institucion.nombre, 'Universidad Ecuatoriana Demo')
         self.assertEqual(run.configuracion_snapshot['solicitud_manual']['candidato_id'], self.candidate.pk)
 
     @override_settings(RASTREO_CANDIDATO_PDF_HABILITADO=True)
@@ -444,8 +445,10 @@ class CandidateTransitionTests(TransactionTestCase):
         origin = BorradorRastreo.objects.get(publicacion__url_normalizada=URL)
         self.assertIsNone(origin.convocatoria.cierre_dia)
         self.assertIn('Verificar requisitos', ' '.join(origin.pendientes_iniciales))
-        from .auto_borradores import pending_for_publication
-        self.assertTrue(pending_for_publication(origin.convocatoria, origin))
+        # pending_for_publication solo revisa el enlace oficial; los demás faltantes (p. ej. la opción de estudio)
+        # los informa errores_publicacion, que es lo que bloquea publicar.
+        from convocatorias.services import errores_publicacion
+        self.assertTrue(any('opción activa' in note for note in errores_publicacion(origin.convocatoria, estricto=False)))
 
     def test_national_fiche_without_identified_offerer_creates_editable_private_draft(self):
         from .auto_borradores import prepare_automatic_draft, pending_for_publication
@@ -461,7 +464,9 @@ class CandidateTransitionTests(TransactionTestCase):
         offer = origin.convocatoria
         self.assertIsNone(offer.institucion_id)
         self.assertTrue(any('entidad oferente' in note for note in origin.pendientes_iniciales))
-        self.assertTrue(any('institución oferente' in note for note in pending_for_publication(offer, origin)))
+        # La entidad oferente la exige errores_publicacion (pending_for_publication solo revisa el enlace oficial).
+        from convocatorias.services import errores_publicacion
+        self.assertTrue(any('institución oferente' in note for note in errores_publicacion(offer, estricto=False)))
         repeated, created, _ = prepare_automatic_draft(origin.publicacion_id, origin.version_id, allow_partial=True)
         self.assertFalse(created)
         self.assertEqual(repeated.pk, origin.pk)
@@ -483,7 +488,9 @@ class CandidateTransitionTests(TransactionTestCase):
         offer.refresh_from_db()
         self.assertEqual(offer.institucion_id, institution.pk)
         self.assertFalse(publicas().filter(pk=offer.pk).exists())
-        self.assertTrue(any('participación ecuatoriana' in note for note in pending_for_publication(offer, origin)))
+        # La participación ecuatoriana ya no es un paso aparte: publicar exige la entidad ecuatoriana seleccionada
+        # (mismo criterio que test_auto_borradores).
+        self.assertFalse(any('participación ecuatoriana' in note for note in pending_for_publication(offer, origin)))
 
     def test_foreign_offerer_is_only_detected_publication(self):
         run, _ = self.execute(fiche(foreign=True))

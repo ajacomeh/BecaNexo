@@ -163,8 +163,11 @@ class GenericRunTests(TransactionTestCase):
         run.refresh_from_db()
         self.assertEqual(run.estado, 'finalizada')
         self.assertEqual(Publicacion.objects.filter(fuente=source).count(), 4)
-        self.assertEqual(BorradorRastreo.objects.filter(publicacion__fuente=source).count(), 3)
-        self.assertTrue(Incidencia.objects.filter(fuente=source, codigo='CANDIDATO_PENDIENTE').exists())
+        # La ficha incompleta también conserva un borrador privado parcial (creación parcial permitida).
+        self.assertEqual(BorradorRastreo.objects.filter(publicacion__fuente=source).count(), 4)
+        # Con la creación parcial permitida, las cuatro fichas (también la incompleta) son candidatos aceptados para borrador;
+        # solo la categoría y la noticia se descartan.
+        self.assertEqual(Incidencia.objects.filter(fuente=source, codigo='CANDIDATO_ACEPTADO').count(), 4)
         self.assertTrue(Incidencia.objects.filter(fuente=source, codigo='CANDIDATO_DESCARTADO').exists())
         self.assertFalse(Publicacion.objects.filter(fuente=source, url_original__endswith='noticia').exists())
 
@@ -210,7 +213,8 @@ class GenericRunTests(TransactionTestCase):
         offer = origin.convocatoria
         self.assertEqual(offer.revision, 'pendiente')
         self.assertIsNone(offer.institucion_id)
-        self.assertEqual(offer.url_oficial, '')
+        # El llenado conserva como enlace oficial la página institucional de donde salió la ficha.
+        self.assertEqual(offer.url_oficial, seed)
         self.assertEqual(origin.version.datos_extraidos['vigencia_al_consultar'], 'abierta')
         self.assertEqual(str(offer.cierre_dia), '2027-11-12')
         candidates = editable_candidates(origin.version)

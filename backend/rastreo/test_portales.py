@@ -146,7 +146,8 @@ class PortalRunTests(TransactionTestCase):
         self.assertEqual(publication.versiones.count(), 1)
         self.assertEqual(BorradorRastreo.objects.filter(publicacion=publication).count(), 1)
         self.assertEqual(publication.convocatoria.estado, 'borrador')
-        self.assertIsNone(publication.convocatoria.institucion_id)
+        # El llenado asigna la entidad cuando la ficha nombra a una existente (el oferente ya no queda siempre vacío).
+        self.assertEqual(publication.convocatoria.institucion.nombre, 'Universidad ecuatoriana sintetica')
         self.assertFalse(publicas().filter(pk=publication.convocatoria_id).exists())
         self.assertEqual(Revision.objects.filter(fuente=source, dimension='configuracion').count(), 2)
         self.assertEqual(Incidencia.objects.filter(fuente=source, gravedad='error').count(), 0)
@@ -239,7 +240,8 @@ class PortalRunTests(TransactionTestCase):
         self.assertEqual(run.publicaciones_observadas, 3)
         self.assertEqual(Publicacion.objects.filter(fuente=source).count(), 3)
         self.assertEqual(Version.objects.filter(publicacion__fuente=source).count(), 3)
-        self.assertEqual(BorradorRastreo.objects.filter(publicacion__fuente=source).count(), 1)
+        # Cada una de las tres secciones conserva su propio borrador privado (creación parcial permitida).
+        self.assertEqual(BorradorRastreo.objects.filter(publicacion__fuente=source).count(), 3)
         self.assertTrue(Incidencia.objects.filter(fuente=source, codigo='BASE_NO_PERMITIDA').exists())
         self.assertEqual([call.args[0] for call in requested.call_args_list], [portal.robots, portal.indice])
         for publication in Publicacion.objects.filter(fuente=source):
@@ -287,6 +289,8 @@ class PortalRunTests(TransactionTestCase):
             return 200, {'content-type': 'text/html'}, FICHA_HTML
         with patch('convocatorias.siau_red.Downloader.once', side_effect=network):
             run_manual(second.pk, self.actor.pk, uuid.uuid4())
+        # Desde que se relajó la creación de borradores, el duplicado de otro portal también conserva su borrador privado
+        # (con la incidencia de revisión), en lugar de quedar sin borrador.
         self.assertEqual(Publicacion.objects.count(), 2)
-        self.assertEqual(BorradorRastreo.objects.count(), 1)
+        self.assertEqual(BorradorRastreo.objects.count(), 2)
         self.assertTrue(Incidencia.objects.filter(fuente=second, codigo='BORRADOR_REVISION_PENDIENTE').exists())
