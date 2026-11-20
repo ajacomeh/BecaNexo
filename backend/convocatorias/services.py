@@ -5,6 +5,7 @@ from django.db import transaction
 from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 from . import models as m, serializers as s
+from .reglas import EXTERNOS
 
 
 def publicas():
@@ -109,7 +110,7 @@ def errores_publicacion(obj, estricto=True):
             seen = set()
             for r in reglas:
                 codigo = r.tipo_requisito.codigo
-                if codigo in ("ACREDITACION", "DOCUMENTO", "OTRO"): continue
+                if codigo in EXTERNOS: continue
                 # Varias condiciones académicas sin relación definida ya dan «desconocido» en la comparación
                 # (no se mezclan títulos distintos); no hace falta bloquear la publicación por ello.
                 if codigo in ("FORMACION", "TITULO_AREA", "PROMEDIO") and r.relacion_formacion == "pendiente": continue

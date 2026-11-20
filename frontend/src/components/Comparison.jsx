@@ -52,7 +52,9 @@ function Evaluation({ item, catalogs }) {
       <div><dt>Dato declarado utilizado</dt><dd>{item.dato_declarado ? Object.entries(item.dato_declarado).map(([k, v]) => <p key={k}>{labels[k] || k}: {valueText(v, k, catalogs)}</p>) : missingEvidenceText(item)}</dd></div>
       <div><dt>Condición exigida</dt><dd>{Object.entries(condition.valores || {}).map(([k, v]) => <p key={k}>{type?.esquema_valor?.campos[k]?.label || labels[k] || k}: {valueText(v, k, catalogs, type?.esquema_valor?.campos[k])}</p>)}{condition.fecha_referencia && <p>Fecha de referencia: {condition.fecha_referencia}</p>}</dd></div>
     </dl>
-    {item.comprobacion_externa && <div className="comparison-external"><strong>Verificación externa pendiente</strong><p>La entidad oferente comprueba los documentos y certificados. La coincidencia declarada no los acredita.</p>{condition.documento && <p>{condition.documento}</p>}{condition.acreditacion && <p>{condition.acreditacion}</p>}</div>}
+    {item.comprobacion_externa && <div className="comparison-external"><strong>Verificación externa pendiente</strong>{item.tipo === 'CONDICION_ADMINISTRATIVA'
+      ? <p>La entidad oferente comprueba esta condición en sus registros administrativos. BecaNexo no la da por cumplida.</p>
+      : <p>La entidad oferente comprueba los documentos y certificados. La coincidencia declarada no los acredita.</p>}{condition.documento && <p>{condition.documento}</p>}{condition.acreditacion && <p>{condition.acreditacion}</p>}</div>}
     {item.resultado !== 'cumple' && !item.comprobacion_externa && profileLinks[item.seccion_perfil] && <Link className="button button-light comparison-profile-link" to={profileLinks[item.seccion_perfil][0]}><Icon name={profileLinks[item.seccion_perfil][0].startsWith('/preferencias') ? 'preferences' : 'profile'} /><span>{profileLinks[item.seccion_perfil][1]}</span></Link>}
     {condition.referencia_bases && <p>Referencia en las bases: {condition.referencia_bases}</p>}
   </li>

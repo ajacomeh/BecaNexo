@@ -45,7 +45,8 @@ class EstructuraSemanticaTests(SimpleTestCase):
                           'Contar con un título académico previo para cursar una maestría; '
                           'cumplir con los requisitos generales establecidos en la convocatoria')
         self.assertEqual(len(rows), 3)
-        self.assertEqual(rows[0]['tipo_sugerido'], 'OTRO')
+        # El goce de derechos es una condición administrativa, nunca nacionalidad.
+        self.assertEqual(rows[0]['tipo_sugerido'], 'CONDICION_ADMINISTRATIVA')
         self.assertEqual(rows[0]['metodo'], 'elegibilidad_por_verificar')
         self.assertEqual(rows[1]['valor_sugerido'], {})
         self.assertEqual(rows[2]['metodo'], 'referencia_externa')
@@ -93,7 +94,9 @@ class EstructuraSemanticaTests(SimpleTestCase):
         for text, method in cases:
             with self.subTest(text=text):
                 item = candidatos(text)[0]
-                self.assertEqual((item['estado'], item['metodo'], item['tipo_sugerido']), ('externa', method, 'OTRO'))
+                # Las que la entidad comprueba en sus registros son «Condición administrativa»; la admisión sigue como OTRO.
+                expected = 'OTRO' if method == 'admision_programa' else 'CONDICION_ADMINISTRATIVA'
+                self.assertEqual((item['estado'], item['metodo'], item['tipo_sugerido']), ('externa', method, expected))
                 self.assertEqual(item['valor_sugerido'], {})
                 self.assertEqual(item['operador_sugerido'], 'externo')
                 self.assertFalse(item['validado'])

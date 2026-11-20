@@ -54,6 +54,16 @@ ADMISION_PROGRAMA = re.compile(
     r'\btitulo\s+academico\s+previo\b|\bpara\s+cursar\s+un\s+programa\b')
 
 
+# Categorías externas que la entidad oferente comprueba en sus registros administrativos: tipo propio.
+# La admisión o matrícula en el programa sigue como «Otra condición externa».
+CATEGORIAS_ADMINISTRATIVAS = {'prohibicion_administrativa', 'elegibilidad_por_verificar'}
+TIPO_ADMINISTRATIVO = 'CONDICION_ADMINISTRATIVA'
+
+
+def tipo_externo(categoria):
+    return TIPO_ADMINISTRATIVO if categoria in CATEGORIAS_ADMINISTRATIVAS else 'OTRO'
+
+
 def categoria_externa(n, negated):
     """Categoría de condición externa de una cláusula normalizada, o None si no corresponde."""
     if ECUATORIANO.search(n):
@@ -227,8 +237,8 @@ def interpretar_requisitos(text, *, version_id, url, documento_id=None):
         elif state != 'identificada':
             external = method if method == 'elegibilidad_por_verificar' else categoria_externa(n, negated)
             if external:
-                # Condición que comprueba la entidad oferente: texto literal como tipo OTRO, sin valores.
-                code, method, score, values, state = 'OTRO', external, None, {}, 'externa'
+                # Condición que comprueba la entidad oferente: texto literal, sin valores ni inversión de la negación.
+                code, method, score, values, state = tipo_externo(external), external, None, {}, 'externa'
         candidates.append({'texto_original': clause, 'tipo_sugerido': code or 'OTRO',
             'valor_sugerido': values, 'operador_sugerido': CONTRATOS[code][1] if code in CONTRATOS else None,
             'estado': state, 'metodo': method, 'puntuacion': score,

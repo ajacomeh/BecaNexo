@@ -42,6 +42,8 @@ export const benefitFields = (options, countries = []) => [scope(options, countr
   text('moneda', 'Moneda del importe fijo', { maxLength: 3 }), text('tope_original', 'Tope literal según las bases', { hint: 'Conserva el símbolo y texto originales; $ no confirma USD.' }),
   text('tope_monto', 'Valor máximo del tope, si está claro', { type: 'number', kind: 'number' }), text('tope_moneda', 'Moneda confirmada del tope (opcional)', { maxLength: 3, hint: 'Deja vacío si la fuente no confirma el código monetario.' }),
   select('periodicidad', 'Periodicidad', enumOptions(['unico', 'mensual', 'anual', 'otra'])), text('detalle', 'Detalle de cobertura', { type: 'textarea' })]
+// Tipos que verifica la entidad oferente (operador «externo» del contrato): incluye la condición administrativa.
+export const isExternal = (type) => Boolean(type?.esquema_valor?.operadores?.includes('externo'))
 export const requirementFields = (type, c, options) => {
   const documental = ['DOCUMENTO', 'ACREDITACION'].includes(type.codigo)
   const fields = [scope(options, c.paises), text('texto_original', 'Texto original del requisito', { type: 'textarea', required: true }),

@@ -9,6 +9,7 @@ import Message from '../components/Message'
 import Button from '../components/Button'
 import { generalFields, optionFields, benefitFields, requirementFields, optionLabel } from './offerFields'
 import { stateLabel } from './offerDisplay'
+import { isExternal } from './offerFields'
 import OriginPanel from '../components/OriginPanel'
 
 async function allInstitutions() {
@@ -58,7 +59,7 @@ function Records({ name, title, offer, catalogs, onSaved }) {
     if (name === 'requisitos') {
       const value = Object.fromEntries(Object.entries(values).filter(([key, v]) => key.startsWith('regla_') && v != null && (!Array.isArray(v) || v.length)).map(([key, v]) => [key.slice(6), v]))
       data = { ...Object.fromEntries(Object.entries(values).filter(([key]) => !key.startsWith('regla_'))), tipo_requisito: type.id, valor_estructurado: value,
-        modo_comprobacion: ['ACREDITACION', 'DOCUMENTO', 'OTRO'].includes(type.codigo) ? 'entidad_oferente' : 'dato_declarado' }
+        modo_comprobacion: isExternal(type) ? 'entidad_oferente' : 'dato_declarado' }
     }
     try {
       const response = await offersApi.write(`gestion/convocatorias/${offer.id}/${name}${editing.id ? `/${editing.id}` : ''}`, editing.id ? 'PATCH' : 'POST', data)

@@ -3,11 +3,10 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from perfiles.models import Perfil, MCER
-from .reglas import CONTRATOS, esquema, validar
+from .reglas import CONTRATOS, EXTERNOS, esquema, validar  # EXTERNOS: tipos que verifica la entidad oferente.
 from .equivalencias import coincidir, validar_equivalencias
 
 ACADEMICOS = {"FORMACION", "TITULO_AREA", "PROMEDIO"}
-EXTERNOS = {"ACREDITACION", "DOCUMENTO", "OTRO"}
 ETIQUETAS = {
     "cumple": "Coincide según tus datos declarados",
     "no_cumple": "No coincide con un requisito obligatorio",

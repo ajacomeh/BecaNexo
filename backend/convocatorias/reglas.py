@@ -32,7 +32,13 @@ CONTRATOS = {
     "ACREDITACION": ("Certificación externa", "externo", {"certificados_admitidos": campo("Certificados admitidos según las bases"), "vigencia": campo("Vigencia publicada", required=False), "url_documento": campo("Enlace oficial del documento o formulario", "url", False)}),
     "DOCUMENTO": ("Documento externo", "externo", {"documento": campo("Nombre del documento"), "condiciones": campo("Condiciones o alternativas según las bases", required=False), "url_documento": campo("Enlace oficial del documento o formulario", "url", False)}),
     "OTRO": ("Otra condición externa", "externo", {"descripcion": campo("Descripción publicada")}),
+    # Condiciones repetidas en las bases que la entidad oferente comprueba en sus registros (goce de derechos,
+    # becas vigentes, crédito educativo, sanciones, contratos, otros programas). Texto literal, sin valores.
+    "CONDICION_ADMINISTRATIVA": ("Condición administrativa", "externo", {"descripcion": campo("Condición publicada")}),
 }
+
+# Tipos que verifica la entidad oferente: nunca se comparan con el perfil ni dan «cumple» por sí solos.
+EXTERNOS = frozenset(codigo for codigo, (_, operador, _) in CONTRATOS.items() if operador == "externo")
 
 
 def esquema(codigo):
@@ -44,7 +50,7 @@ def validar(codigo, valor, fecha, modo, operador):
     if codigo not in CONTRATOS: raise ValidationError({"tipo_requisito": "Tipo no soportado."})
     _, esperado, campos = CONTRATOS[codigo]
     if operador != esperado: raise ValidationError({"operador": "Operador incompatible con este tipo."})
-    externo = codigo in ("ACREDITACION", "DOCUMENTO", "OTRO")
+    externo = codigo in EXTERNOS
     if modo != ("entidad_oferente" if externo else "dato_declarado"):
         raise ValidationError({"modo_comprobacion": "La condición documental se verifica exclusivamente por la entidad oferente; separa las reglas declaradas."})
     if not isinstance(valor, dict) or set(valor) - set(campos):

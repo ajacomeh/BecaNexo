@@ -25,10 +25,10 @@ from django.db import IntegrityError, transaction
 
 from convocatorias import serializers as catalogo_serializers
 from convocatorias.models import Beneficio, OpcionEstudio, Requisito, TipoBeca, TipoRequisito
+from convocatorias.reglas import EXTERNOS
 from convocatorias.services import touch
 from perfiles.models import Area, Pais
 
-EXTERNOS = ('ACREDITACION', 'DOCUMENTO', 'OTRO')
 MODELOS = {'opciones': OpcionEstudio, 'beneficios': Beneficio, 'requisitos': Requisito}
 SECCIONES = {'requisitos': 'Requisitos', 'beneficios': 'Beneficio', 'opciones': 'Estudios: nivel, modalidad y destino'}
 
@@ -60,14 +60,18 @@ def filas_de_candidatos(found, tipos, paises=None):
         procedencia = item.get('procedencia') or {}
         base = {'modelo': 'requisitos', 'texto': texto, 'seccion': procedencia.get('seccion') or SECCIONES['requisitos'],
                 'documento_id': procedencia.get('documento_id'), 'pagina': procedencia.get('pagina'), 'metodo': item.get('metodo'),
-                'huella': _huella('requisitos', {'texto': _normal(texto), 'tipo': codigo})}
+                # Las condiciones externas conservan la huella de siempre (tipo OTRO): cambiar su tipificación no
+                # hace reaparecer un requisito que el administrador eliminó.
+                'huella': _huella('requisitos', {'texto': _normal(texto), 'tipo': 'OTRO' if item.get('estado') == 'externa' else codigo})}
         if item.get('estado') == 'obligacion':
             filas.append({**base, 'omitido': 'Es una obligación posterior de la persona beneficiaria, no un requisito '
                                              'de postulación; se registra en las obligaciones del beneficiario.'})
             continue
         if item.get('estado') == 'externa':
             # La comprueba la entidad oferente: texto literal, nunca invertido ni evaluado por BecaNexo.
-            tipo = tipos.get('OTRO')
+            # Si el tipo propio (p. ej. condición administrativa) aún no está en el catálogo, se usa OTRO.
+            tipo = tipos.get(codigo) if codigo in EXTERNOS else None
+            tipo = tipo or tipos.get('OTRO')
             if not tipo:
                 filas.append({**base, 'omitido': 'Tipo de requisito OTRO no registrado en el catálogo.'})
                 continue
@@ -180,10 +184,19 @@ def complementar_con_bases(found, bases, version_id):
     if not bases:
         return found
     vistas = [item.get('texto_original') or '' for item in found.get('requisitos', [])]
+    # Mismo tipo estructurado con los mismos valores (p. ej. «Ser ciudadano ecuatoriano» y «Nacionalidad
+    # ecuatoriana»): es la misma condición, aunque la redacción no se parezca.
+    estructuradas = {(item.get('tipo_sugerido'), json.dumps(item.get('valor_sugerido') or {}, sort_keys=True))
+                     for item in found.get('requisitos', []) if item.get('estado') == 'identificada'}
     for item in requisitos_de_bases(bases, version_id):
         nueva = item.get('texto_original') or ''
+        firma = (item.get('tipo_sugerido'), json.dumps(item.get('valor_sugerido') or {}, sort_keys=True))
+        if item.get('estado') == 'identificada' and firma in estructuradas:
+            continue
         if clave(nueva) and not any(misma_condicion(nueva, vista) for vista in vistas):
             vistas.append(nueva)
+            if item.get('estado') == 'identificada':
+                estructuradas.add(firma)
             found.setdefault('requisitos', []).append(item)
     otros = found.setdefault('otros_campos', {})
     if not otros.get('beneficios'):

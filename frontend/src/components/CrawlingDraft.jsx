@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { offersApi } from '../api/client'
 import Button from './Button'
 import Message from './Message'
+import { isExternal } from '../pages/offerFields'
 
 const kinds = ['opciones', 'beneficios', 'requisitos']
 const label = { opciones: 'Opción', beneficios: 'Beneficio', requisitos: 'Requisito' }
@@ -29,7 +30,7 @@ function catalogData(kind, item, countries, types, extra) {
       detalle: [item.texto, item.condiciones].filter(Boolean).join('\n') || null }
   }
   const type = types.find((t) => t.codigo === item.tipo)
-  if (!type || !['DOCUMENTO', 'ACREDITACION', 'OTRO'].includes(type.codigo) || !item.texto) throw Error('Este requisito necesita mapeo estructurado adicional; consérvalo pendiente y revísalo en el editor.')
+  if (!type || !isExternal(type) || !item.texto) throw Error('Este requisito necesita mapeo estructurado adicional; consérvalo pendiente y revísalo en el editor.')
   const structured = type.codigo === 'DOCUMENTO' ? { documento: extra.nombre, condiciones: extra.condiciones || undefined } : type.codigo === 'ACREDITACION' ? { certificados_admitidos: extra.nombre, vigencia: extra.condiciones || undefined } : { descripcion: extra.nombre }
   if (!extra.nombre?.trim()) throw Error('Indica el nombre documental o descripción conforme a la evidencia.')
   return { ...baseScope, destino: scope === 'destino' ? item.destino : null, tipo_requisito: type.id,
