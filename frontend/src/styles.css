@@ -291,9 +291,24 @@
 .eyebrow { font-size: .75rem; font-weight: 700; letter-spacing: .1em; margin-bottom: 12px; }
 .offer-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
 .offer-card-statuses { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.recommendation-status-cumple { background: #e4f5ef; color: #086e50; }
-.recommendation-status-no_cumple { background: #f4ecea; color: #9b3b24; }
-.recommendation-status-desconocido { background: #fff4dd; color: #765016; }
+.status-pill.recommendation-status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; font-weight: 650; }
+.recommendation-status .ui-icon, .recommendation-requirements .ui-icon { width: 16px; height: 16px; flex: none; }
+.status-pill.recommendation-status-cumple { background: #e4f5ef; color: #086e50; border-color: #087f8c; }
+.status-pill.recommendation-status-no_cumple { background: #f4ecea; color: #9b3b24; border-color: #a22018; }
+.status-pill.recommendation-status-desconocido { background: #fff4dd; color: #765016; border-color: #8a6519; }
+.recommendation-explanation .recommendation-requirements { margin: -4px -6px 2px; padding: 8px 10px; border-left: 4px solid #8a6519; border-radius: 6px; }
+.recommendation-explanation .recommendation-requirements strong { display: inline-flex; align-items: center; gap: 6px; }
+.recommendation-requirements-cumple { background: #e4f5ef; border-left-color: #087f8c !important; }
+.recommendation-requirements-cumple strong { color: #086e50 !important; }
+.recommendation-requirements-no_cumple { background: #f4ecea; border-left-color: #a22018 !important; }
+.recommendation-requirements-no_cumple strong { color: #9b3b24 !important; }
+.recommendation-requirements-desconocido { background: #fff4dd; border-left-color: #8a6519 !important; }
+.recommendation-requirements-desconocido strong { color: #765016 !important; }
+/* Modo de alto contraste del sistema: los fondos se pierden, así que el borde y el ícono mantienen la distinción. */
+@media (forced-colors: active) {
+  .recommendation-status { border: 1px solid CanvasText; }
+  .recommendation-explanation .recommendation-requirements { border-left: 4px solid CanvasText !important; }
+}
 .recommendation-explanation { display: grid; gap: 8px; width: 100%; padding: 12px 14px; border: 1px solid #e4eaf3; border-radius: 8px; background: #f7f9fc; min-width: 0; }
 .recommendation-explanation p { display: grid; gap: 2px; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
 .recommendation-explanation strong { color: #17345c; font-size: .85rem; }
