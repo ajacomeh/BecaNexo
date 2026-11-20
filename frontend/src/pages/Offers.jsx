@@ -23,14 +23,7 @@ function StudySummary({ options }) {
 function PublicationReadiness({ offer }) {
   const diagnosis = offer.diagnostico
   if (!diagnosis || offer.revision === 'validada') return null
-  const marks = offer.origen_automatico?.marcas || []
-  return <div className="offer-readiness">
-    <p className="accent-note">{diagnosis.faltan ? `Faltan ${diagnosis.faltan} ${diagnosis.faltan === 1 ? 'paso' : 'pasos'} para publicar` : 'Sin pendientes: lista para revisar y publicar'}</p>
-    {(diagnosis.faltan > 0 || marks.length > 0) && <details><summary>Qué falta revisar</summary>
-      {diagnosis.faltan > 0 && <ul>{diagnosis.pendientes_publicacion.map(item => <li key={item}>{item}</li>)}</ul>}
-      {marks.length > 0 && <><p className="small-note">Marcas del rastreo:</p><ul>{marks.map(item => <li key={item}>{item}</li>)}</ul></>}
-    </details>}
-  </div>
+  return <p className="accent-note">{diagnosis.faltan ? `Faltan ${diagnosis.faltan} ${diagnosis.faltan === 1 ? 'paso' : 'pasos'} para publicar` : 'Sin pendientes: lista para revisar y publicar'}</p>
 }
 
 export default function Offers({ admin = false }) {
@@ -45,7 +38,7 @@ function AdministrativeOffers({ admin }) {
   const [retry, setRetry] = useState(0)
   const query = params.toString()
   const totalPages = data ? Math.ceil(data.count / data.page_size) : 0
-  const filterKeys = ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado', 'confianza']
+  const filterKeys = ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado']
   const activeFilterCount = filterKeys.filter(key => params.get(key)).length
   const applyFilters = values => {
     const next = Object.fromEntries(Object.entries(values).filter(([key, value]) => filterKeys.includes(key) && value != null && value !== ''))
@@ -71,10 +64,10 @@ function AdministrativeOffers({ admin }) {
     {admin && <div className="heading-actions"><Link className="secondary-link" to="/gestion/convocatorias/nueva"><Icon name="add" /><span>Crear convocatoria</span></Link><Link to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar oferentes</span></Link></div>}</div>
     {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
     {!catalogs && !error && <p role="status"><Icon name="loading" />Cargando catálogo…</p>}
-    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={applyFilters} onClear={clearFilters} stateValues={['borrador', 'pausada', 'abierta', 'cerrada', 'proxima', 'sin_fecha']} activeCount={activeFilterCount} confidence />}
+    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={applyFilters} onClear={clearFilters} stateValues={['borrador', 'pausada', 'abierta', 'cerrada', 'proxima', 'sin_fecha']} activeCount={activeFilterCount} />}
     {catalogs && !data && !error && <p role="status"><Icon name="loading" />Cargando convocatorias…</p>}
-    {data && <><div className="catalog-results-heading"><p role="status">{data.count} convocatorias encontradas</p><div className="field"><label htmlFor="admin-offer-order">Ordenar por</label><select id="admin-offer-order" value={params.get('orden') || 'recientes'} onChange={e => orderResults(e.target.value)}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option><option value="confianza">Confianza del borrador</option></select></div></div><div className="offer-grid">{data.results.map((offer) => <article className="offer-card" key={offer.id}>
-      <div className="offer-card-pills"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>{offer.origen_automatico?.confianza && <span className={`status-pill confidence-${offer.origen_automatico.confianza}`}>Confianza {offer.origen_automatico.confianza}</span>}</div><h2>{offer.titulo}</h2><p>{offer.institucion?.nombre || (offer.revision === 'validada' ? 'Entidad oferente: No identificada' : 'Oferente pendiente de confirmar')}</p>{offer.origen_automatico && <p className="small-note">Borrador del rastreo · Publicación {offer.origen_automatico.publicacion_id}</p>}
+    {data && <><div className="catalog-results-heading"><p role="status">{data.count} convocatorias encontradas</p><div className="field"><label htmlFor="admin-offer-order">Ordenar por</label><select id="admin-offer-order" value={params.get('orden') || 'recientes'} onChange={e => orderResults(e.target.value)}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option></select></div></div><div className="offer-grid">{data.results.map((offer) => <article className="offer-card" key={offer.id}>
+      <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h2>{offer.titulo}</h2><p>{offer.institucion?.nombre || (offer.revision === 'validada' ? 'Entidad oferente: No identificada' : 'Oferente pendiente de confirmar')}</p>{offer.origen_automatico && <p className="small-note">Borrador del rastreo · Publicación {offer.origen_automatico.publicacion_id}</p>}
       <PublicationReadiness offer={offer} /><p>Tipo: {display(offer.tipo_beca_nombre)}</p>
       <p className="accent-note">{offer.beneficios.length ? offer.beneficios.map((b) => `${b.concepto}: ${b.porcentaje != null ? `${b.porcentaje} %` : 'porcentaje no especificado'}`).join(' · ') : 'Beneficios no especificados'}</p>
       <StudySummary options={offer.opciones} /><p>Cierre: {closingText(offer)}</p>

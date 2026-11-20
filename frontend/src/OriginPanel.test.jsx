@@ -12,34 +12,56 @@ const origin = { aplicacion: { propuesta_id: 3 }, publicacion_id: 4, version_id:
   estado: { bloqueos: [], pendientes: [{ id: 'SIN_OPCIONES:opciones', codigo: 'SIN_OPCIONES',
     campo: 'opciones', motivo: 'Falta una opción confirmada' }] }, resoluciones: [] }
 
-const automatic = { automatico: true, publicacion_id: 4, version_id: 5, datos_iniciales: {}, candidatos_editables: {},
-  enlaces_origen: {}, version_convocatoria: 3, bloqueos_actuales: ['Revisa 1 propuesta precargada (acepta o descarta cada una) antes de publicar.'],
-  observaciones: [], pendientes_iniciales: [] }
+const automatic = { aplicacion: null, automatico: true, publicacion_id: 15, version_id: 23, version_convocatoria: 3,
+  enlaces_origen: { publicacion: 'https://siau.example/ficha', bases: [{ url: 'https://siau.example/bases.pdf' }, { url: 'javascript:alert(1)' }],
+    postulacion: [{ url: 'https://siau.example/postula' }] },
+  para_publicar: ['Asigna una institución oferente ecuatoriana antes de publicar.', 'Añade al menos una opción activa.'],
+  evidencia: { campos: [{ campo: 'url_oficial', valor: 'https://siau.example/ficha', literal: 'Enlace de postulación de la ficha', documento_id: 47, seccion: 'Enlaces de la ficha' }],
+    registros: [{ modelo: 'requisitos', id: 5, texto: 'No haber sido sancionada con la prohibición de postular.', documento_id: 47, seccion: 'Requisitos' },
+      { modelo: 'beneficios', id: 6, texto: 'Subvención de USD 569.23 para manutención.', documento_id: 47, seccion: 'Beneficio' },
+      { modelo: 'opciones', id: 7, texto: 'maestria · virtual · Ecuador', documento_id: 47, seccion: 'Estudios', pagina: 2 }] } }
 
-it('precarga propuestas con clave estable y resuelve cada registro pendiente', async () => {
-  const rows = [{ modelo: 'beneficios', id: 21, texto: 'Cubre el 50 % de la matrícula.', confianza: 'alta', estado: 'pendiente', huella: 'h1',
-    procedencia: { version_id: 5, documento_id: 9, campo: 'beneficio' } },
-  { modelo: 'requisitos', id: 22, texto: 'Ser ciudadano ecuatoriano.', confianza: 'alta', estado: 'aceptado', huella: 'h2', procedencia: {} }]
-  vi.spyOn(offersApi, 'get').mockResolvedValueOnce({ ...automatic, precarga: [] }).mockResolvedValue({ ...automatic, precarga: rows })
-  const write = vi.spyOn(offersApi, 'write').mockRejectedValueOnce(new Error('Fallo sintético'))
-    .mockResolvedValueOnce({ creados: [rows[0]], omitidos: [{ modelo: 'requisitos', huella: 'h3', texto: 'No haber recibido otra beca.', motivo: 'Interpretación ambigua' }] })
-    .mockResolvedValue({ estado: 'descartado' })
-  const changed = vi.fn()
-  render(<MemoryRouter><OriginPanel offer={{ id: 7, version: 3 }} onChanged={changed} /></MemoryRouter>)
-  const user = userEvent.setup()
-  await user.click(await screen.findByRole('button', { name: 'Precargar propuestas' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Fallo sintético')
-  await user.click(screen.getByRole('button', { name: 'Precargar propuestas' }))
-  expect(await screen.findByText(/Se creó 1 registro inactivo para revisar\. 1 candidato quedó para revisión manual\./)).toBeVisible()
-  expect(write.mock.calls[0][2].clave_accion).toBe(write.mock.calls[1][2].clave_accion)
-  expect(write.mock.calls[1]).toEqual(['gestion/rastreo/convocatorias/7/precargar', 'POST', { version_convocatoria: 3, clave_accion: write.mock.calls[1][2].clave_accion }])
-  expect(await screen.findByText('Cubre el 50 % de la matrícula.')).toBeVisible()
-  expect(screen.getByText(/1 pendiente de revisión/)).toBeVisible()
-  expect(screen.getAllByRole('button', { name: /Aceptar/ })).toHaveLength(1)
-  await user.click(screen.getByRole('button', { name: 'Descartar y eliminar' }))
-  await waitFor(() => expect(write).toHaveBeenLastCalledWith('gestion/rastreo/convocatorias/7/precarga/resolver', 'POST',
-    { modelo: 'beneficios', id: 21, decision: 'descartar', version_convocatoria: 3 }))
-  expect(changed).toHaveBeenCalledTimes(2)
+it('presenta el origen del borrador de forma compacta, con enlaces y lo que falta para publicar', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue(automatic)
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 3 }} /></MemoryRouter>)
+  expect(await screen.findByText('Borrador generado por rastreo')).toBeVisible()
+  expect(screen.getByText(/Publicación 15 · Versión 23\. Ninguna beca se publica automáticamente\./)).toBeVisible()
+  expect(screen.getByRole('link', { name: /Consultar ficha/ })).toHaveAttribute('href', '/gestion/rastreo/publicaciones/15')
+  expect(screen.getByRole('link', { name: 'Abrir ficha de origen' })).toHaveAttribute('href', 'https://siau.example/ficha')
+  expect(screen.getByRole('link', { name: 'Bases 1' })).toHaveAttribute('href', 'https://siau.example/bases.pdf')
+  expect(screen.queryByRole('link', { name: 'Bases 2' })).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Para publicar falta' })).toBeVisible()
+  expect(screen.getByText('Asigna una institución oferente ecuatoriana antes de publicar.')).toBeVisible()
+  expect(screen.getByText('Añade al menos una opción activa.')).toBeVisible()
+  for (const removed of [/Requisitos extraídos/, /Beneficios interpretados/, /Opciones sugeridas/, /Tablas y anexos/,
+    /Bases PDF archivadas/, /Propuestas documentales/, /Datos complementarios/, /Datos de origen conservados/, /Precargar propuestas/, /onfianza/]) {
+    expect(screen.queryByText(removed)).not.toBeInTheDocument()
+  }
+  expect(screen.queryByRole('button', { name: /Preparar en editor|Precargar|Aceptar|Descartar/ })).not.toBeInTheDocument()
+})
+
+it('ofrece un único desplegable cerrado con el texto literal y el documento y página de cada registro', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue(automatic)
+  const write = vi.spyOn(offersApi, 'write')
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 3 }} /></MemoryRouter>)
+  const summary = await screen.findByText('Ver evidencia de origen')
+  expect(document.querySelectorAll('.crawl-origin details')).toHaveLength(1)
+  expect(summary.closest('details')).not.toHaveAttribute('open')
+  await userEvent.setup().click(summary)
+  expect(summary.closest('details')).toHaveAttribute('open')
+  expect(screen.getByText('Enlace de postulación de la ficha')).toBeVisible()
+  expect(screen.getByText(/No haber sido sancionada con la prohibición de postular\./)).toBeVisible()
+  expect(screen.getByText(/Subvención de USD 569\.23 para manutención\./)).toBeVisible()
+  expect(screen.getByText('Documento 47 · Sección: Requisitos')).toBeVisible()
+  expect(screen.getByText('Documento 47 · Sección: Estudios · Página 2')).toBeVisible()
+  expect(write).not.toHaveBeenCalled()
+})
+
+it('indica que no falta nada cuando no quedan pendientes y no muestra evidencia si no hay registros', async () => {
+  vi.spyOn(offersApi, 'get').mockResolvedValue({ ...automatic, para_publicar: [], evidencia: { campos: [], registros: [] } })
+  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 3 }} /></MemoryRouter>)
+  expect(await screen.findByText(/No falta nada\./)).toBeVisible()
+  expect(screen.queryByText('Ver evidencia de origen')).not.toBeInTheDocument()
 })
 
 it('conserva la justificación y la evidencia ante un error y permite reintentar', async () => {
@@ -68,122 +90,9 @@ it('no presenta procedencia en una convocatoria manual', async () => {
   expect(screen.queryByText('Registrar resolución comprobada')).not.toBeInTheDocument()
 })
 
-it('muestra origen automático, pendientes y oferente sugerido sin asignarlo', async () => {
-  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
-    publicacion_id: 15, version_id: 23,
-    bloqueos_actuales: ['Confirmar elegibilidad ecuatoriana'],
-    observaciones: ['Oferente no identificado; revisar la fuente.'],
-    datos_iniciales: { titulo: 'Beca nacional sintética', entidad_sugerida: { id: 4, nombre: 'Entidad sintética' } } })
-  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} /></MemoryRouter>)
-  expect(await screen.findByText('Borrador generado por rastreo')).toBeVisible()
-  expect(screen.getByText('Confirmar elegibilidad ecuatoriana')).toBeVisible()
-  expect(screen.getByText('Oferente no identificado; revisar la fuente.')).toBeVisible()
-  expect(screen.getByRole('link', { name: /Consultar ficha/ })).toHaveAttribute('href', '/gestion/rastreo/publicaciones/15')
-  await userEvent.setup().click(screen.getByText('Datos de origen conservados'))
-  expect(screen.getByText(/Entidad sintética \(ID 4; confirmar antes de asignar\)/)).toBeVisible()
-})
-
-it('separa ficha, bases y postulación y prepara candidatos sin guardar', async () => {
-  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
-    publicacion_id: 15, version_id: 23, bloqueos_actuales: ['Revisar requisitos'],
-    datos_iniciales: { titulo: 'Ficha sintética' },
-    enlaces_origen: { publicacion: 'https://siau.example/ficha',
-      bases: [{ url: 'https://siau.example/bases.pdf' }],
-      postulacion: [{ url: 'javascript:alert(1)' }] },
-    candidatos_editables: { requisitos: [{ texto_original: 'Promedio mínimo',
-      procedencia: { version_id: 23 }, validado: false }], opciones: [] } })
-  const onPrepare = vi.fn()
-  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
-  expect(await screen.findByText('Borrador generado por rastreo')).toBeVisible()
-  expect(screen.getByRole('link', { name: 'Abrir ficha de origen' })).toHaveAttribute('href', 'https://siau.example/ficha')
-  expect(screen.getByRole('link', { name: 'Bases 1' })).toHaveAttribute('href', 'https://siau.example/bases.pdf')
-  expect(screen.queryByRole('link', { name: 'Postulación 1' })).not.toBeInTheDocument()
-  await userEvent.setup().click(screen.getByText('Requisitos extraídos para revisar (1)'))
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Preparar en editor' }))
-  expect(onPrepare).toHaveBeenCalledWith('requisitos', expect.objectContaining({ texto_original: 'Promedio mínimo', validado: false }))
-})
-
-it('separa texto, clasificación, procedencia y acción de cada requisito sin cambiar la sugerencia', async () => {
-  const candidate = { texto_original: 'Promedio mínimo de 8,5', tipo_sugerido: 'PROMEDIO', estado: 'identificado',
-    metodo: 'regla', valor_sugerido: { minimo: '8,5' }, procedencia: { version_id: 23, documento_id: 8 } }
-  vi.spyOn(offersApi, 'get').mockResolvedValue({ automatico: true, publicacion_id: 15,
-    version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
-    candidatos_editables: { requisitos: [candidate, { texto_original: 'Condición por comprobar',
-      estado: 'ambiguo', procedencia: { version_id: 23 } }], opciones: [] } })
-  const onPrepare = vi.fn()
-  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
-  await userEvent.setup().click(await screen.findByText('Requisitos extraídos para revisar (2)'))
-  const cards = document.querySelectorAll('.origin-candidate-list .origin-candidate')
-  expect(cards).toHaveLength(2)
-  expect(cards[0]).toHaveTextContent('Promedio mínimo de 8,5')
-  expect(cards[0]).toHaveTextContent('Tipo: PROMEDIO')
-  expect(cards[0]).toHaveTextContent('Estado: identificado')
-  expect(cards[0]).toHaveTextContent('Versión 23 · Documento 8')
-  expect(cards[0]).toHaveTextContent('Valores propuestos: minimo: 8,5')
-  expect(cards[1]).toHaveTextContent('Estado: ambiguo')
-  await userEvent.setup().click(cards[0].querySelector('button'))
-  expect(onPrepare).toHaveBeenCalledWith('requisitos', candidate)
-})
-
-it('expone un beneficio literal como candidato editable sin atribuirle concepto', async () => {
-  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
-    publicacion_id: 15, version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
-    candidatos_editables: { requisitos: [], opciones: [], otros_campos: { beneficios: [
-      { texto_original: 'Cobertura parcial del 25%', porcentaje: 25, monto_literal: null,
-        procedencia: { version_id: 23, documento_id: 8 } }] } } })
-  const onPrepare = vi.fn()
-  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
-  await userEvent.setup().click(await screen.findByText('Beneficios interpretados para revisar'))
-  expect(screen.getByText(/Porcentaje literal: 25%/)).toBeVisible()
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Preparar en editor' }))
-  expect(onPrepare).toHaveBeenCalledWith('beneficios', expect.objectContaining({ porcentaje: 25 }))
-})
-
-it('muestra tablas y anexos archivados como pendientes sin preparar reglas', async () => {
-  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
-    publicacion_id: 15, version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
-    candidatos_editables: { requisitos: [], opciones: [], otros_campos: { evidencia_tabular: {
-      estado: 'extraida', tablas: [{ encabezado: 'Beca socioeconómica', titulo: 'Requisitos específicos',
-        procedencia: { version_id: 23, documento_id: 8 }, filas: [{ celdas: ['Renovación', 'Mantener promedio'],
-          tipo: 'requisito_o_documento', condicion: 'renovacion', fecha_sugerida: null }] }],
-      enlaces_documentales: [{ texto: 'Anexo de solicitud', url: 'https://institucion.edu.ec/anexo.pdf' }],
-    } } } })
-  const onPrepare = vi.fn()
-  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
-  await userEvent.setup().click(await screen.findByText('Tablas y anexos de la ficha para revisar'))
-  expect(screen.getByText(/Renovación · Mantener promedio/)).toBeVisible()
-  expect(screen.getByText(/requisito_o_documento; renovacion/)).toBeVisible()
-  expect(screen.getByRole('link', { name: 'Anexo de solicitud' })).toHaveAttribute('href', 'https://institucion.edu.ec/anexo.pdf')
-  expect(onPrepare).not.toHaveBeenCalled()
-})
-
-it('muestra evidencia PDF por página y señala documentos sin texto', async () => {
-  vi.spyOn(offersApi, 'get').mockResolvedValue({ aplicacion: null, automatico: true,
-    publicacion_id: 15, version_id: 23, bloqueos_actuales: [], datos_iniciales: {},
-    candidatos_editables: { requisitos: [], opciones: [], otros_campos: { evidencia_pdf: {
-      documentos: [
-        { documento_id: 8, version_id: 23, url: 'https://institucion.edu.ec/bases.pdf', estado: 'extraido', total_paginas: 2, fragmentos_truncados: true,
-          fragmentos: [{ texto_original: 'Cobertura del 75% al 100%', tipo: 'beneficio', condicion: 'inicial_por_revisar',
-            categoria: 'Beca socioeconómica', procedencia: { pagina: 2 } }] },
-        { documento_id: 9, version_id: 23, url: 'https://institucion.edu.ec/anexo.pdf', estado: 'sin_texto',
-          total_paginas: 1, fragmentos: [] },
-      ], omitidos_por_limite: false,
-    } } } })
-  const onPrepare = vi.fn()
-  render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 1 }} onPrepare={onPrepare} /></MemoryRouter>)
-  await userEvent.setup().click(await screen.findByText('Bases PDF archivadas para revisar (2)'))
-  expect(screen.getByText(/Cobertura del 75% al 100%/)).toBeVisible()
-  expect(screen.getByText(/p\. 2; beneficio/)).toBeVisible()
-  expect(screen.getByText(/PDF sin texto seleccionable/)).toBeVisible()
-  expect(screen.getByText(/Lectura parcial por límites de seguridad/)).toBeVisible()
-  expect(onPrepare).not.toHaveBeenCalled()
-})
-
 it('avisa de una versión relevante y confirma su revisión sin aplicar datos automáticamente', async () => {
-  const current = { aplicacion: null, automatico: true, publicacion_id: 15,
-    version_id: 23, version_actual_id: 24, version_convocatoria: 3,
-    cambio_relevante: true, revision_confirmada: false,
-    bloqueos_actuales: ['Confirmar versión 24'], datos_iniciales: { titulo: 'Ficha original' } }
+  const current = { ...automatic, version_actual_id: 24, cambio_relevante: true, revision_confirmada: false,
+    para_publicar: ['Confirmar versión 24'] }
   vi.spyOn(offersApi, 'get').mockResolvedValue(current)
   const write = vi.spyOn(offersApi, 'write').mockResolvedValue({})
   render(<MemoryRouter><OriginPanel offer={{ id: 11, version: 3 }} /></MemoryRouter>)

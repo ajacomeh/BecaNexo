@@ -26,14 +26,7 @@ def detalle(obj, publico=False, con_diagnostico=False):
     data["institucion"] = s.InstitucionSerializer(obj.institucion).data if obj.institucion_id else None
     if not publico:
         origin = m.BorradorRastreo.objects.filter(convocatoria=obj).select_related("publicacion__fuente", "version").first()
-        if origin:
-            from rastreo.auto_borradores import pending_for_publication, review_notes
-            confianza, marcas = confianza_borrador(origin)
-        data["origen_automatico"] = ({"publicacion_id": origin.publicacion_id, "version_id": origin.version_id,
-                                        "pendientes_iniciales": origin.pendientes_iniciales,
-                                        "bloqueos_actuales": pending_for_publication(obj, origin),
-                                        "observaciones": review_notes(obj, origin),
-                                        "confianza": confianza, "marcas": marcas} if origin else None)
+        data["origen_automatico"] = {"publicacion_id": origin.publicacion_id, "version_id": origin.version_id} if origin else None
         if con_diagnostico:
             data["diagnostico"] = diagnostico(obj)
     data["tipo_beca_nombre"] = obj.tipo_beca.nombre if obj.tipo_beca else None
@@ -70,15 +63,6 @@ def touch(obj):
     obj.save(update_fields=["version", "actualizado_en", "revision"])
 
 
-def confianza_borrador(origin):
-    """Confianza y marcas registradas al crear el borrador; los antiguos se clasifican al consultar."""
-    clasificacion = (origin.datos_iniciales or {}).get("clasificacion_inicial") or {}
-    if not clasificacion.get("confianza"):
-        from rastreo.auto_borradores import classify_candidate
-        clasificacion = classify_candidate(origin.publicacion, origin.version)
-    return clasificacion.get("confianza") or "baja", clasificacion.get("marcas") or []
-
-
 def diagnostico(obj):
     """Lo que falta para publicar, con los mismos controles de publicar(), sin escribir nada."""
     if obj.revision == "validada":
@@ -108,7 +92,7 @@ def errores_publicacion(obj, estricto=True):
     if not opciones: errors.append("Añade al menos una opción activa.")
     # Los destinos desconocidos no se inventan: se permiten listas vacías y se muestran como no especificados.
     requisitos = list(obj.requisitos.filter(activo=True).select_related("tipo_requisito"))
-    if any(not r.validado for r in requisitos): errors.append("Revisa todos los requisitos activos.")
+    # Los requisitos activos sin validar no bloquean: publicar() los valida a nombre de quien publica.
     # Validar nuevamente reglas aunque se hayan insertado fuera de esta API.
     for r in requisitos:
         serializer = s.RequisitoSerializer(r, data=s.RequisitoSerializer(r).data, context={"convocatoria": obj})
@@ -141,12 +125,30 @@ def errores_publicacion(obj, estricto=True):
     return list(dict.fromkeys(errors))
 
 
+TEXTO_CONFIRMACION = ("Al publicar confirmas que la beca es ofrecida o coofrecida por la entidad ecuatoriana indicada "
+                      "y que la información coincide con las bases oficiales.")
+
+
 @transaction.atomic
-def publicar(obj):
+def publicar(obj, actor=None):
+    """Publica si se cumplen los controles. Con `actor` (el administrador que pulsa «Validar y publicar»)
+    valida los requisitos activos pendientes y registra la confirmación en un Evento de auditoría."""
     era_publica = obj.activa and obj.revision == "validada" and (
         bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC")
     errors = errores_publicacion(obj)
     if errors: raise ValidationError({"detail": " ".join(errors)})
+    if actor is not None:
+        pendientes = list(obj.requisitos.filter(activo=True, validado=False).values_list("pk", flat=True))
+        if pendientes:
+            m.Requisito.objects.filter(pk__in=pendientes).update(validado=True)
+        origen = m.BorradorRastreo.objects.filter(convocatoria=obj).first()
+        ahora = timezone.now()
+        cambios = {"entidad": {"id": obj.institucion_id, "nombre": obj.institucion.nombre, "pais": obj.institucion.pais.codigo},
+                   "fecha": ahora.isoformat(), "texto_confirmacion": TEXTO_CONFIRMACION,
+                   "requisitos_validados": pendientes, "oferta_version": obj.version + 1,
+                   "version_ficha_id": origen.version_id if origen else None}
+        m.Evento.objects.create(actor=actor, accion="confirmar_publicacion", convocatoria=obj,
+                                cambios=json.loads(json.dumps(cambios, cls=DjangoJSONEncoder)), creado_en=ahora)
     obj.revision = "validada"
     obj.activa = True
     obj.version += 1

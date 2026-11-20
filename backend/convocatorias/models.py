@@ -17,7 +17,8 @@ REVISIONES = [("pendiente", "Pendiente / borrador"), ("validada", "Validada")]
 ALCANCES_ACADEMICOS = [("pendiente", "Pendiente de confirmar"), ("programas", "Programas específicos"),
                        ("transversal", "Transversal institucional")]
 COBERTURAS = [(x, x.replace("_", " ").capitalize()) for x in ("total", "parcial", "mixta", "no_especificada")]
-NIVELES_OPCION = [*NIVELES, ("no_aplica", "No aplica (educación continua)")]
+NIVELES_OPCION = [*NIVELES, ("tecnico_superior", "Técnico superior"), ("tecnologico_superior", "Tecnológico superior"),
+                  ("maestria_tecnologica", "Maestría tecnológica"), ("no_aplica", "No aplica (educación continua)")]
 PERIODOS = [(x, x.capitalize()) for x in ("unico", "mensual", "anual", "otra")]
 MODOS = [("dato_declarado", "Dato declarado"), ("entidad_oferente", "Entidad oferente")]
 

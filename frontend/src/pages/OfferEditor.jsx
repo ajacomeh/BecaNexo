@@ -20,53 +20,10 @@ async function allInstitutions() {
   }
 }
 
-function safeEvidenceUrl(value) {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' && !url.username && !url.password &&
-      !url.hash && (!url.search || /^\?t=\d+$/.test(url.search))
-  } catch { return false }
-}
-
-function initialWithEvidence(offer, catalogs, origin) {
-  const initial = { ...offer, institucion: offer.institucion?.id ?? null }
-  const fields = origin?.automatico ? origin.candidatos_editables?.otros_campos : null
-  if (!fields) return initial
-  if (!initial.cobertura_tipo && ['total', 'parcial', 'mixta'].includes(fields.cobertura_tipo_sugerida))
-    initial.cobertura_tipo = fields.cobertura_tipo_sugerida
-  if (!initial.gastos_no_cubiertos && fields.gastos_no_cubiertos_literal)
-    initial.gastos_no_cubiertos = fields.gastos_no_cubiertos_literal
-  const bases = origin.enlaces_origen?.bases || []
-  if (!initial.url_bases && bases.length === 1 && safeEvidenceUrl(bases[0].url))
-    initial.url_bases = bases[0].url
-  const type = catalogs.tipos_beca.find((row) => row.nombre.toLocaleLowerCase('es') === fields.tipo_beca_literal?.toLocaleLowerCase('es'))
-  if (!initial.tipo_beca && type) initial.tipo_beca = type.id
-  if (!initial.fecha_publicacion && /^\d{4}-\d{2}-\d{2}$/.test(fields.fechas?.publicacion || ''))
-    initial.fecha_publicacion = fields.fechas.publicacion
-  const areaNames = fields.areas_literales
-  if ((!initial.areas || initial.areas.length === 0) && Array.isArray(areaNames) && areaNames.length > 0 &&
-      areaNames.every((name) => typeof name === 'string')) {
-    const matches = areaNames.map((name) => catalogs.areas.find((area) => area.nombre.toLocaleLowerCase('es') === name.toLocaleLowerCase('es')))
-    if (matches.every(Boolean) && new Set(matches.map((area) => area.id)).size === matches.length)
-      initial.areas = matches.map((area) => area.id)
-  }
-  return initial
-}
-
-function Records({ name, title, offer, catalogs, onSaved, suggestion }) {
-  const [editing, setEditing] = useState(() => suggestion?.name === name
-    ? name === 'requisitos' ? { texto_original: suggestion.value.texto_original, validado: false,
-        valor_estructurado: suggestion.value.estado === 'identificada' ? suggestion.value.valor_sugerido : {} }
-      : name === 'beneficios' ? { concepto: suggestion.value.concepto_sugerido || '',
-        porcentaje: suggestion.value.porcentaje, monto: suggestion.value.monto,
-        moneda: suggestion.value.moneda || '', tope_original: suggestion.value.tope_original || '',
-        tope_monto: suggestion.value.tope_monto, tope_moneda: suggestion.value.tope_moneda || '',
-        detalle: suggestion.value.texto_original }
-        : { nivel: suggestion.value.nivel, modalidad: suggestion.value.modalidad } : null)
+function Records({ name, title, offer, catalogs, onSaved }) {
+  const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
-  const [typeId, setTypeId] = useState(() => suggestion?.name === 'requisitos' && name === 'requisitos'
-    ? String(catalogs.tipos_requisito.find((row) => row.codigo === suggestion.value.tipo_sugerido)?.id
-      || catalogs.tipos_requisito.find((row) => row.codigo === 'OTRO')?.id || '') : '')
+  const [typeId, setTypeId] = useState('')
   const records = offer[name]
   const type = catalogs.tipos_requisito.find((t) => t.id === Number(typeId))
   const fields = name === 'opciones' ? optionFields(catalogs) : name === 'beneficios' ? benefitFields(offer.opciones, catalogs.paises) : type ? requirementFields(type, catalogs, offer.opciones) : []
@@ -114,12 +71,10 @@ export default function OfferEditor() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [retry, setRetry] = useState(0)
-  const [suggestion, setSuggestion] = useState(null)
   useEffect(() => {
     let live = true
-    Promise.all([offersApi.get('becas/catalogos'), allInstitutions(), id ? offersApi.get(`gestion/convocatorias/${id}`) : Promise.resolve(null),
-      id ? offersApi.get(`gestion/rastreo/convocatorias/${id}/origen`).catch(() => null) : Promise.resolve(null)])
-      .then(([catalogs, institutions, offer, origin]) => { if (live) { setLoaded({ catalogs, institutions, offer, origin }); setError('') } }).catch((e) => { if (live) setError(e.message) })
+    Promise.all([offersApi.get('becas/catalogos'), allInstitutions(), id ? offersApi.get(`gestion/convocatorias/${id}`) : Promise.resolve(null)])
+      .then(([catalogs, institutions, offer]) => { if (live) { setLoaded({ catalogs, institutions, offer }); setError('') } }).catch((e) => { if (live) setError(e.message) })
     return () => { live = false }
   }, [id, retry])
   async function action(name) {
@@ -135,19 +90,13 @@ export default function OfferEditor() {
     <Message>{error}</Message>{!loaded && (error ? <Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button> : <p role="status"><Icon name="loading" />Cargando editor…</p>)}<Message kind="success">{notice}</Message>
     {loaded && <><section className="profile-card"><h2>01 · Identificación, fechas y condiciones</h2>{loaded.offer && <p className="profile-note">Revisión: {loaded.offer.revision} · Estado: {stateLabel(loaded.offer.estado)}. Editar retira la publicación hasta una nueva revisión.</p>}
       {!loaded.offer && <p>Guarda el borrador antes de añadir opciones.</p>}
-      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions).map(field => field.name === 'institucion' ? { ...field, required: !loaded.offer?.origen_automatico, hint: <Link className="offer-institution-link" to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> } : field)} initial={loaded.offer ? initialWithEvidence(loaded.offer, loaded.catalogs, loaded.origin) : { alcance_academico: 'pendiente' }} proposal={suggestion?.name === 'general' ? suggestion.value : null} label="Guardar convocatoria" onSubmit={async (values) => {
+      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions).map(field => field.name === 'institucion' ? { ...field, required: !loaded.offer?.origen_automatico, hint: <Link className="offer-institution-link" to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> } : field)} initial={loaded.offer ? { ...loaded.offer, institucion: loaded.offer.institucion?.id ?? null } : { alcance_academico: 'pendiente' }} label="Guardar convocatoria" onSubmit={async (values) => {
         const offer = await offersApi.write(id ? `gestion/convocatorias/${id}` : 'gestion/convocatorias', id ? 'PATCH' : 'POST', values)
         if (!id) navigate(`/gestion/convocatorias/${offer.id}`)
         else { setLoaded((old) => ({ ...old, offer })); setNotice('Cambios guardados. Publica de nuevo después de revisar.') }
       }} /></section>
-      {loaded.offer && <><OriginPanel offer={loaded.offer} onChanged={() => setRetry((value) => value + 1)} onPrepare={(name, value) => {
-        if (loaded.offer.revision === 'validada') { setNotice('La convocatoria ya está validada; revisa su versión antes de incorporar evidencia nueva.'); return }
-        if (name === 'general' && loaded.offer[value.campo]) { setNotice('Este campo ya tiene información; conserva la edición administrativa existente.'); return }
-        if (name === 'requisitos' && loaded.offer.requisitos.some((row) => row.texto_original === value.texto_original)) { setNotice('Este requisito ya existe en el borrador.'); return }
-        if (name === 'beneficios' && loaded.offer.beneficios.some((row) => row.concepto === value.concepto_sugerido)) { setNotice('Este beneficio ya existe en el borrador.'); return }
-        setSuggestion({ name, value, id: crypto.randomUUID() }); setNotice('Propuesta preparada. Revisa su contexto y guarda solo si corresponde.')
-      }} /><Records key={`opciones:${suggestion?.name === 'opciones' ? suggestion.id : 'base'}`} name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} suggestion={suggestion} /><Records key={`beneficios:${suggestion?.name === 'beneficios' ? suggestion.id : 'base'}`} name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} suggestion={suggestion} /><Records key={`requisitos:${suggestion?.name === 'requisitos' ? suggestion.id : 'base'}`} name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} suggestion={suggestion} />
-        <section className="profile-card"><h2>Revisión y publicación</h2><p className="profile-note">Al publicar confirmas la entidad ecuatoriana y la transcripción de las bases. Se exige una opción activa, descripción y enlace oficial; todos los requisitos activos deben estar revisados. Guarda cada sección antes de publicar.</p>
+      {loaded.offer && <><OriginPanel offer={loaded.offer} /><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
+        <section className="profile-card"><h2>Revisión y publicación</h2><p className="profile-note">Al publicar confirmas que la beca es ofrecida o coofrecida por la entidad ecuatoriana indicada y que la información coincide con las bases oficiales.</p>
           <div className="form-actions"><Button icon="publish" busy={busy} onClick={() => action('publicar')}>Validar y publicar</Button>{loaded.offer.revision === 'validada' && loaded.offer.activa && <><Button icon="pause" disabled={busy} className="button-light" onClick={() => action('pausar')}>Pausar convocatoria</Button><Link to={`/becas/${id}`}>Ver en el catálogo</Link></>}</div></section></>}
     </>}
   </OffersLayout>

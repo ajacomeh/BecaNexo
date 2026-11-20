@@ -101,7 +101,7 @@ class Instituciones(AuthView):
 
 def filtrar(request, qs, admin=False):
     allowed = {"page", "page_size", "q", "nivel", "modalidad", "destino", "tipo_beca", "estado", "orden"}
-    if admin: allowed.update({"revision", "confianza"})
+    if admin: allowed.add("revision")
     parametros(request, allowed)
     p = request.query_params
     query = p.get("q", "").strip()
@@ -150,29 +150,10 @@ def filtrar(request, qs, admin=False):
         qs = qs.filter(revision=p["revision"])
     order = p.get("orden", "recientes")
     orders = {"recientes": ["-actualizado_en", "-id"], "titulo": ["titulo", "id"], "cierre": [F("fecha_cierre_orden").asc(nulls_last=True), "id"]}
-    if admin: orders["confianza"] = ["orden_confianza", "-actualizado_en", "-id"]
     if order not in orders: raise serializers.ValidationError({"orden": "Orden no permitido."})
-    if admin and ("confianza" in p or order == "confianza"):
-        by_level = confianzas_borradores()
-        if "confianza" in p:
-            if p["confianza"] not in ("alta", "media"): raise serializers.ValidationError({"confianza": "Confianza no permitida."})
-            qs = qs.filter(pk__in=by_level[p["confianza"]])
-        if order == "confianza":
-            qs = qs.annotate(orden_confianza=Case(When(pk__in=by_level["alta"], then=Value(0)),
-                                                  When(pk__in=by_level["media"], then=Value(1)),
-                                                  default=Value(2), output_field=IntegerField()))
     if order == "cierre":
         qs = qs.annotate(fecha_cierre_orden=Coalesce("cierre_dia", TruncDate("cierre", tzinfo=ZoneInfo("America/Guayaquil"))))
     return qs.order_by(*orders[order]).distinct()
-
-
-def confianzas_borradores():
-    """IDs de borradores automáticos por confianza (registrada o calculada en los antiguos)."""
-    from .services import confianza_borrador
-    by_level = {"alta": [], "media": [], "baja": []}
-    for origin in m.BorradorRastreo.objects.select_related("publicacion__fuente", "version"):
-        by_level.setdefault(confianza_borrador(origin)[0], []).append(origin.convocatoria_id)
-    return by_level
 
 
 class Consulta(AuthView):
@@ -313,7 +294,7 @@ class Accion(AuthView):
                 m.Institucion.objects.select_for_update().get(pk=institution_id)
             obj = get_object_or_404(m.Convocatoria.objects.select_for_update(), pk=pk)
             before = detalle(obj)
-            if accion == "publicar": publicar(obj)
+            if accion == "publicar": publicar(obj, request.user)
             else:
                 if not obj.activa or obj.revision != "validada":
                     raise serializers.ValidationError({"detail": "Solo se puede pausar una convocatoria publicada y activa."})

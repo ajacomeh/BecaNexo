@@ -1,4 +1,4 @@
-export const readable = (value) => ({ maestria: 'Maestría', doctorado: 'Doctorado', grado: 'Grado', tecnologico: 'Tecnológico', tecnico: 'Técnico', especializacion: 'Especialización', no_aplica: 'No aplica (educación continua)', presencial: 'Presencial', virtual: 'Virtual', hibrida: 'Híbrida' }[value] || (value ? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()) : ''))
+export const readable = (value) => ({ maestria: 'Maestría', doctorado: 'Doctorado', grado: 'Grado', tecnologico: 'Tecnológico', tecnico: 'Técnico', tecnico_superior: 'Técnico superior', tecnologico_superior: 'Tecnológico superior', maestria_tecnologica: 'Maestría tecnológica', especializacion: 'Especialización', no_aplica: 'No aplica (educación continua)', presencial: 'Presencial', virtual: 'Virtual', hibrida: 'Híbrida' }[value] || (value ? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()) : ''))
 export const unique = values => [...new Set(values.filter(Boolean))]
 
 export function benefitSummary(benefits) {

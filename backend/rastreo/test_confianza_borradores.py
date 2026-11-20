@@ -146,7 +146,7 @@ class BorradorConfianzaFlujoTests(TransactionTestCase):
         client.force_login(self.actor)
         return client
 
-    def test_draft_stores_confidence_and_api_lists_filters_and_orders_it(self):
+    def test_draft_stores_confidence_internally_but_api_does_not_expose_or_filter_it(self):
         Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})
         call_command('cargar_catalogos_convocatorias', verbosity=0)
         publication = self.capture(offerer=False)
@@ -155,24 +155,22 @@ class BorradorConfianzaFlujoTests(TransactionTestCase):
         self.assertEqual(stored['confianza'], 'media')
         self.assertTrue(stored['marcas'])
         client = self.admin()
-        listing = client.get('/api/gestion/convocatorias/', {'confianza': 'media', 'orden': 'confianza'})
+        listing = client.get('/api/gestion/convocatorias/', {})
         self.assertEqual(listing.status_code, 200, listing.data)
         row = next(item for item in listing.data['results'] if item['id'] == origin.convocatoria_id)
-        self.assertEqual(row['origen_automatico']['confianza'], 'media')
-        self.assertEqual(row['origen_automatico']['marcas'], stored['marcas'])
+        self.assertEqual(row['origen_automatico'], {'publicacion_id': publication.pk, 'version_id': origin.version_id})
         offer = origin.convocatoria
         self.assertEqual(row['diagnostico']['pendientes_publicacion'], errores_publicacion(offer, estricto=False))
         self.assertEqual(row['diagnostico']['faltan'], len(row['diagnostico']['pendientes_publicacion']))
         self.assertGreater(row['diagnostico']['faltan'], 0)
-        self.assertEqual(client.get('/api/gestion/convocatorias/', {'confianza': 'alta'}).data['count'], 0)
-        self.assertEqual(client.get('/api/gestion/convocatorias/', {'confianza': 'baja'}).status_code, 400)
-        self.assertEqual(client.get('/api/becas/', {'confianza': 'media'}).status_code, 400)
+        for params in ({'confianza': 'media'}, {'orden': 'confianza'}):
+            self.assertEqual(client.get('/api/gestion/convocatorias/', params).status_code, 400)
         # La publicación sigue bloqueada con sus reglas actuales.
         with self.assertRaises(ValidationError):
             publicar(offer)
         situation = client.get(f'/api/gestion/rastreo/publicaciones/{publication.pk}/').data['situacion']
-        self.assertEqual((situation['tipo'], situation['convocatoria_id'], situation['confianza']),
-                         ('borrador', origin.convocatoria_id, 'media'))
+        self.assertEqual((situation['tipo'], situation['convocatoria_id']), ('borrador', origin.convocatoria_id))
+        self.assertNotIn('confianza', situation)
 
     def test_foreign_only_offer_has_no_draft_and_shows_clear_reason_in_crawl_tray(self):
         foreign = [{'nombre': 'Universidad extranjera sintética', 'rol': 'oferente', 'pais_codigo': 'US',

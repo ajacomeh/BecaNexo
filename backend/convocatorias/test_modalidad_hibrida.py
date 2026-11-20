@@ -1,7 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -163,8 +163,9 @@ class ModalidadHibridaTests(TestCase):
         self.assertEqual(len(vector('Beca de tecnología en modalidad híbrida')), 384)
 
     def test_evidencia_hibrida_prepara_candidato_sin_validarlo(self):
-        documents = Mock()
-        documents.filter.return_value.values_list.return_value.first.return_value = None
+        # Sin ficha HTML ni PDF archivados: editable_candidates consulta la relación de documentos de la versión.
+        documents = MagicMock()
+        documents.filter.return_value.select_related.return_value.first.return_value = None
         version = SimpleNamespace(pk=91, documentos=documents, datos_extraidos={
             'estudios': {'niveles_mencionados': ['Grado'],
                          'modalidad': {'texto_original': 'Híbrida'},
@@ -174,7 +175,10 @@ class ModalidadHibridaTests(TestCase):
             options = editable_candidates(version)['opciones']
         self.assertEqual([(o['nivel'], o['modalidad'], o['validado']) for o in options],
                          [('grado', 'hibrida', False)])
+        # Dos modalidades enumeradas en el mismo valor dan una opción por modalidad (criterio de la fase 3.2).
         version.datos_extraidos['estudios']['modalidad']['texto_original'] = 'Presencial e híbrida'
         with patch('rastreo.estructura_semantica.interpretar_requisitos', return_value=[]), \
              patch('rastreo.estructura_semantica.candidatos_adicionales', return_value={}):
-            self.assertEqual(editable_candidates(version)['opciones'], [])
+            options = editable_candidates(version)['opciones']
+        self.assertEqual([(o['nivel'], o['modalidad'], o['validado']) for o in options],
+                         [('grado', 'presencial', False), ('grado', 'hibrida', False)])

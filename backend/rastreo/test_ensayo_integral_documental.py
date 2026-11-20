@@ -111,7 +111,7 @@ class EnsayoIntegralDocumental(TransactionTestCase):
             valor_estructurado={'descripcion': 'Acreditar condición según bases'})
         with self.assertRaises(ValidationError) as publication_error:
             publicar(origin.convocatoria)
-        self.assertIn('Revisa todos los requisitos activos', str(publication_error.exception))
+        self.assertIn('institución oferente ecuatoriana', str(publication_error.exception))
         self.assertFalse(publicas().filter(pk=origin.convocatoria_id).exists())
         self.assertEqual(APIClient().get(f'/api/becas/{origin.convocatoria_id}/').status_code, 404)
         client = APIClient()
@@ -120,9 +120,7 @@ class EnsayoIntegralDocumental(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['version_actual_id'], version.pk)
         self.assertTrue(response.data['cambio_relevante'])
-        self.assertTrue(response.data['candidatos_editables']['otros_campos']['propuestas_documentales'])
-        self.assertTrue(any(row['procedencia'].get('pagina') == 1 for row in
-                            response.data['candidatos_editables']['otros_campos']['propuestas_documentales']))
+        self.assertEqual(set(response.data['evidencia']), {'campos', 'registros'})
         print(json.dumps({'ensayo_id': origin.convocatoria_id, 'estado': origin.convocatoria.estado,
                           'publicacion': publication.pk, 'version': version.pk,
                           'propuestas': len(proposals), 'bloqueos_origen': len(pending_for_publication(origin.convocatoria, origin)),

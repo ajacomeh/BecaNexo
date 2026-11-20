@@ -18,7 +18,7 @@ const situationLabel = (situation) => situationLabels[situation?.tipo] || 'Detec
 
 function SituationNote({ situation }) {
   if (situation?.convocatoria_id) {
-    return <p className="profile-note">Borrador privado #{situation.convocatoria_id}{situation.confianza && ` · Confianza ${situation.confianza}`} · <Link to={`/gestion/convocatorias/${situation.convocatoria_id}`}>Abrir borrador</Link></p>
+    return <p className="profile-note">Borrador privado #{situation.convocatoria_id} · <Link to={`/gestion/convocatorias/${situation.convocatoria_id}`}>Abrir borrador</Link></p>
   }
   return <p className="profile-note">{situation?.motivo || 'No es una convocatoria aprobada del catálogo.'}</p>
 }

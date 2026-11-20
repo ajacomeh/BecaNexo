@@ -184,7 +184,8 @@ class ConvocatoriasTests(TestCase):
         self.assertEqual(self.public.get(f"/api/becas/{c}/").data["descripcion"], "Actualizada")
         self.write(path + "pausar/", expected=200)
         self.assertEqual(self.public.get(f"/api/becas/{c}/").status_code, 404)
-        self.assertEqual(m.Evento.objects.filter(convocatoria_id=c).count(), 6)
+        # Cada publicación añade su Evento de confirmación a nombre del administrador.
+        self.assertEqual(m.Evento.objects.filter(convocatoria_id=c).count(), 8)
         self.write(path, {}, "delete", 405)
 
     def test_pausar_solo_publicada_activa_sin_duplicar_version_auditoria(self):
@@ -259,9 +260,10 @@ class ConvocatoriasTests(TestCase):
         c = self.oferta()["id"]; option = self.opcion(c)
         req = self.requisito(c, "IDIOMA", {"codigo_idioma": "en", "nivel_minimo": "B2"}, validado=False).data
         base = f"/api/gestion/convocatorias/{c}/"
-        self.write(base + "publicar/", expected=400)
-        self.write(base + f"requisitos/{req['id']}/", {"validado": True}, "patch", 200)
+        # Los requisitos activos sin validar ya no bloquean: publicar los valida y lo registra.
         self.write(base + "publicar/", expected=200)
+        self.assertTrue(m.Requisito.objects.get(pk=req["id"]).validado)
+        self.assertEqual(m.Evento.objects.get(convocatoria_id=c, accion="confirmar_publicacion").cambios["requisitos_validados"], [req["id"]])
         self.write(base + "beneficios/", {"concepto": "Matrícula", "porcentaje": 80}, expected=201)
         self.write(base + "beneficios/", {"concepto": "Matrícula", "porcentaje": 20, "opcion_estudio": option["id"]}, expected=201)
         self.write(base + "publicar/", expected=400)

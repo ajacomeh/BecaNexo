@@ -36,7 +36,6 @@ def latest_publications():
         version_observada_id=Subquery(last.values('version_id')[:1]),
         titulo_observado=Subquery(last.values('version__datos_extraidos__titulo__texto_original')[:1]),
         borrador_convocatoria_id=F('borrador_automatico__convocatoria_id'),
-        borrador_confianza=F('borrador_automatico__datos_iniciales__clasificacion_inicial__confianza'),
         decision_codigo=Subquery(decision.values('codigo')[:1]),
         decision_motivo=Subquery(decision.values('detalle')[:1]))
 
@@ -51,30 +50,30 @@ def publication_data(p):
 
 
 def publication_situation(p, classify=False):
-    """Situación editorial visible: borrador con su confianza o motivo claro de que no lo tenga.
+    """Situación editorial visible: borrador o motivo claro de que no lo tenga.
 
     En la lista usa solo valores anotados en la misma consulta; el detalle (classify=True)
     recalcula la clasificación vigente con la última versión observada.
     """
     if p.borrador_convocatoria_id:
         return {'tipo': 'borrador', 'convocatoria_id': p.borrador_convocatoria_id,
-                'confianza': p.borrador_confianza, 'motivo': None}
+                'motivo': None}
     if p.convocatoria_id:
-        return {'tipo': 'integrada', 'convocatoria_id': p.convocatoria_id, 'confianza': None, 'motivo': None}
+        return {'tipo': 'integrada', 'convocatoria_id': p.convocatoria_id, 'motivo': None}
     if not p.version_observada_id:
-        return {'tipo': 'sin_version', 'convocatoria_id': None, 'confianza': None,
+        return {'tipo': 'sin_version', 'convocatoria_id': None,
                 'motivo': 'Sin borrador: todavía no hay una versión conservada de la ficha.'}
     if classify:
         from .auto_borradores import classify_candidate
         result = classify_candidate(p, Version.objects.get(pk=p.version_observada_id))
         kind = 'descartada' if result['estado'] == 'fuera_alcance' else 'sin_borrador' if result['estado'] != 'apta' else 'apta_sin_borrador'
-        return {'tipo': kind, 'convocatoria_id': None, 'confianza': result['confianza'],
+        return {'tipo': kind, 'convocatoria_id': None,
                 'motivo': result['motivo'] if kind != 'apta_sin_borrador'
                 else 'Apta para borrador; se creará en la próxima captura con borradores automáticos habilitados.'}
     if p.decision_codigo:
         return {'tipo': 'descartada' if p.decision_codigo == 'CANDIDATO_FUERA_ALCANCE' else 'sin_borrador',
-                'convocatoria_id': None, 'confianza': 'baja', 'motivo': p.decision_motivo}
-    return {'tipo': 'sin_borrador', 'convocatoria_id': None, 'confianza': None,
+                'convocatoria_id': None, 'motivo': p.decision_motivo}
+    return {'tipo': 'sin_borrador', 'convocatoria_id': None,
             'motivo': 'Sin borrador todavía; abre la publicación para ver su clasificación.'}
 
 
@@ -144,18 +143,11 @@ class Publicaciones(ReadOnly):
                 result['cierre_extraido'] = (version.datos_extraidos or {}).get('cierre')
             if publication.convocatoria_id:
                 from convocatorias.models import Convocatoria, BorradorRastreo
-                from .auto_borradores import pending_for_publication, review_notes
+                from .auto_borradores import review_notes
                 offer = Convocatoria.objects.get(pk=publication.convocatoria_id)
                 origin = BorradorRastreo.objects.filter(publicacion=publication, convocatoria=offer).select_related('version').first()
-                blockers = pending_for_publication(offer, origin) if origin else ['Vínculo de origen pendiente de revisión.']
-                if not offer.descripcion.strip():
-                    blockers.append('Completar la descripción respaldada por la fuente.')
-                if not offer.url_oficial:
-                    blockers.append('Confirmar el enlace oficial en Convocatorias.')
-                if not offer.opciones.filter(activa=True).exists():
-                    blockers.append('Añadir al menos una opción de estudio revisada.')
-                if offer.requisitos.filter(activo=True, validado=False).exists():
-                    blockers.append('Revisar los requisitos activos antes de publicar.')
+                from convocatorias.services import errores_publicacion
+                blockers = errores_publicacion(offer, estricto=False)
                 result['borrador'] = {'id': offer.pk, 'revision': offer.revision, 'activa': offer.activa,
                     'bloqueos': blockers,
                     'observaciones': review_notes(offer, origin) if origin else []}

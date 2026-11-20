@@ -148,7 +148,7 @@ class AutoDraftTests(TransactionTestCase):
         institution = Institucion.objects.create(nombre=name, sector='publico', pais=ec)
         data = {'entidad_html': {'texto_original': name}}
         self.assertEqual(_institution(data), institution)
-        publication = self.capture()
+        publication = self.capture(offerer=False)
         offer = publication.convocatoria
         self.assertIsNone(offer.institucion_id)
         # La mención puede variar; el campo de sugerencia se conserva solo si coincide exactamente.
@@ -224,7 +224,8 @@ class AutoDraftTests(TransactionTestCase):
         version = latest_version(publication)
         self.assertEqual(classify_candidate(publication, version)['estado'], 'apta')
         self.assertEqual(classify_candidate(publication, version)['elegibilidad'], 'no_especificada')
-        self.assertTrue(any('participación ecuatoriana' in x for x in pending_for_publication(publication.convocatoria, BorradorRastreo.objects.get(publicacion=publication))))
+        # La participación ecuatoriana ya no es un paso aparte: publicar exige la entidad ecuatoriana seleccionada.
+        self.assertFalse(any('participación ecuatoriana' in x for x in pending_for_publication(publication.convocatoria, BorradorRastreo.objects.get(publicacion=publication))))
         self.assertFalse(publicas().filter(pk=publication.convocatoria_id).exists())
         self.assertTrue(Incidencia.objects.filter(publicacion=publication,
             codigo='BORRADOR_REVISION_PENDIENTE', gravedad='aviso').exists())
@@ -235,7 +236,7 @@ class AutoDraftTests(TransactionTestCase):
         self.assertEqual(detail.data['clasificacion_borrador']['estado'], 'apta')
         self.assertEqual(detail.data['borrador']['id'], publication.convocatoria_id)
         self.assertEqual(detail.data['borrador']['revision'], 'pendiente')
-        self.assertTrue(any('participación ecuatoriana' in reason for reason in detail.data['borrador']['bloqueos']))
+        self.assertFalse(any('participación ecuatoriana' in reason for reason in detail.data['borrador']['bloqueos']))
         self.assertTrue(detail.data['cierre_extraido'])
 
     def test_unknown_offerer_with_confirmed_recipients_creates_private_draft(self):
@@ -276,7 +277,8 @@ class AutoDraftTests(TransactionTestCase):
         option = OpcionEstudio.objects.create(convocatoria=offer, nivel='grado', modalidad='virtual')
         option.paises.add(ec)
         self.assertTrue(any('Requisitos extraídos' in note for note in review_notes(offer, origin)))
-        self.assertTrue(any('institución oferente' in note for note in pending_for_publication(offer, origin)))
+        from convocatorias.services import errores_publicacion
+        self.assertTrue(any('institución oferente' in note for note in errores_publicacion(offer, estricto=False)))
         admin = APIClient(enforce_csrf_checks=True)
         admin.force_login(self.actor)
         token = admin.get('/api/auth/csrf/').data['csrfToken']
@@ -445,8 +447,13 @@ class AutoDraftTests(TransactionTestCase):
         response = admin.get(f'/api/gestion/rastreo/convocatorias/{origin.convocatoria_id}/origen/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['enlaces_origen']['publicacion'], publication.url_original)
-        self.assertEqual(response.data['candidatos_editables']['requisitos'][0]['procedencia']['version_id'], origin.version_id)
-        self.assertEqual(origin.convocatoria.url_oficial, '')
+        self.assertEqual(response.data['version_id'], origin.version_id)
+        self.assertIsInstance(response.data['para_publicar'], list)
+        self.assertEqual(set(response.data['evidencia']), {'campos', 'registros'})
+        self.assertNotIn('candidatos_editables', response.data)
+        # El enlace oficial es el de postulación de la ficha (evidencia directa), distinto de la URL de la ficha.
+        postulacion = [item['url'] for item in response.data['enlaces_origen']['postulacion']]
+        self.assertEqual([origin.convocatoria.url_oficial], postulacion)
 
     def test_relevant_new_version_hides_validated_offer_until_admin_confirmation(self):
         publication = self.capture()
@@ -466,7 +473,8 @@ class AutoDraftTests(TransactionTestCase):
         self.assertEqual(offer.titulo, 'Título corregido por administración')
         self.assertEqual(offer.revision, 'pendiente')
         self.assertEqual(publicas().filter(pk=offer.pk).count(), 0)
-        self.assertTrue(any('versión' in text for text in pending_for_publication(offer, origin)))
+        # La versión nueva ya no bloquea la publicación; el borrador vuelve a pendiente y el panel avisa del cambio.
+        self.assertFalse(any('versión' in text for text in pending_for_publication(offer, origin)))
         admin = APIClient(enforce_csrf_checks=True)
         admin.force_login(self.actor)
         token = admin.get('/api/auth/csrf/').data['csrfToken']
@@ -644,9 +652,6 @@ class AutoDraftTests(TransactionTestCase):
         self.capture(national_ficha().replace(b'2026', b'2030'))
         latest = latest_version(publication)
         self.assertNotEqual(latest.pk, origin.version_id)
-        blocked = admin.post(f'/api/gestion/convocatorias/{offer.pk}/publicar/', {},
-                             format='json', HTTP_X_CSRFTOKEN=token)
-        self.assertEqual(blocked.status_code, 400)
         offer.refresh_from_db()
         reviewed = admin.post(f'/api/gestion/rastreo/convocatorias/{offer.pk}/origen/', {
             'version_id': latest.pk, 'version_convocatoria': offer.version,

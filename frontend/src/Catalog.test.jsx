@@ -7,13 +7,18 @@ import PublicCatalog from './pages/PublicCatalog'
 import CatalogCard from './components/CatalogCard'
 import OfferDetail, { BenefitList, RequirementList, Documentation } from './pages/OfferDetail'
 import DemoApplication from './pages/DemoApplication'
-import { benefitSummary } from './pages/catalogPresentation'
+import { benefitSummary, readable } from './pages/catalogPresentation'
 import { optionFields } from './pages/offerFields'
 
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: null }) }))
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }, { id: 2, codigo: 'ES', nombre: 'España' }], niveles: [{ valor: 'grado', nombre: 'Grado' }], modalidades: [{ valor: 'virtual', nombre: 'Virtual' }, { valor: 'hibrida', nombre: 'Híbrida' }], tipos_beca: [{ id: 1, nombre: 'Mérito' }] }
 const offer = { id: 1, titulo: 'DEMOSTRACIÓN · Oferta', institucion: { nombre: 'Entidad' }, estado: 'sin_fecha', beneficios: [], opciones: [] }
+
+it('muestra con su tilde los niveles técnicos y la maestría tecnológica de las opciones de estudio', () => {
+  expect(['tecnico_superior', 'tecnologico_superior', 'maestria_tecnologica', 'maestria', 'no_aplica'].map(readable))
+    .toEqual(['Técnico superior', 'Tecnológico superior', 'Maestría tecnológica', 'Maestría', 'No aplica (educación continua)'])
+})
 
 it('muestra el área confirmada de OCCITEC y no interpreta áreas vacías como todas', async () => {
   const areaCatalogs = { ...catalogs, areas: [{ id: 2, nombre: 'Educación' }] }

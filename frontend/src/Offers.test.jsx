@@ -16,24 +16,19 @@ const filterCatalogs = { ...catalogs, niveles: [{ valor: 'maestria', nombre: 'Ma
 const adminListing = { count: 1, page: 1, page_size: 12, results: [{ id: 4, estado: 'borrador', titulo: 'Convocatoria sintética', institucion: { nombre: 'Entidad ficticia' }, beneficios: [], opciones: [], cierre: null }] }
 
 describe('convocatorias', () => {
-  it('muestra confianza y pasos pendientes del borrador, y filtra y ordena por confianza', async () => {
-    const draft = { ...adminListing.results[0], revision: 'pendiente',
-      origen_automatico: { publicacion_id: 3, confianza: 'media', marcas: ['Oferente por identificar en las bases de la beca nacional.'] },
+  it('muestra en cada borrador solo cuántos pasos faltan para publicar, sin confianza ni desplegable', async () => {
+    const draft = { ...adminListing.results[0], revision: 'pendiente', origen_automatico: { publicacion_id: 3, version_id: 9 },
       diagnostico: { faltan: 2, pendientes_publicacion: ['Asigna una institución oferente ecuatoriana antes de publicar.', 'Añade al menos una opción activa.'] } }
     const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path === 'becas/catalogos' ? filterCatalogs : { ...adminListing, results: [draft] })
     render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)
-    const user = userEvent.setup()
-    expect(await screen.findByText('Confianza media')).toBeVisible()
-    expect(screen.getByText('Faltan 2 pasos para publicar')).toBeVisible()
-    await user.click(screen.getByText('Qué falta revisar'))
-    expect(screen.getByText('Añade al menos una opción activa.')).toBeVisible()
-    expect(screen.getByText('Oferente por identificar en las bases de la beca nacional.')).toBeVisible()
-    await user.selectOptions(screen.getByLabelText('Ordenar por'), 'confianza')
-    await waitFor(() => expect(get).toHaveBeenCalledWith('gestion/convocatorias', { orden: 'confianza' }))
-    await user.click(await screen.findByText('Más filtros'))
-    await user.selectOptions(screen.getByLabelText('Confianza del borrador del rastreo'), 'media')
-    await user.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
-    await waitFor(() => expect(get).toHaveBeenCalledWith('gestion/convocatorias', { confianza: 'media', orden: 'confianza' }))
+    expect(await screen.findByText('Faltan 2 pasos para publicar')).toBeVisible()
+    expect(screen.queryByText(/onfianza/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Qué falta revisar')).not.toBeInTheDocument()
+    expect(screen.queryByText('Añade al menos una opción activa.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /onfianza/ })).not.toBeInTheDocument()
+    await userEvent.click(await screen.findByText('Más filtros'))
+    expect(screen.queryByLabelText(/onfianza/)).not.toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('gestion/convocatorias', {})
   })
 
   it('resume las opciones y muestra cierres con día o instante sin inventar horas', async () => {
@@ -270,89 +265,6 @@ describe('convocatorias', () => {
     await userEvent.click(region.getByRole('button', { name: 'Guardar opciones de estudio' }))
     await waitFor(() => expect(write).toHaveBeenCalledWith('gestion/convocatorias/41/opciones/12', 'PATCH', expect.objectContaining({ programa: 'Programa B' })))
     expect(get).toHaveBeenCalledWith('gestion/convocatorias/41')
-  })
-
-  it('precarga un valor estructurado sugerido sin guardarlo ni validarlo', async () => {
-    const offer = { id: 41, titulo: 'Beca sintética', institucion: null, revision: 'pendiente',
-      estado: 'borrador', version: 1, opciones: [], beneficios: [], requisitos: [], origen_automatico: true }
-    const reviewCatalogs = { ...filterCatalogs, tipos_requisito: [
-      { id: 9, codigo: 'OTRO', nombre: 'Otro', esquema_valor: { campos: {} } },
-      { id: 10, codigo: 'PROMEDIO', nombre: 'Promedio', esquema_valor: { campos: {
-        minimo: { label: 'Promedio mínimo', kind: 'number', required: true },
-        escala_min: { label: 'Mínimo de escala', kind: 'number', required: true },
-        escala_max: { label: 'Máximo de escala', kind: 'number', required: true },
-      } } }] }
-    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? reviewCatalogs
-      : path === 'gestion/convocatorias/41' ? offer
-        : path.endsWith('/origen') ? { aplicacion: null, automatico: true, publicacion_id: 8,
-          version_id: 12, datos_iniciales: {}, bloqueos_actuales: ['Revisar requisitos'],
-          candidatos_editables: { requisitos: [{ texto_original: 'Promedio literal', tipo_sugerido: 'PROMEDIO',
-            valor_sugerido: { minimo: 8.5 }, estado: 'identificada', metodo: 'regla',
-            validado: false, procedencia: { version_id: 12, documento_id: 7 } }], opciones: [] } }
-          : { count: 1, results: [{ id: 1, nombre: 'Entidad sintética' }] })
-    const write = vi.spyOn(offersApi, 'write')
-    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
-    await userEvent.click(await screen.findByText('Requisitos extraídos para revisar (1)'))
-    await userEvent.click(screen.getByRole('button', { name: 'Preparar en editor' }))
-    const region = within(screen.getByRole('region', { name: 'Requisitos' }))
-    expect(region.getByLabelText(/Texto original del requisito/)).toHaveValue('Promedio literal')
-    expect(region.getByLabelText(/Promedio mínimo/)).toHaveValue(8.5)
-    expect(region.getByLabelText(/Transcripción revisada por administrador/)).toHaveValue('false')
-    expect(write).not.toHaveBeenCalled()
-  })
-
-  it('prepara un beneficio fijo literal sin convertir un tope en importe fijo', async () => {
-    const offer = { id: 41, titulo: 'Beca sintética', institucion: null, revision: 'pendiente',
-      estado: 'borrador', version: 1, opciones: [], beneficios: [], requisitos: [], origen_automatico: true }
-    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? filterCatalogs
-      : path === 'gestion/convocatorias/41' ? offer
-        : path.endsWith('/origen') ? { aplicacion: null, automatico: true, publicacion_id: 8,
-          version_id: 12, datos_iniciales: {}, bloqueos_actuales: [],
-          candidatos_editables: { requisitos: [], opciones: [], otros_campos: { beneficios: [{
-            texto_original: 'Por una sola vez USD 828.97 para manutención', concepto_sugerido: 'manutención',
-            monto: 828.97, moneda: 'USD', porcentaje: null, tope_original: null,
-            procedencia: { version_id: 12 } }] } } }
-          : { count: 1, results: [{ id: 1, nombre: 'Entidad sintética' }] })
-    const write = vi.spyOn(offersApi, 'write')
-    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
-    await userEvent.click(await screen.findByText('Beneficios interpretados para revisar'))
-    await userEvent.click(screen.getByRole('button', { name: 'Preparar en editor' }))
-    const region = within(screen.getByRole('region', { name: 'Beneficios' }))
-    expect(region.getByLabelText(/Concepto financiado/)).toHaveValue('manutención')
-    expect(region.getByLabelText('Importe fijo (no es tope)')).toHaveValue(828.97)
-    expect(region.getByLabelText('Moneda del importe fijo')).toHaveValue('USD')
-    expect(write).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    [{}, { cobertura: 'parcial', bases: 'https://fuente.edu.ec/bases.pdf', gastos: 'No cubre transporte', tipo: '6' }],
-    [{ cobertura_tipo: 'mixta', url_bases: 'https://admin.example/bases.pdf',
-      gastos_no_cubiertos: 'Revisado por administración', tipo_beca: 7 },
-    { cobertura: 'mixta', bases: 'https://admin.example/bases.pdf', gastos: 'Revisado por administración', tipo: '7' }],
-  ])('precarga solo campos generales vacíos y conserva ediciones administrativas', async (previous, expected) => {
-    const offer = { id: 41, titulo: 'Beca sintética', institucion: null, revision: 'pendiente',
-      estado: 'borrador', version: 1, opciones: [], beneficios: [], requisitos: [], origen_automatico: true, ...previous }
-    const reviewCatalogs = { ...filterCatalogs, areas: [{ id: 4, nombre: 'Ingeniería' }], tipos_beca: [
-      { id: 6, nombre: 'Excelencia' }, { id: 7, nombre: 'Movilidad' }] }
-    const source = { aplicacion: null, automatico: true, publicacion_id: 8, version_id: 12,
-      datos_iniciales: {}, bloqueos_actuales: [], enlaces_origen: {
-        bases: [{ url: 'https://fuente.edu.ec/bases.pdf' }] },
-      candidatos_editables: { requisitos: [], opciones: [], otros_campos: {
-        tipo_beca_literal: 'excelencia', cobertura_tipo_sugerida: 'parcial',
-        gastos_no_cubiertos_literal: 'No cubre transporte', areas_literales: ['Ingeniería'],
-        fechas: { publicacion: '2026-11-13' } } } }
-    vi.spyOn(offersApi, 'get').mockImplementation(async path => path === 'becas/catalogos' ? reviewCatalogs
-      : path === 'gestion/convocatorias/41' ? offer
-        : path.endsWith('/origen') ? source : { count: 1, results: [{ id: 1, nombre: 'Entidad sintética' }] })
-    const write = vi.spyOn(offersApi, 'write')
-    render(<MemoryRouter initialEntries={['/gestion/convocatorias/41']}><Routes><Route path="/gestion/convocatorias/:id" element={<OfferEditor />} /></Routes></MemoryRouter>)
-    expect(await screen.findByLabelText(/Cobertura según las bases/)).toHaveValue(expected.cobertura)
-    expect(screen.getByLabelText(/Enlace de las bases/)).toHaveValue(expected.bases)
-    expect(screen.getByLabelText(/Gastos no cubiertos/)).toHaveValue(expected.gastos)
-    expect(screen.getByLabelText(/Tipo de beca/)).toHaveValue(expected.tipo)
-    expect(screen.getByLabelText(/Fecha de publicación/)).toHaveValue('2026-11-13')
-    expect(screen.getByRole('group', { name: /Áreas académicas/ }).querySelector('input[type="checkbox"]')).toBeChecked()
-    expect(write).not.toHaveBeenCalled()
   })
 
   it.each([

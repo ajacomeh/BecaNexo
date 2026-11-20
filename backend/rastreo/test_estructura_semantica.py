@@ -2,7 +2,7 @@
 from django.test import SimpleTestCase
 
 from convocatorias.semantica import ModeloNoDisponible, similitud, vector
-from .estructura_semantica import PROTOTIPOS, _semantica, candidatos_adicionales, interpretar_requisitos
+from .estructura_semantica import PROTOTIPOS, _semantica, candidatos_adicionales, interpretar_requisitos, unir_continuaciones
 
 
 def candidatos(text):
@@ -54,6 +54,79 @@ class EstructuraSemanticaTests(SimpleTestCase):
                          {'nivel_minimo': 'bachillerato', 'estado_exigido': 'concluidos', 'titulo_obtenido': True})
         self.assertEqual(candidatos('Estar matriculada en una carrera de tercer nivel de grado.')[0]['valor_sugerido'],
                          {'niveles_admitidos': ['grado'], 'estado_exigido': 'en_curso', 'titulo_obtenido': False})
+
+    def test_une_lineas_partidas_por_el_maquetado_sin_unir_elementos_distintos(self):
+        text = ('CONDICIONES OBLIGATORIAS\n'
+                'Contar con un título académico previo para cursar un programa de especialización. (Para maestría se debe '
+                'contar con un título de tercer nivel técnico\n'
+                'tecnológico universitario).\n'
+                'Ser Bachiller\n'
+                'Estar matriculada en una carrera de grado.\n'
+                '- Haber concluido estudios\n'
+                '- no se une una viñeta aunque empiece en minúscula')
+        self.assertEqual(unir_continuaciones(text), [
+            'CONDICIONES OBLIGATORIAS',
+            'Contar con un título académico previo para cursar un programa de especialización. (Para maestría se debe '
+            'contar con un título de tercer nivel técnico tecnológico universitario).',
+            'Ser Bachiller', 'Estar matriculada en una carrera de grado.', 'Haber concluido estudios',
+            'no se une una viñeta aunque empiece en minúscula'])
+        rows = candidatos(text)
+        self.assertNotIn('tecnológico universitario).', [row['texto_original'] for row in rows])
+
+    def test_condiciones_externas_se_conservan_literales_sin_invertirse_ni_estructurarse(self):
+        cases = [
+            ('Persona natural en goce de derechos de participación ciudadana en el Ecuador.', 'elegibilidad_por_verificar'),
+            ('Ser persona natural en ejercicio de sus derechos de participación en el Ecuador.', 'elegibilidad_por_verificar'),
+            ('No contar con un título académico del mismo nivel de formación.', 'prohibicion_administrativa'),
+            ('No constar como persona beneficiaria incumplida de crédito educativo.', 'prohibicion_administrativa'),
+            ('No mantener la calidad vigente de persona becaria o beneficiaria de ayuda económica por esta cartera de Estado.',
+             'prohibicion_administrativa'),
+            ('No haber sido sancionada con la prohibición de postular por desistimiento de una beca.', 'prohibicion_administrativa'),
+            ('No estar cursando o por iniciar estudios en otros programas del mismo grado académico.', 'prohibicion_administrativa'),
+            ('Acreditar, conforme a los registros de la institución, que no mantiene una beca vigente otorgada por dicha institución.',
+             'prohibicion_administrativa'),
+            ('Haber sido admitido o estar cursando estudios de maestrías o especializaciones en universidades del país.',
+             'admision_programa'),
+            ('Contar con un título académico previo para cursar un programa de especialización o maestría.', 'admision_programa'),
+            ('Ser estudiante regular de una carrera de tercer nivel técnico, tecnológico superior o de grado.', 'admision_programa'),
+        ]
+        for text, method in cases:
+            with self.subTest(text=text):
+                item = candidatos(text)[0]
+                self.assertEqual((item['estado'], item['metodo'], item['tipo_sugerido']), ('externa', method, 'OTRO'))
+                self.assertEqual(item['valor_sugerido'], {})
+                self.assertEqual(item['operador_sugerido'], 'externo')
+                self.assertFalse(item['validado'])
+                self.assertEqual(item['texto_original'], text)
+
+    def test_regresion_lo_que_se_extraia_bien_no_cambia(self):
+        for text, code, values in (
+                ('Ser ciudadano/a ecuatoriano/a', 'NACIONALIDAD', {'codigos_pais': ['EC']}),
+                ('Ser Bachiller', 'FORMACION', {'nivel_minimo': 'bachillerato', 'estado_exigido': 'concluidos', 'titulo_obtenido': True}),
+                ('Estar matriculada en una carrera de tercer nivel de grado de una universidad o escuela politécnica pública del país.',
+                 'FORMACION', {'niveles_admitidos': ['grado'], 'estado_exigido': 'en_curso', 'titulo_obtenido': False})):
+            with self.subTest(text=text):
+                item = candidatos(text)[0]
+                self.assertEqual((item['estado'], item['tipo_sugerido'], item['valor_sugerido']), ('identificada', code, values))
+
+    def test_no_se_reinterpretan_negaciones_de_nacionalidad_ni_otras_negaciones_no_administrativas(self):
+        for text in ('No tener nacionalidad ecuatoriana', 'No ser ecuatoriano', 'No tener más de 30 años',
+                     'No superar los treinta años'):
+            with self.subTest(text=text):
+                item = candidatos(text)[0]
+                self.assertEqual(item['estado'], 'ambigua')
+                self.assertTrue(item['negacion_literal'])
+                self.assertEqual(item['valor_sugerido'], {})
+        self.assertEqual(candidatos('Cumplir con los requisitos generales establecidos en la convocatoria')[0]['estado'], 'ambigua')
+
+    def test_obligaciones_del_beneficiario_no_son_requisitos_de_postulacion(self):
+        for text in ('La persona beneficiaria deberá remitir al MINEDEC el informe semestral.',
+                     'La persona becaria debe presentar el certificado de notas cada semestre.',
+                     'Para mantener la beca se debe aprobar todas las asignaturas.'):
+            with self.subTest(text=text):
+                item = candidatos(text)[0]
+                self.assertEqual((item['estado'], item['metodo']), ('obligacion', 'obligacion_beneficiario'))
+                self.assertEqual(item['valor_sugerido'], {})
 
     def test_beneficio_y_vigencia_literal_sin_suponer_moneda(self):
         data = {'titulo': {'texto_original': 'Beca de excelencia', 'url': 'https://fuente.edu.ec/ficha'},

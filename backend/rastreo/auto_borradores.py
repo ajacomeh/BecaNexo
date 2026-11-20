@@ -94,7 +94,14 @@ def _named_entities(data):
     text = '\n'.join(_texto(data.get(key)) for key in ('titulo', 'descripcion', 'requisitos', 'postulacion_y_documentos'))
     for match in re.finditer(rf'(?:{_ROL})\s+(?:el|la|los|las)?\s*([^\n.;:,()]{{4,160}})', text, re.I):
         candidate = re.split(r'\s+(?:para|que|con\s+el\s+fin|a\s+trav[eé]s)\s+', match[1], maxsplit=1, flags=re.I)[0]
-        add(candidate)
+        # Una segunda entidad con su propio papel («en convenio con…») es otro candidato, no parte del nombre.
+        for part in re.split(rf'\s+(?:{_ROL})\s+(?:el|la|los|las)?\s*', candidate, flags=re.I):
+            add(part)
+    # «…, del Ministerio X – SIGLA tiene por objetivo conceder becas»: la entidad que concede es oferente.
+    for match in re.finditer(r'\bdel?\s+((?:Ministerio|Secretar[ií]a|Subsecretar[ií]a|Gobierno|Prefectura|Municipio|Universidad|'
+                             r'Escuela\s+Polit[eé]cnica|Instituto|Fundaci[oó]n)[^\n.;:()]{3,150}?)\s+tiene\s+por\s+(?:objetivo|objeto)\s+'
+                             r'(?:otorgar|conceder|la\s+concesi[oó]n|el\s+otorgamiento)', text, re.I):
+        add(match[1])
     return ecuadorian, foreign, unknown
 
 
@@ -266,34 +273,33 @@ def candidate_assessment(publication, version):
         assessment['motivo'] if assessment['estado'] != 'apta' or assessment['elegibilidad'] == 'no_especificada' else None)
 
 
+def candidatos_de_datos(data, version_id, document_id=None, texto=''):
+    """Función pura: requisitos, opciones y campos adicionales a partir de los datos extraídos.
+
+    `texto` es el texto conservado de la ficha: completa valores que el maquetado partió en dos líneas.
+    """
+    from convocatorias.models import NIVELES_OPCION
+    from .estructura_semantica import interpretar_requisitos, candidatos_adicionales
+    from .estudios import opciones_candidatas
+    requirements = _texto(data.get('requisitos'))
+    suggestions = interpretar_requisitos(requirements, version_id=version_id,
+        url=(data.get('requisitos') or {}).get('url'), documento_id=document_id)
+    options, pending_options = opciones_candidatas(data, texto, version_id, {value for value, _label in NIVELES_OPCION})
+    fields = candidatos_adicionales(data, version_id=version_id, documento_id=document_id)
+    return {'requisitos': suggestions, 'opciones': options, 'opciones_pendientes': pending_options, 'otros_campos': fields}
+
+
 def editable_candidates(version):
     """Interpreta la evidencia sin escribir ni validar candidatos editoriales."""
-    from .estructura_semantica import interpretar_requisitos, candidatos_adicionales
     from .evidencia_tabular import extraer_tablas
     from .evidencia_pdf import MAX_DOCUMENTOS, leer_evidencia_pdf
     from .propuestas_documentales import proponer
     from .storage import StorageError, root_path, verify_file
     data = version.datos_extraidos or {}
-    requirements = _texto(data.get('requisitos'))
     html = version.documentos.filter(rol='ficha_html').select_related('documento').first()
     document_id = html.documento_id if html else None
-    suggestions = interpretar_requisitos(requirements, version_id=version.pk,
-        url=(data.get('requisitos') or {}).get('url'), documento_id=document_id)
-    studies = data.get('estudios') or {}
-    level_text = [_normal(str(x)) for x in studies.get('niveles_mencionados', []) if isinstance(x, str)]
-    level_map = {'bachillerato': 'bachillerato', 'tercer nivel': 'grado', 'grado': 'grado',
-                 'especializacion': 'especializacion', 'maestria': 'maestria', 'doctorado': 'doctorado'}
-    levels = {value for mention in level_text for word, value in level_map.items() if word in mention}
-    modality_text = _normal(_literal(studies.get('modalidad'), 60))
-    modalities = {'presencial': 'presencial', 'virtual': 'virtual', 'en linea': 'virtual',
-                  'semipresencial': 'semipresencial', 'hibrida': 'hibrida', 'hibrido': 'hibrida'}
-    destination = _literal(studies.get('destino'), 500)
-    options = []
-    if len(levels) == 1 and modality_text in modalities and destination:
-        options.append({'nivel': next(iter(levels)), 'modalidad': modalities[modality_text],
-                        'destino_original': destination, 'validado': False,
-                        'procedencia': {'version_id': version.pk, 'campos': ['estudios.niveles_mencionados', 'estudios.modalidad', 'estudios.destino']}})
-    fields = candidatos_adicionales(data, version_id=version.pk, documento_id=document_id)
+    found = candidatos_de_datos(data, version.pk, document_id, getattr(version, 'texto_extraido', '') or '')
+    suggestions, options, fields = found['requisitos'], found['opciones'], found['otros_campos']
     fields['evidencia_tabular'] = {'tablas': [], 'enlaces_documentales': [], 'estado': 'sin_html'}
     if html:
         try:
@@ -321,7 +327,8 @@ def editable_candidates(version):
             omitted = True
     fields['evidencia_pdf'] = {'documentos': documents, 'omitidos_por_limite': omitted}
     fields['propuestas_documentales'] = proponer(fields['evidencia_tabular'], fields['evidencia_pdf'])
-    return {'requisitos': suggestions, 'opciones': options, 'otros_campos': fields}
+    return {'requisitos': suggestions, 'opciones': options, 'opciones_pendientes': found['opciones_pendientes'],
+            'otros_campos': fields}
 
 
 def _candidate(publication, version):
@@ -459,7 +466,6 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
                 'destino_mencionado': _literal((data.get('estudios') or {}).get('destino'), 500),
                 'beneficio_original': _texto(data.get('beneficio')),
                 'url_publicacion': publication.url_original,
-                'candidatos_editables': editable_candidates(version),
                 'clasificacion_inicial': assessment}
     identity = hashlib.sha256(f'rastreo:{publication.pk}'.encode()).hexdigest()
     offer = Convocatoria.objects.create(institucion=None, titulo=title, descripcion=description,
@@ -469,6 +475,9 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
         datos_iniciales=snapshot, pendientes_iniciales=pending)
     publication.convocatoria = offer
     publication.save(update_fields=['convocatoria'])
+    # Escribe en los campos y listas normales lo identificado con claridad; un fallo no pierde el borrador.
+    from .llenado import llenar_origen
+    llenar_origen(origin)
     return origin, True, assessment['motivo'] if assessment['elegibilidad'] == 'no_especificada' else None
 
 
@@ -561,22 +570,13 @@ def _classify_for_publication(publication, version, *, allow_partial=False):
 
 
 def pending_for_publication(offer, origin):
-    """Solo bloqueos materiales de procedencia, alcance y revisión vigente."""
+    """Único control propio del origen: el enlace oficial debe apuntar a una fuente pública.
+
+    La entidad oferente ecuatoriana, el título, la descripción, el enlace y la opción activa los exige
+    convocatorias.services.errores_publicacion; la ficha, su versión y el alcance dejan de bloquear:
+    publicar es la confirmación del administrador (queda en el Evento de confirmación).
+    """
     errors = []
-    if not offer.institucion_id:
-        errors.append('Asigna una institución oferente ecuatoriana antes de publicar.')
-    if origin.publicacion.convocatoria_id != offer.pk or origin.version.publicacion_id != origin.publicacion_id:
-        errors.append('La procedencia del borrador no coincide con la publicación rastreada.')
-    if not origin.version.documentos.filter(rol='ficha_html').exists():
-        errors.append('No existe ficha HTML preservada para verificar la fuente.')
-    current = latest_version(origin.publicacion)
-    assessment = _classify_for_publication(origin.publicacion, current) if current else None
-    if not assessment or assessment['estado'] != 'apta':
-        errors.append('La ficha vigente no acredita una beca dentro del alcance.')
-    if not assessment or assessment['elegibilidad'] != 'confirmada':
-        errors.append('La participación ecuatoriana no está acreditada; no se presume cumplida.')
-    if current and materially_changed(review_baseline(origin, offer), current) and not version_confirmed(offer, current):
-        errors.append(f'La versión {current.pk} tiene cambios relevantes; confirma su revisión antes de publicar.')
     if offer.url_oficial:
         from convocatorias.serializers import safe_url
         from rest_framework import serializers
@@ -585,19 +585,8 @@ def pending_for_publication(offer, origin):
             host = urlsplit(offer.url_oficial).hostname or ''
             if not host or host.endswith(('.local', '.localhost', '.test')):
                 errors.append('El enlace oficial no apunta a una fuente pública verificable.')
-            if not offer.institucion_id:
-                evidence = (current.datos_extraidos or {}) if current else {}
-                urls = {origin.publicacion.url_original}
-                for key in ('enlaces_bases', 'enlaces_postulacion'):
-                    urls.update(row.get('url') for row in evidence.get(key, []) if isinstance(row, dict))
-                if offer.url_oficial not in urls:
-                    errors.append('Sin oferente identificado, el enlace debe constar en la evidencia de origen.')
         except serializers.ValidationError:
             errors.append('El enlace oficial no es una URL HTTP/HTTPS válida.')
-    from .precarga import bloqueo_publicacion
-    pending_preload = bloqueo_publicacion(offer)
-    if pending_preload:
-        errors.append(pending_preload)
     return errors
 
 

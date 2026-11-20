@@ -226,7 +226,7 @@ class GenericRunTests(TransactionTestCase):
         response = admin.get(f'/api/gestion/rastreo/convocatorias/{offer.pk}/origen/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['publicacion_id'], publication.pk)
-        self.assertEqual(response.data['candidatos_editables']['requisitos'], candidates['requisitos'])
+        self.assertIn('evidencia', response.data)
         self.assertFalse(admin.get('/api/becas/').data['count'])
         # La sugerencia no publica: el administrador completa y valida datos en la base aislada.
         guarded = APIClient(enforce_csrf_checks=True)

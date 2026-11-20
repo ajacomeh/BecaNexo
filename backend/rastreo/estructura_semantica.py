@@ -37,16 +37,65 @@ PATRONES = {
 }
 
 
+# Condiciones que no se estructuran con valores propios porque las comprueba la entidad oferente
+# (registros administrativos, admisión al programa). Se conservan como texto literal, nunca se
+# invierten ni se convierten en un dato que BecaNexo pueda dar por cumplido.
+OBLIGACION = re.compile(r'\b(?:persona\s+)?(?:becari[oa]|beneficiari[oa])\s+(?:debera|debe)\b|'
+                        r'\bpara\s+(?:mantener|renovar)\s+(?:la\s+)?beca\b|\bse\s+compromete\b')
+ECUATORIANO = re.compile(r'\becuatorian\w*|\bnacionalidad\b')
+PROHIBICION_ADMINISTRATIVA = re.compile(
+    r'\bno\s+(?:contar\s+con|constar|figurar|mantener|'
+    r'haber\s+(?:sido|obtenido|recibido|gozado|desistido|incumplido)|'
+    r'estar\s+(?:cursando|por\s+iniciar|sujet[oa]|sancionad[oa]|inhabilitad[oa])|'
+    r'tener\s+(?:impedimento|sancion|deuda|beca))\b|'
+    r'\bque\s+no\s+(?:mantiene|tiene|posee|ha\s+sido|figura|consta)\b')
+ADMISION_PROGRAMA = re.compile(
+    r'\bhaber\s+sido\s+admitid[oa]\b|\bestar\s+cursando\s+estudios\b|\bestudiante\s+regular\b|'
+    r'\btitulo\s+academico\s+previo\b|\bpara\s+cursar\s+un\s+programa\b')
+
+
+def categoria_externa(n, negated):
+    """Categoría de condición externa de una cláusula normalizada, o None si no corresponde."""
+    if ECUATORIANO.search(n):
+        return None  # La nacionalidad no se reinterpreta: sigue su propio contrato o queda ambigua.
+    if (negated or re.search(r'\bque\s+no\b', n)) and PROHIBICION_ADMINISTRATIVA.search(n):
+        return 'prohibicion_administrativa'
+    if not negated and ADMISION_PROGRAMA.search(n):
+        return 'admision_programa'
+    return None
+
+
 def normal(text):
     return ''.join(char for char in unicodedata.normalize('NFD', text.casefold())
                    if unicodedata.category(char) != 'Mn')
 
 
+def unir_continuaciones(text):
+    """Une las líneas que el maquetado de la ficha partió a mitad de frase.
+
+    Una línea continúa a la anterior cuando la anterior no cerró la frase (., ;, :, ?, !) y la
+    nueva empieza en minúscula o con «(» sin viñeta ni número. Las viñetas, los números y las
+    líneas que empiezan en mayúscula siempre abren un elemento nuevo.
+    """
+    lines = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        marker = re.match(r'^(?:[-•*]|\d+[.)])\s*', stripped)
+        content = stripped[marker.end():].strip() if marker else stripped
+        if (lines and not marker and content and not re.search(r'[.;:?!]\s*$', lines[-1])
+                and (content[0].islower() or content[0] == '(')):
+            lines[-1] = f'{lines[-1]} {content}'
+        else:
+            lines.append(content)
+    return lines
+
+
 def dividir(text):
     """Solo separa cláusulas con un nuevo verbo de exigencia inequívoco."""
     result = []
-    for line in text.splitlines():
-        line = re.sub(r'^\s*(?:[-•*]|\d+[.)])\s*', '', line).strip()
+    for line in unir_continuaciones(text):
         if not line or len(line) > 1000 or normal(line) in (
                 'requisitos', 'requisitos generales', 'condiciones obligatorias'):
             continue
@@ -171,6 +220,15 @@ def interpretar_requisitos(text, *, version_id, url, documento_id=None):
         values = _valores(code, clause) if code and not negated and method == 'regla' else {}
         state = 'ambigua' if negated or len(labels) > 1 or not code else (
             'identificada' if values else 'sugerida')
+        if OBLIGACION.search(n):
+            # Una obligación posterior de la persona beneficiaria nunca es un requisito de postulación,
+            # aunque su redacción coincida con un documento o una formación.
+            code, method, score, values, state = 'OTRO', 'obligacion_beneficiario', None, {}, 'obligacion'
+        elif state != 'identificada':
+            external = method if method == 'elegibilidad_por_verificar' else categoria_externa(n, negated)
+            if external:
+                # Condición que comprueba la entidad oferente: texto literal como tipo OTRO, sin valores.
+                code, method, score, values, state = 'OTRO', external, None, {}, 'externa'
         candidates.append({'texto_original': clause, 'tipo_sugerido': code or 'OTRO',
             'valor_sugerido': values, 'operador_sugerido': CONTRATOS[code][1] if code in CONTRATOS else None,
             'estado': state, 'metodo': method, 'puntuacion': score,
