@@ -20,6 +20,30 @@ async function allInstitutions() {
   }
 }
 
+const UNDO = 'No se puede deshacer desde esta pantalla; la auditoría conserva una instantánea de antes y después.'
+
+function DeleteRecord({ name, record, offer, catalogs, onConfirm, onCancel }) {
+  if (name === 'beneficios') {
+    return <ConfirmDelete title="este beneficio" description="Se quitará de la convocatoria y se conservará su instantánea en la auditoría. La convocatoria volverá a revisión pendiente." onCancel={onCancel} onConfirm={onConfirm} />
+  }
+  const published = offer.revision === 'validada'
+  const after = published ? ' La convocatoria publicada volverá a revisión pendiente hasta que la valides y publiques de nuevo.' : ''
+  if (name === 'requisitos') {
+    const kind = catalogs.tipos_requisito.find((t) => t.id === record.tipo_requisito)?.nombre
+    return <ConfirmDelete heading="¿Seguro que quieres eliminar este requisito?" onCancel={onCancel} onConfirm={onConfirm}
+      description={`Se quitará de la convocatoria el requisito «${kind ? `${kind}: ` : ''}${record.texto_original}». ${UNDO}${after}`} />
+  }
+  const own = (offer.requisitos || []).filter((r) => r.opcion_estudio === record.id)
+  const benefits = (offer.beneficios || []).filter((b) => b.opcion_estudio === record.id)
+  const lastActive = published && record.activa && !offer.opciones.some((o) => o.id !== record.id && o.activa)
+  return <ConfirmDelete heading="¿Seguro que quieres eliminar esta opción?" onCancel={onCancel} onConfirm={onConfirm}
+    description={`Se quitará la opción de estudio «${optionLabel(record, catalogs.paises, offer.opciones)}». ${UNDO}${after}`}>
+    {own.length > 0 && <><p>También se eliminarán sus requisitos propios:</p><ul className="detail-list">{own.map((r) => <li key={r.id}>{r.texto_original}</li>)}</ul></>}
+    {benefits.length > 0 && <p className="profile-note">Tiene beneficios propios ({benefits.map((b) => b.concepto).join(', ')}): elimínalos o asígnalos a toda la convocatoria antes de eliminar la opción.</p>}
+    {lastActive && <p className="profile-note">Es la última opción activa de una convocatoria publicada; publicar exige al menos una opción activa, así que no podrá eliminarse.</p>}
+  </ConfirmDelete>
+}
+
 function Records({ name, title, offer, catalogs, onSaved }) {
   const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
@@ -51,14 +75,14 @@ function Records({ name, title, offer, catalogs, onSaved }) {
     {name === 'requisitos' && <p className="profile-note">Revisar la transcripción no verifica documentos de postulantes. Los certificados los comprueba la entidad oferente.</p>}
     <ul className="record-list offer-records">{records.map((r) => <li key={r.id}><span>{name === 'opciones' ? `${optionLabel(r, catalogs.paises, records)}${r.activa ? '' : ' · Inactiva'}` : name === 'beneficios' ? r.concepto : `${catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)?.nombre}: ${r.texto_original}${r.activo ? '' : ' · Inactivo'}`}</span>
       <div className="record-actions"><button className="text-button" disabled={editing !== null} onClick={() => { setEditing(r); setTypeId(String(r.tipo_requisito || '')) }}><Icon name="edit" /><span>Editar</span></button>
-        {name === 'beneficios' && <button className="text-button danger-text" disabled={editing !== null} onClick={() => setDeleting(r)}><Icon name="delete" /><span>Eliminar</span></button>}</div></li>)}</ul>
+        <button className="text-button danger-text" disabled={editing !== null} onClick={() => setDeleting(r)}><Icon name="delete" /><span>Eliminar</span></button></div></li>)}</ul>
     {!records.length && <p className="empty-note">Todavía no hay registros. Lo no informado se conserva como desconocido.</p>}
     {!editing ? <Button icon="add" className="button-light" onClick={() => { setEditing({}); setTypeId('') }}>Añadir {title.toLowerCase()}</Button> : <div className="record-editor"><h3>{editing.id ? 'Editar registro' : 'Nuevo registro'}</h3>
       {name === 'requisitos' && <div className="field"><label htmlFor="requirement-type">Tipo de requisito</label><select id="requirement-type" value={typeId} onChange={(e) => setTypeId(e.target.value)}><option value="">Selecciona un tipo</option>{catalogs.tipos_requisito.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select></div>}
       {fields.length > 0 ? <OfferForm key={`${editing.id || 'new'}-${typeId}`} fields={fields} initial={initial} label={`Guardar ${title.toLowerCase()}`} onSubmit={save} onCancel={() => setEditing(null)} /> : <Button icon="cancel" onClick={() => setEditing(null)}>Cancelar</Button>}
     </div>}
-    {deleting && <ConfirmDelete title="este beneficio" description="Se quitará de la convocatoria y se conservará su instantánea en la auditoría. La convocatoria volverá a revisión pendiente." onCancel={() => setDeleting(null)} onConfirm={async () => {
-      await offersApi.write(`gestion/convocatorias/${offer.id}/beneficios/${deleting.id}`, 'DELETE'); onSaved(name, null, deleting.id); setDeleting(null)
+    {deleting && <DeleteRecord name={name} record={deleting} offer={offer} catalogs={catalogs} onCancel={() => setDeleting(null)} onConfirm={async () => {
+      await offersApi.write(`gestion/convocatorias/${offer.id}/${name}/${deleting.id}`, 'DELETE'); onSaved(name, null, deleting.id); setDeleting(null)
     }} />}
   </section>
 }
@@ -83,7 +107,10 @@ export default function OfferEditor() {
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
   function childSaved(name, row, deletedId) {
-    setNotice('Registro guardado. Revisa y publica nuevamente para mostrar los cambios.'); setLoaded((old) => ({ ...old, offer: { ...old.offer, version: old.offer.version + 1, revision: 'pendiente', estado: old.offer.activa ? 'borrador' : 'pausada',
+    setNotice(deletedId ? 'Registro eliminado. Revisa y publica nuevamente para mostrar los cambios.' : 'Registro guardado. Revisa y publica nuevamente para mostrar los cambios.')
+    setLoaded((old) => ({ ...old, offer: { ...old.offer, version: old.offer.version + 1, revision: 'pendiente', estado: old.offer.activa ? 'borrador' : 'pausada',
+      // Una opción eliminada se lleva consigo sus requisitos propios (mismo criterio que el servidor).
+      ...(deletedId && name === 'opciones' ? { requisitos: old.offer.requisitos.filter((r) => r.opcion_estudio !== deletedId) } : {}),
       [name]: deletedId ? old.offer[name].filter((r) => r.id !== deletedId) : old.offer[name].some((r) => r.id === row.id) ? old.offer[name].map((r) => r.id === row.id ? row : r) : [...old.offer[name], row] } }))
   }
   return <OffersLayout><Link className="back-link" to="/gestion/convocatorias"><Icon name="back" /><span>Convocatorias</span></Link><h1>{id ? 'Editar y revisar convocatoria' : 'Crear convocatoria'}</h1><p>Comprueba la información contra las bases oficiales. No verifica documentos de estudiantes.</p>

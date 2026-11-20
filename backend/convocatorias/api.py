@@ -237,6 +237,30 @@ class Convocatorias(AuthView):
 RECURSOS = {"opciones": (m.OpcionEstudio, s.OpcionSerializer), "beneficios": (m.Beneficio, s.BeneficioSerializer), "requisitos": (m.Requisito, s.RequisitoSerializer)}
 
 
+def ya_eliminado(obj, recurso, pk):
+    """El registro existió en esta convocatoria y una eliminación auditada lo quitó (directa o con su opción)."""
+    for event in m.Evento.objects.filter(convocatoria=obj, accion__in=[f"{nombre}_eliminar" for nombre in RECURSOS]).only("cambios"):
+        antes = {row.get("id") for row in (event.cambios.get("antes") or {}).get(recurso) or []}
+        despues = {row.get("id") for row in (event.cambios.get("despues") or {}).get(recurso) or []}
+        if pk in antes and pk not in despues:
+            return True
+    return False
+
+
+def eliminar(obj, recurso, child):
+    """Eliminación física sin dejar huérfanos. Una opción arrastra sus requisitos propios en la misma transacción."""
+    if recurso == "opciones":
+        if m.Beneficio.objects.filter(opcion_estudio=child).exists():
+            raise serializers.ValidationError({"detail": "Esta opción tiene beneficios propios. Elimínalos o asígnalos a toda la "
+                                                         "convocatoria antes de eliminar la opción."})
+        if obj.revision == "validada" and child.activa and not obj.opciones.filter(activa=True).exclude(pk=child.pk).exists():
+            raise serializers.ValidationError({"detail": "No se puede eliminar la última opción activa de una convocatoria publicada: "
+                                                         "publicar exige al menos una opción activa. Añade o activa otra opción antes."})
+        # Los requisitos propios de la opción (también los de un destino de esa opción) se eliminan con ella.
+        m.Requisito.objects.filter(convocatoria=obj, opcion_estudio=child).delete()
+    child.delete()
+
+
 class Hijos(AuthView):
     permission_classes = [Administrador]
     http_method_names = ["get", "post", "patch", "delete", "options"]
@@ -254,20 +278,22 @@ class Hijos(AuthView):
         model, serializer_type = RECURSOS[self.recurso]
         with escritura():
             obj = get_object_or_404(m.Convocatoria.objects.select_for_update(), pk=convocatoria)
+            if delete and request.data: raise serializers.ValidationError({"detail": "La eliminación no acepta campos."})
+            if delete and not model.objects.filter(convocatoria=obj, pk=pk).exists() and ya_eliminado(obj, self.recurso, pk):
+                # Idempotente: repetir la eliminación de un registro ya eliminado no cambia nada ni vuelve a auditar.
+                return Response(status=204)
             child = get_object_or_404(model.objects.filter(convocatoria=obj), pk=pk) if pk else None
             before = detalle(obj)
             if delete:
-                if request.data: raise serializers.ValidationError({"detail": "La eliminación no acepta campos."})
-                if self.recurso != "beneficios":
-                    raise serializers.ValidationError({"detail": "Desactiva el registro para conservar su historial."})
-                child.delete()
+                eliminar(obj, self.recurso, child)
             else:
                 serializer = serializer_type(child, data=request.data, partial=pk is not None, context={"convocatoria": obj})
                 serializer.is_valid(raise_exception=True)
                 serializer.save(convocatoria=obj)
             # Una opción editada en una convocatoria ya pública se valida antes de
             # confirmar la transacción. Si falla, también se revierte la opción.
-            if self.recurso == "opciones" and obj.activa and obj.revision == "validada":
+            # Eliminar, en cambio, devuelve la convocatoria a revisión pendiente, como cualquier otra edición.
+            if self.recurso == "opciones" and not delete and obj.activa and obj.revision == "validada":
                 publicar(obj)
             else:
                 touch(obj)

@@ -324,3 +324,28 @@ class LlenadoAutomaticoTests(TransactionTestCase):
         self.assertFalse(offer.url_oficial.endswith('.'))
         self.assertTrue(offer.url_bases.startswith('https://'))
         self.assertFalse(offer.url_bases.endswith('.'))
+
+    def test_registro_eliminado_por_el_administrador_no_reaparece_al_repetir_ni_con_version_nueva(self):
+        from .llenado import completar_borrador, evidencia_de_origen
+        origin = self.borrador()
+        version = self.con_requisitos(origin)
+        llenar_origen(origin, version)
+        offer = origin.convocatoria
+        eliminado = offer.requisitos.order_by('pk').first()
+        texto = eliminado.texto_original
+        admin = APIClient(enforce_csrf_checks=True)
+        admin.force_login(self.actor)
+        token = admin.get('/api/auth/csrf/').data['csrfToken']
+        respuesta = admin.delete(f'/api/gestion/convocatorias/{offer.pk}/requisitos/{eliminado.pk}/', HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(respuesta.status_code, 204)
+        self.assertTrue(Evento.objects.filter(convocatoria=offer, accion='requisitos_eliminar', actor=self.actor).exists())
+        origin.refresh_from_db()
+        llenar_origen(origin, version)
+        self.assertFalse(offer.requisitos.filter(texto_original=texto).exists())
+        # Una versión nueva de la ficha con el mismo texto tampoco lo recrea: la huella sigue en el libro.
+        evidencia = {**evidencia_de_origen(origin, version), 'version_id': version.pk + 1000}
+        registro = dict(origin.datos_iniciales['llenado_automatico'])
+        resumen = completar_borrador(offer, evidencia, registro)
+        self.assertNotIn(texto, [c['texto'] for c in resumen['creados']])
+        self.assertFalse(offer.requisitos.filter(texto_original=texto).exists())
+        self.assertNotIn(eliminado.pk, [r['id'] for r in evidencia_visible(origin)['registros']])
