@@ -53,7 +53,7 @@ function Evaluation({ item, catalogs }) {
       <div><dt>Condición exigida</dt><dd>{Object.entries(condition.valores || {}).map(([k, v]) => <p key={k}>{type?.esquema_valor?.campos[k]?.label || labels[k] || k}: {valueText(v, k, catalogs, type?.esquema_valor?.campos[k])}</p>)}{condition.fecha_referencia && <p>Fecha de referencia: {condition.fecha_referencia}</p>}</dd></div>
     </dl>
     {item.comprobacion_externa && <div className="comparison-external"><strong>Verificación externa pendiente</strong><p>La entidad oferente comprueba los documentos y certificados. La coincidencia declarada no los acredita.</p>{condition.documento && <p>{condition.documento}</p>}{condition.acreditacion && <p>{condition.acreditacion}</p>}</div>}
-    {item.resultado !== 'cumple' && profileLinks[item.seccion_perfil] && <Link className="secondary-link comparison-profile-link" to={profileLinks[item.seccion_perfil][0]}><Icon name="profile" /><span>{profileLinks[item.seccion_perfil][1]}</span></Link>}
+    {item.resultado !== 'cumple' && !item.comprobacion_externa && profileLinks[item.seccion_perfil] && <Link className="button button-light comparison-profile-link" to={profileLinks[item.seccion_perfil][0]}><Icon name={profileLinks[item.seccion_perfil][0].startsWith('/preferencias') ? 'preferences' : 'profile'} /><span>{profileLinks[item.seccion_perfil][1]}</span></Link>}
     {condition.referencia_bases && <p>Referencia en las bases: {condition.referencia_bases}</p>}
   </li>
 }
@@ -83,11 +83,18 @@ function RequirementSummary({ items, result, title, catalogs }) {
   </section>
 }
 
+// Orden de lectura: primero lo que no se cumple, luego lo que falta confirmar y, plegado, lo ya cumplido.
+const resultGroups = [['no_cumple', 'No cumples', 'failure', true], ['desconocido', 'Por confirmar', 'pending', true], ['cumple', 'Cumplidos', 'success', false]]
+
 function Requirements({ items, catalogs }) {
-  return groups.map(([state, title]) => {
+  // <details>/<summary> nativo: se abre con teclado (Intro o Espacio) y los lectores anuncian si está expandido.
+  return <div className="comparison-groups">{resultGroups.map(([state, title, icon, open]) => {
     const records = items.filter(r => r.resultado === state)
-    return records.length > 0 && <section key={state}><h4><Icon name={state === "cumple" ? "success" : state === "no_cumple" ? "failure" : "pending"} />{title}</h4><ul className="detail-list">{records.map(item => <Evaluation key={item.id} item={item} catalogs={catalogs} />)}</ul></section>
-  })
+    return records.length > 0 && <details key={state} className={`comparison-group comparison-group-${state}`} open={open}>
+      <summary><Icon name={icon} /><span>{title} ({records.length})</span></summary>
+      <ul className="detail-list">{records.map(item => <Evaluation key={item.id} item={item} catalogs={catalogs} />)}</ul>
+    </details>
+  })}</div>
 }
 
 function Option({ option, featured, catalogs, topSummarized = false, summarizedDestination = null }) {

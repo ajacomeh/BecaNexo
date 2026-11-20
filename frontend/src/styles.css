@@ -191,6 +191,18 @@
 .comparison-summary-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .comparison-summary-actions .button { width: auto; min-width: 0; margin: 0; }
 .comparison-profile-link { display: inline-flex; width: auto; min-width: 0; margin: 8px 0 12px; }
+.comparison-groups { display: grid; gap: 12px; margin-top: 16px; }
+.comparison-group { border: 1px solid #d7dfed; border-left: 5px solid #8a6519; border-radius: 8px; background: white; overflow-wrap: anywhere; }
+.comparison-group > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; padding: 12px 14px; line-height: 1.5; border-radius: 7px; }
+.comparison-group > summary:focus-visible { outline: 3px solid #17345c; outline-offset: 2px; }
+.comparison-group > .detail-list { padding: 0 14px 14px; }
+.comparison-group-no_cumple { border-left-color: #a22018; }
+.comparison-group-no_cumple > summary { background: #f4ecea; color: #9b3b24; }
+.comparison-group-desconocido { border-left-color: #8a6519; }
+.comparison-group-desconocido > summary { background: #fff4dd; color: #765016; }
+.comparison-group-cumple { border-left-color: #087f8c; }
+.comparison-group-cumple > summary { background: #e4f5ef; color: #086e50; }
+.comparison-group[open] > summary { border-bottom: 1px solid #e4eaf3; border-radius: 7px 7px 0 0; }
 .profile-anchor { scroll-margin-top: 24px; }
 .profile-anchor:focus { outline: 3px solid #087f8c; outline-offset: 4px; border-radius: 4px; }
 @media (max-width: 600px) { .comparison-option { padding: 16px; } .comparison-counts { grid-template-columns: 1fr; } }
