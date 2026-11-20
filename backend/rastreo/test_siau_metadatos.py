@@ -149,7 +149,7 @@ class MetadataCaptureTests(TransactionTestCase):
     source = base.RastreoTests.source
 
     def test_admin_lists_candidates_by_execution_and_identifies_metadata_run(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         source = self.source()
         now = timezone.now()
         run = Ejecucion.objects.create(
@@ -177,7 +177,7 @@ class MetadataCaptureTests(TransactionTestCase):
         self.assertEqual((detail.data['tipo'], detail.data['candidatos_registrados']), ('metadatos_indice', 2))
 
     def test_429_retry_after_blocks_premature_run_without_candidates(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         source = self.source()
         enable_discovery(self.actor.pk, 'Preparar índice de pruebas')
         enable_national_discovery(self.actor.pk, 'Preparar nacionales de pruebas')
@@ -198,7 +198,7 @@ class MetadataCaptureTests(TransactionTestCase):
             read.assert_not_called()
 
     def test_503_without_retry_after_uses_configured_frequency(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         source = self.source()
         enable_discovery(self.actor.pk, 'Preparar índice de pruebas')
         enable_national_discovery(self.actor.pk, 'Preparar nacionales de pruebas')
@@ -218,7 +218,7 @@ class MetadataCaptureTests(TransactionTestCase):
             read.assert_not_called()
 
     def test_audited_preview_does_not_create_fiches_documents_or_drafts(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         previous_offers = Convocatoria.objects.count()
         source = self.source()
         enable_discovery(self.actor.pk, 'Preparar índice de pruebas')
@@ -242,7 +242,7 @@ class MetadataCaptureTests(TransactionTestCase):
             read.assert_not_called()
 
     def test_completed_cursor_survives_failed_run_without_advancing(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         source = self.source()
         enable_discovery(self.actor.pk, 'Preparar índice de pruebas')
         enable_national_discovery(self.actor.pk, 'Preparar nacionales de pruebas')

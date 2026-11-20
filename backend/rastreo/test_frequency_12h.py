@@ -24,7 +24,7 @@ class TwelveHourFrequencyTests(TransactionTestCase):
 
     def setUp(self):
         self.setUpBase()
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         self.source_row = self.source()
         enable_discovery(self.actor.pk, 'Índice de prueba')
         enable_national_discovery(self.actor.pk, 'Nacionales de prueba')

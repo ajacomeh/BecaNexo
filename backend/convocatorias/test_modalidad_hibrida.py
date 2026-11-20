@@ -43,7 +43,7 @@ class ModalidadHibridaTests(TestCase):
                 cls.legacy = offer
 
     def setUp(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
 
     def test_catalogo_detalle_y_filtro_distinguen_hibrida_de_presencial(self):
         self.assertEqual(dict(MODALIDADES)['hibrida'], 'Híbrida')

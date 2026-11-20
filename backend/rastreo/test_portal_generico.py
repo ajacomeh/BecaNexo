@@ -91,7 +91,7 @@ class GenericContractTests(SimpleTestCase):
 @override_settings(RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS=True)
 class GenericRunTests(TransactionTestCase):
     def setUp(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         self.actor = get_user_model().objects.create_user(email='generic-admin@example.com', nombre='Admin', rol='administrador')
         self.user = get_user_model().objects.create_user(email='generic-user@example.com', nombre='User')
         ec, _ = Pais.objects.get_or_create(codigo='EC', defaults={'nombre': 'Ecuador'})

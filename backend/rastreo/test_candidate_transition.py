@@ -50,7 +50,7 @@ class CandidateTransitionTests(TransactionTestCase):
 
     def setUp(self):
         self.setUpBase()
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         source = self.source()
         enable_discovery(self.actor.pk, 'Índice sintético')
         enable_national_discovery(self.actor.pk, 'Nacionales sintéticas')
@@ -201,7 +201,7 @@ class CandidateTransitionTests(TransactionTestCase):
             import sys
             import time
 
-            self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+            self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
             smoke = os.environ.get('BECANEXO_DEMO_VISUAL_SMOKE') == '1'
             password = secrets.token_urlsafe(18) if smoke else getpass(
                 'Contraseña TEMPORAL para rastreo-admin@example.com (mínimo 12 caracteres): ')

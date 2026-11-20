@@ -29,7 +29,7 @@ class CandidatePDFTests(TransactionTestCase):
 
     def execute_pdf(self, *, pdf_status=200, pdf_type='application/pdf', pdf_bytes=PDF,
                     pdf_url=PDF_URL, robots=transition.ROBOTS_TEXT, links=1, html=None, key=None):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         html = (html or transition.fiche()).replace(
             b'</section>', (f'<a href="{pdf_url}">BASES</a>'.encode() * links) + b'</section>')
         calls = []

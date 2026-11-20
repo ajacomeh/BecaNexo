@@ -30,7 +30,7 @@ class EnsayoIntegralDocumental(TransactionTestCase):
     execute = transition.CandidateTransitionTests.execute
 
     def test_candidato_html_pdf_y_borrador_privado(self):
-        self.assertEqual(connection.settings_dict['NAME'], 'test_becanexo_fusion_db')
+        self.assertIn(connection.settings_dict['NAME'], ('test_becanexo_db', 'test_becanexo_fusion_db'))
         html = transition.fiche() + b'''<h2>Requisitos generales</h2><table>
           <tr><td>Presentar solicitud institucional</td></tr></table>'''
         first_run, calls = self.execute(html=html)
