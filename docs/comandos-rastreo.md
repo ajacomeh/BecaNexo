@@ -108,6 +108,20 @@ Devuelve `proxima_ejecucion`, `atrasada` (verdadero cuando pasaron más de 2 hor
 
 **Resumen de cada corrida.** El resultado de `programado` y de `resumen` incluye `resumen` con `peticiones`, `publicaciones_observadas`, `versiones_nuevas`, `candidatos_nuevos`, `borradores_creados`, `incidencias_total`, `incidencias_por_codigo`, `motivo` (en corridas omitidas o fallidas) y un `texto` legible. El script guarda una línea por corrida en `%LOCALAPPDATA%\BecaNexo\rastreo\programador.jsonl`; el resultado «no corresponde aún» se registra solo una vez por día. Códigos de salida de `-Ejecutar`: 0 finalizada o todavía no corresponde, 1 fallida, 3 parcial, 4 omitida, 2 error operativo y 5 estado desconocido.
 
+**Acción recomendada de la tarea (ventana oculta).** Programa `powershell.exe`, directorio de trabajo `D:\Proyectos\BecaNexo` y argumentos:
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File "D:\Proyectos\BecaNexo\scripts\rastreo-programado.ps1" -Ejecutar -FuenteId 1 -BaseEsperada becanexo_db
+```
+
+**Advertencia:** cerrar la ventana de una corrida en curso la termina con el código `0xC000013A` (`STATUS_CONTROL_C_EXIT`). La ejecución queda «en curso» en la base, sin latido, hasta que el siguiente disparo la cierra como interrumpida; esa corrida cerrada consume la ventana de 24 horas, así que no habrá otra captura hasta que venza.
+
+**Limitaciones conocidas de la corrida programada:**
+
+- El disparador de inicio de sesión puede lanzar la corrida justo al reanudar el equipo, cuando el sistema aún no terminó de estabilizarse.
+- Una corrida interrumpida cuenta como captura de la ventana de 24 horas, aunque no haya hecho ninguna petición.
+- La tarea solo corre con la sesión de Windows abierta y el equipo despierto; los disparos perdidos durante la suspensión se recuperan únicamente por `StartWhenAvailable`.
+
 ## Configuración y comandos
 
 Consultas nuevas del bloque 2, **sin red y sin escrituras** (sustituir IDs por los listados):

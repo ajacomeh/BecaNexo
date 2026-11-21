@@ -119,3 +119,6 @@ Quedan fuera del alcance de esta versión:
 - Avisos internos para el administrador.
 - Extracción visual de tablas en las bases.
 - Más fuentes institucionales además de SIAU.
+- El disparador de inicio de sesión de la tarea programada puede lanzar la corrida justo al reanudar el equipo.
+- Una corrida programada interrumpida cuenta como captura de la ventana de 24 horas.
+- La tarea programada solo corre con la sesión de Windows abierta y el equipo despierto, o al recuperar disparos perdidos con `StartWhenAvailable`.
