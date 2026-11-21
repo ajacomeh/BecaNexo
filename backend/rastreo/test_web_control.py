@@ -8,7 +8,7 @@ import sys
 import tempfile
 import time
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -496,8 +496,11 @@ class WebControlTests(TransactionTestCase):
                           {'motivo': 'Motivo aceptable', 'saltar_frecuencia': True}):
                 self.assertEqual(admin.post(ROOT, value, format='json', HTTP_X_CSRFTOKEN=token).status_code, 400)
             start.assert_not_called()
+        # El cupo diario se reinicia a medianoche UTC: con el reloj fijo a mediodía, el resultado no depende de la
+        # hora a la que se ejecute la prueba (en la última hora del día UTC el reinicio queda a menos de una hora).
+        fixed_now = datetime(2026, 11, 20, 12, 0, tzinfo=dt_timezone.utc)
         with tempfile.TemporaryDirectory() as root, override_settings(
-                RASTREO_WEB_LAUNCH_ROOT=root, RASTREO_EXTRAORDINARIO_HABILITADO=True):
+                RASTREO_WEB_LAUNCH_ROOT=root, RASTREO_EXTRAORDINARIO_HABILITADO=True),                 patch('django.utils.timezone.now', return_value=fixed_now):
             for index in range(3):
                 (Path(root) / f'solicitud-{source.pk}-{uuid.uuid4()}.json').write_text(
                     json.dumps({'aceptada_en': (timezone.now() - timedelta(minutes=index * 6)).isoformat()}),
@@ -505,6 +508,7 @@ class WebControlTests(TransactionTestCase):
             state = self._client(self.actor).get(ROOT).data
             self.assertFalse(state['puede_iniciar'])
             self.assertGreater(state['proxima_manual'], timezone.now() + timedelta(hours=1))
+            self.assertEqual(state['proxima_manual'], datetime(2026, 11, 21, 0, 0, tzinfo=dt_timezone.utc))
 
     def test_extraordinary_source_block_and_scheduled_calendar(self):
         source = self.source()
