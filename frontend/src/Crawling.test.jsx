@@ -115,7 +115,10 @@ it('identifica fuente, estado, última ejecución y borradores en el panel', asy
   open()
   expect((await screen.findByText('Publicaciones detectadas', { selector: 'dt' })).nextSibling).toHaveTextContent('3')
   expect(screen.getByText('Borradores automáticos').nextSibling).toHaveTextContent('1')
-  expect(screen.getByText(/SIAU prueba · parcial/)).toBeVisible()
+  // La última corrida se resume en una línea: número, estado y fecha (la fuente figura en «Fuentes registradas»).
+  const run = screen.getByText(/Última corrida:/).closest('p')
+  expect(run).toHaveTextContent(/^Última corrida: #8 · parcial · /)
+  expect(run).toBeVisible()
   expect(screen.queryByText(/siau-nacionales\/3/)).not.toBeVisible()
   await userEvent.click(screen.getByText('Configuración y detalles técnicos'))
   expect(screen.getByText(/siau-nacionales\/3/)).toBeVisible()

@@ -1,7 +1,6 @@
 .crawl { min-width: 0; overflow-wrap: anywhere; }
 .crawl-control { margin-block: 1.25rem; }
 .crawl-control-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.crawl-control-heading > div { min-width: 0; }
 .crawl-control-heading h2 { margin: 0 0 .4rem; }
 .crawl-control-heading p { margin: 0; }
 .crawl-control-heading .button { flex: none; }
@@ -170,3 +169,12 @@
 .crawl-draft .crawl-check input { width: 1.1rem; height: 1.1rem; flex: none; }
 .crawl-draft :is(input, textarea, button):focus-visible, .crawl-origin :is(select, textarea, button):focus-visible { outline: 3px solid #167b88; outline-offset: 3px; }
 .crawl-origin { overflow-wrap: anywhere; }
+/* Botón de inicio: aria-disabled lo mantiene enfocable; el motivo aparece como tooltip al pasar el ratón o al enfocar. */
+.crawl-start { position: relative; display: inline-flex; flex: none; }
+.crawl-start .button[aria-disabled="true"] { opacity: .65; cursor: not-allowed; }
+.crawl-start .button:focus-visible { outline: 3px solid #087f8c; outline-offset: 2px; }
+.crawl-tooltip { position: absolute; top: calc(100% + 6px); right: 0; z-index: 5; width: max-content; max-width: min(320px, 80vw);
+  padding: .45rem .65rem; border-radius: 6px; background: #17243b; color: #fff; font-size: .8rem; line-height: 1.4;
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s; }
+.crawl-start:hover .crawl-tooltip, .crawl-start:focus-within .crawl-tooltip { opacity: 1; visibility: visible; }
+.crawl-control-line { color: #2b3d55; }
