@@ -141,6 +141,15 @@ La fuente pasó a `siau-nacionales/4` con el comando auditado `rastreo habilitar
 
 Para volver a la política anterior: `rastreo revertir-paginacion --actor-id <ID> --motivo "<motivo>" --clave <UUID>`. El script de la tarea programada acepta `/2`, `/3` y `/4`.
 
+## Identidad de versión por contenido (22/11/2026)
+
+El HTML de las fichas de SIAU trae identificadores aleatorios de plugins de WordPress en cada respuesta (Smart Slider `n-uc-*`, `client_id` de Download Manager, `ubtn-N`, `Info-box-wrap-N`, `tooltip-<hex>`). Cuando la identidad dependía de los bytes crudos del HTML, cada corrida creaba una versión falsa (`cambio_bytes`): 25 de 36 hasta el 22/11/2026. Esas versiones se conservan como historial.
+
+- **Identidad de una versión** (`rastreo/observaciones.py`, `observe`): contenido relevante (`hash_contenido_relevante`: datos, texto y advertencias extraídos), PDF de bases y anexos con su SHA-256, pendientes, y versiones de extractor, normalizador y contrato. El SHA-256 del HTML de ficha no cuenta. Si todo coincide con la última versión, se reutiliza y el resultado es `sin_cambios`. Si coincide con una versión anterior, se reutiliza esa (A→B→A vuelve a A).
+- **Evidencia:** los bytes exactos de cada descarga se conservan siempre como documento en el acceso de esa ejecución. La migración `0016` adapta el disparador `rast_evidencia_observada`. Un PDF sigue exigiendo el documento exacto en la misma ejecución. El HTML de ficha exige el documento exacto, una ficha HTML de la misma publicación o un HTML de la misma URL, obtenidos en esa ejecución.
+- **Contadores:** `versiones_nuevas` y `observaciones_sin_cambios` conservan su significado en la base (los valida el disparador `rast_contadores_ejec`). La API y el resumen añaden `versiones_con_cambios` (primera observación o cambio relevante), que es lo que el panel muestra como «Versiones nuevas», y `cambios_tecnicos` (resultado `cambio_bytes`: versión nueva por cambio de extractor, normalizador o contrato), mostrado como «Cambio técnico, sin cambios de contenido».
+- **Regla de trabajo:** cada vez que cambie lo que se extrae del HTML (campos, normalización, texto), hay que subir la versión del extractor (por ejemplo, de `siau-html/2` a `siau-html/3`). Así el cambio de código aparece como cambio técnico y no como cambio de la fuente. El 19/11/2026 se añadió `cierres_por_modalidad` sin subir la versión y eso produjo 5 `cambio_relevante` que no venían de SIAU.
+
 ## Configuración y comandos
 
 Consultas nuevas del bloque 2, **sin red y sin escrituras** (sustituir IDs por los listados):

@@ -572,10 +572,14 @@ def resumen_corrida(execution):
         codigos[codigo] = codigos.get(codigo, 0) + 1
     peticiones = execution.accesos.count()
     borradores = _borradores_creados(execution)
+    resultados = list(execution.observaciones.values_list('resultado', flat=True))
+    con_cambios = sum(r in ('nueva', 'cambio_relevante') for r in resultados)
+    tecnicos = resultados.count('cambio_bytes')
     local = execution.inicio.astimezone(ZoneInfo('America/Guayaquil'))
     partes = [local.strftime('%Y-%m-%d %H:%M') + ' (Ecuador)', execution.estado,
               f'{peticiones} {"petición" if peticiones == 1 else "peticiones"}',
-              f'{execution.publicaciones_observadas} fichas observadas', f'{execution.versiones_nuevas} versiones nuevas',
+              f'{execution.publicaciones_observadas} fichas observadas', f'{con_cambios} versiones nuevas',
+              *([f'{tecnicos} {"cambio técnico" if tecnicos == 1 else "cambios técnicos"} sin cambios de contenido'] if tecnicos else []),
               f'{nuevas} {"candidato nuevo" if nuevas == 1 else "candidatos nuevos"}',
               f'{borradores} {"borrador creado" if borradores == 1 else "borradores creados"}',
               f'{sum(codigos.values())} incidencias']
@@ -583,7 +587,9 @@ def resumen_corrida(execution):
         partes.append(f'motivo: {execution.error_resumen}')
     return {'ejecucion_id': execution.pk, 'origen': execution.origen, 'estado': execution.estado, 'inicio': execution.inicio,
             'fin': execution.fin, 'peticiones': peticiones, 'publicaciones_observadas': execution.publicaciones_observadas,
-            'versiones_nuevas': execution.versiones_nuevas, 'candidatos_nuevos': nuevas, 'borradores_creados': borradores,
+            'versiones_nuevas': execution.versiones_nuevas, 'versiones_con_cambios': con_cambios, 'cambios_tecnicos': tecnicos,
+            'observaciones_sin_cambios': execution.observaciones_sin_cambios,
+            'candidatos_nuevos': nuevas, 'borradores_creados': borradores,
             'incidencias_total': sum(codigos.values()), 'incidencias_por_codigo': codigos,
             'motivo': execution.error_resumen if execution.estado in ('omitida', 'fallida') else None, 'texto': ' · '.join(partes)}
 

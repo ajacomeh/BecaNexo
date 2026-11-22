@@ -53,16 +53,22 @@ class ObservacionesTests(TransactionTestCase):
                          list(repeated.observaciones.order_by('publicacion_id').values_list('version_id', flat=True)))
 
     @base.ventana_cumplida()
-    def test_cosmetic_html_has_new_manifest_same_relevant_content(self):
+    def test_cosmetic_html_reuses_version_and_keeps_raw_bytes(self):
+        # Contrato desde la identidad por contenido: un HTML con otros bytes pero el mismo contenido relevante y los
+        # mismos PDF reutiliza la versión (sin_cambios). Antes creaba otra versión con resultado cambio_bytes.
         source = self.source()
-        self.run_fake(source)
+        first = self.run_fake(source)
         html = FIXTURE.read_text(encoding='utf8').replace('<nav>', '<nav class="redisenado">Menú nuevo ') + '<!-- cosmético -->'
         run = self.altered(source, html=html)
-        self.assertEqual(run.observaciones.filter(resultado='cambio_bytes').count(), 2)
+        self.assertEqual(run.observaciones.filter(resultado='sin_cambios').count(), 2)
+        self.assertEqual(summary(run)['resumen']['versiones_con_cambios'], 0)
         for publication in Publicacion.objects.all():
-            a, b = publication.versiones.order_by('numero')
-            self.assertNotEqual(a.hash_manifiesto, b.hash_manifiesto)
-            self.assertEqual(a.hash_contenido_relevante, b.hash_contenido_relevante)
+            self.assertEqual(publication.versiones.count(), 1)
+            # Los bytes crudos de cada descarga siguen conservados en su acceso: dos documentos HTML distintos.
+            raw = {a.documento.sha256 for a in Acceso.objects.filter(publicacion=publication, rol='ficha', documento__isnull=False).select_related('documento')}
+            self.assertEqual(len(raw), 2)
+        self.assertEqual(list(first.observaciones.order_by('publicacion_id').values_list('version_id', flat=True)),
+                         list(run.observaciones.order_by('publicacion_id').values_list('version_id', flat=True)))
 
     @base.ventana_cumplida()
     def test_relevant_requirements_benefits_preserve_negation(self):
@@ -100,6 +106,9 @@ class ObservacionesTests(TransactionTestCase):
         self.assertEqual(summary(run)['versiones_nuevas'], 2)
         self.assertEqual(Version.objects.count(), 4)
         self.assertTrue(all(o.version.version_extractor == 'siau-html/test-nueva' for o in run.observaciones.select_related('version')))
+        # Versión nueva por cambio de extractor con el mismo contenido: cambio técnico, no «versión nueva» del panel.
+        self.assertEqual(run.observaciones.filter(resultado='cambio_bytes').count(), 2)
+        self.assertEqual((summary(run)['resumen']['versiones_con_cambios'], summary(run)['resumen']['cambios_tecnicos']), (0, 2))
 
     @base.ventana_cumplida()
     def test_return_a_b_a_reuses_a_with_temporal_order(self):

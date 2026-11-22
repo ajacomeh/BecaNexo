@@ -234,6 +234,27 @@ it('ejecución sin publicaciones conserva contadores y acceso a incidencias', as
   expect(screen.getByRole('heading', { name: 'Incidencias' })).toBeVisible()
 })
 
+it('cuenta como versiones nuevas solo los cambios de contenido y etiqueta los cambios técnicos', async () => {
+  vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('ejecuciones/2') ? { id: 2, fuente: { nombre: 'SIAU' }, estado: 'finalizada',
+    accesos: 9, documentos_distintos: 7, publicaciones_observadas: 5, versiones_nuevas: 2, observaciones_sin_cambios: 3,
+    versiones_con_cambios: 0, cambios_tecnicos: 2 } : list())
+  open('/gestion/rastreo/ejecuciones/2')
+  expect(await screen.findByText('SIAU · Descarga finalizada')).toBeVisible()
+  // versiones_nuevas (2) incluye versiones técnicas; el panel muestra solo las de contenido (versiones_con_cambios).
+  expect(screen.getByText('Versiones nuevas').nextSibling).toHaveTextContent('0')
+  expect(screen.getByText('Observaciones sin cambios').nextSibling).toHaveTextContent('3')
+  expect(screen.getByText('Cambio técnico, sin cambios de contenido').nextSibling).toHaveTextContent('2')
+})
+
+it('sin campos nuevos de la API conserva el contador anterior y no muestra cambios técnicos', async () => {
+  vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('ejecuciones/3') ? { id: 3, fuente: { nombre: 'SIAU' }, estado: 'finalizada',
+    accesos: 4, documentos_distintos: 4, publicaciones_observadas: 2, versiones_nuevas: 2, observaciones_sin_cambios: 0 } : list())
+  open('/gestion/rastreo/ejecuciones/3')
+  expect(await screen.findByText('SIAU · Descarga finalizada')).toBeVisible()
+  expect(screen.getByText('Versiones nuevas').nextSibling).toHaveTextContent('2')
+  expect(screen.queryByText('Cambio técnico, sin cambios de contenido')).not.toBeInTheDocument()
+})
+
 it('postulante no puede navegar a Rastreo ni ve su menú', async () => {
   auth.user = { nombre: 'Postulante sintético', rol: 'postulante' }
   const get = vi.spyOn(offersApi, 'get')

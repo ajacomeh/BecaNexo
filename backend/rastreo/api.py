@@ -82,14 +82,19 @@ def execution_data(e):
             'fuente': {'id': e.fuente_id, 'nombre': e.fuente.nombre},
             'accesos': e.accesos_total, 'documentos_distintos': e.documentos_total,
             'tipo': 'metadatos_indice' if e.version_extractor == 'siau-index-meta/1' else 'documental',
-            'candidatos_registrados': e.candidatos_total}
+            'candidatos_registrados': e.candidatos_total,
+            # Campos nuevos (los anteriores no cambian): versiones con contenido nuevo (primera observación o cambio
+            # relevante) y cambios técnicos (nueva versión por cambio de extractor, normalizador o contrato).
+            'versiones_con_cambios': e.con_cambios_total, 'cambios_tecnicos': e.tecnicos_total}
 
 
 def executions():
     return Ejecucion.objects.select_related('fuente').annotate(
         accesos_total=Count('accesos', distinct=True),
         documentos_total=Count('accesos__documento', distinct=True),
-        candidatos_total=Count('candidatoindice', distinct=True))
+        candidatos_total=Count('candidatoindice', distinct=True),
+        con_cambios_total=Count('observaciones', filter=Q(observaciones__resultado__in=('nueva', 'cambio_relevante')), distinct=True),
+        tecnicos_total=Count('observaciones', filter=Q(observaciones__resultado='cambio_bytes'), distinct=True))
 
 
 class ReadOnly(AuthView):

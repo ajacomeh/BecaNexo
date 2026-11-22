@@ -45,6 +45,15 @@ def identity(execution, url):
                   'primera_deteccion': now, 'ultima_deteccion': now})[0]
 
 
+HTML_ROLES = frozenset({'ficha_html'})
+
+
+def content_identity(manifest):
+    """Manifiesto sin las huellas del HTML de ficha: PDF de bases, anexos y pendientes."""
+    return {'documentos': [entry for entry in manifest.get('documentos', []) if entry.get('rol') not in HTML_ROLES],
+            'pendientes': manifest.get('pendientes', [])}
+
+
 def technical_content(item, pending):
     data = copy.deepcopy(item)
     # Fecha mínima fija: obtiene advertencias estructurales sin vigencia del reloj.
@@ -85,10 +94,23 @@ def observe(execution, publication, item=None, evidence=(), pending=(), detail=N
                     'pendientes': sorted(pending, key=lambda x: (x['url'], x['estado']))}
         data, text, warnings = technical_content(item, pending)
         relevant_hash = digest({'datos': data, 'texto': text, 'advertencias': warnings})
-        version_key = dict(publicacion=publication, hash_manifiesto=digest(manifest),
-            version_extractor=current.version_extractor, version_normalizador=current.version_normalizador, version_contrato=CONTRATO)
-        version = Version.objects.filter(**version_key).first()
+        processing = dict(publicacion=publication, version_extractor=current.version_extractor,
+                          version_normalizador=current.version_normalizador, version_contrato=CONTRATO)
+        version_key = dict(processing, hash_manifiesto=digest(manifest))
         last = publication.observaciones.exclude(version=None).select_related('version').order_by('-id').first()
+        exact = Version.objects.filter(**version_key).first()
+        if exact and (exact.hash_contenido_relevante != relevant_hash or exact.manifiesto != manifest):
+            raise ValidationError('Extracción no determinista: cambiar versión del extractor/contrato antes de reutilizar.')
+        # Identidad por contenido: datos y texto extraídos, PDF de bases (sus SHA-256), pendientes y versiones de
+        # extractor/normalizador/contrato. Los bytes crudos del HTML de ficha no cuentan: el portal inserta
+        # identificadores aleatorios de plugins en cada descarga. Esos bytes se conservan en el acceso de cada ejecución.
+        content = content_identity(manifest)
+        matches = [row for row in Version.objects.filter(**processing, hash_contenido_relevante=relevant_hash).order_by('-numero')
+                   if content_identity(row.manifiesto) == content]
+        if last is not None and any(row.pk == last.version_id for row in matches):
+            version = last.version
+        else:
+            version = exact or (matches[0] if matches else None)
         if version is None:
             number = (publication.versiones.aggregate(n=Max('numero'))['n'] or 0) + 1
             version = Version.objects.create(**version_key, numero=number, manifiesto=manifest,
@@ -98,8 +120,6 @@ def observe(execution, publication, item=None, evidence=(), pending=(), detail=N
                 rol=e['rol'], url_original=e.get('url_original', e['url']), url_normalizada=e['url'],
                 localizador=e.get('localizador')) for e in entries])
             created = True
-        elif version.hash_contenido_relevante != relevant_hash or version.manifiesto != manifest:
-            raise ValidationError('Extracción no determinista: cambiar versión del extractor/contrato antes de reutilizar.')
         if last is None:
             result = 'nueva'
         elif last.version_id == version.pk:
