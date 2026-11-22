@@ -16,9 +16,9 @@ La versión `0.1.0` de `frontend/package.json` identifica el paquete frontend; e
 ### Rastreo de SIAU
 
 - **Captura manual**: en el panel de rastreo del administrador, «Iniciar rastreo» pide un motivo de al menos 10 caracteres y solo está disponible cuando una fuente autorizada ya admite captura por su frecuencia y no hay otra ejecución activa.
-- **Corrida programada**: la tarea de Windows `BecaNexo-Rastreo-SIAU` se dispara cada hora y ejecuta `scripts/rastreo-programado.ps1 -Ejecutar`. Solo captura cuando venció la ventana de la fuente (`frecuencia_min` = 1440, es decir, 24 horas); antes responde «no corresponde aún» sin hacer peticiones a SIAU.
+- **Corrida programada**: la tarea de Windows `BecaNexo-Rastreo-SIAU` se dispara cada hora y ejecuta `scripts/rastreo-programado.ps1 -Ejecutar`. Solo captura cuando venció la ventana de la fuente (`frecuencia_min` = 720, es decir, 12 horas; el mínimo admitido); antes responde «no corresponde aún» sin hacer peticiones a SIAU.
 - **Modos del script**: `-Comprobar` (solo lectura: estado de la programación de la fuente), `-Ejecutar` (lo que lanza la tarea) y `-Revisar` (solo lectura: últimas corridas programadas, si la captura está atrasada más de 2 horas respecto de la hora prevista y el final del registro local).
-- **Corridas interrumpidas**: una corrida programada que quedó «en curso» sin latido en los últimos 10 minutos (por ejemplo, por un apagado del equipo) se cierra automáticamente como fallida, con la incidencia `INTERRUMPIDA`, antes de la siguiente. La corrida cerrada sigue consumiendo la ventana de 24 horas.
+- **Corridas interrumpidas**: una corrida programada que quedó «en curso» sin latido en los últimos 10 minutos (por ejemplo, por un apagado del equipo) se cierra automáticamente como fallida, con la incidencia `INTERRUMPIDA`, antes de la siguiente. La corrida cerrada sigue consumiendo la ventana de 12 horas.
 - **Resumen**: cada corrida programada registra un resumen legible (peticiones, publicaciones observadas, versiones nuevas, candidatos nuevos, borradores creados e incidencias) en `%LOCALAPPDATA%\BecaNexo\rastreo\programador.jsonl`. Ver [comandos de rastreo](docs/comandos-rastreo.md).
 
 ### Borrador privado automático
@@ -120,5 +120,5 @@ Quedan fuera del alcance de esta versión:
 - Extracción visual de tablas en las bases.
 - Más fuentes institucionales además de SIAU.
 - El disparador de inicio de sesión de la tarea programada puede lanzar la corrida justo al reanudar el equipo.
-- Una corrida programada interrumpida cuenta como captura de la ventana de 24 horas.
+- Una corrida programada interrumpida cuenta como captura de la ventana de 12 horas.
 - La tarea programada solo corre con la sesión de Windows abierta y el equipo despierto, o al recuperar disparos perdidos con `StartWhenAvailable`.

@@ -38,7 +38,7 @@ Comandos operativos **solo tras autorización de escritura para cada acción**. 
 $clavePolitica = [guid]::NewGuid().ToString()
 .\.venv\Scripts\python.exe backend/manage.py rastreo habilitar-descubrimiento --actor-id 1 --motivo "Autorizar fichas nacionales del índice SIAU" --clave $clavePolitica
 # Frecuencia configurable de 60 a 10080 minutos, con auditoría antes/después.
-# El valor actual de SIAU es 1440; no cambiarlo en desarrollo sin autorización.
+# El valor actual de SIAU es 720 (12 h, mínimo admitido; desde el 22/11/2026); no cambiarlo en desarrollo sin autorización.
 $claveFrecuencia = [guid]::NewGuid().ToString()
 .\.venv\Scripts\python.exe backend/manage.py rastreo configurar-frecuencia --fuente-id 1 --actor-id 1 --motivo "Ajustar periodicidad SIAU" --frecuencia-min 2880 --clave $claveFrecuencia
 # Una ejecución manual controlada conserva su clave para reintentos idempotentes.
@@ -114,12 +114,12 @@ Devuelve `proxima_ejecucion`, `atrasada` (verdadero cuando pasaron más de 2 hor
 powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File "D:\Proyectos\BecaNexo\scripts\rastreo-programado.ps1" -Ejecutar -FuenteId 1 -BaseEsperada becanexo_db
 ```
 
-**Advertencia:** cerrar la ventana de una corrida en curso la termina con el código `0xC000013A` (`STATUS_CONTROL_C_EXIT`). La ejecución queda «en curso» en la base, sin latido, hasta que el siguiente disparo la cierra como interrumpida; esa corrida cerrada consume la ventana de 24 horas, así que no habrá otra captura hasta que venza.
+**Advertencia:** cerrar la ventana de una corrida en curso la termina con el código `0xC000013A` (`STATUS_CONTROL_C_EXIT`). La ejecución queda «en curso» en la base, sin latido, hasta que el siguiente disparo la cierra como interrumpida; esa corrida cerrada consume la ventana de 12 horas, así que no habrá otra captura hasta que venza.
 
 **Limitaciones conocidas de la corrida programada:**
 
 - El disparador de inicio de sesión puede lanzar la corrida justo al reanudar el equipo, cuando el sistema aún no terminó de estabilizarse.
-- Una corrida interrumpida cuenta como captura de la ventana de 24 horas, aunque no haya hecho ninguna petición.
+- Una corrida interrumpida cuenta como captura de la ventana de 12 horas, aunque no haya hecho ninguna petición.
 - La tarea solo corre con la sesión de Windows abierta y el equipo despierto; los disparos perdidos durante la suspensión se recuperan únicamente por `StartWhenAvailable`.
 
 ## Política vigente siau-nacionales/4 (desde el 22/11/2026)
@@ -136,6 +136,8 @@ La fuente pasó a `siau-nacionales/4` con el comando auditado `rastreo habilitar
 | `MAX_FICHAS` (`rastreo/descubrimiento.py`) | 12 | Fichas procesadas por corrida. Primero las no vistas y luego las vistas hace más tiempo, así que el índice completo se cubre por rotación en varias corridas. |
 | `MAX_INDEX_PAGES` (`rastreo/siau_ajax.py`) | 12 | Tope de seguridad de páginas AJAX. Cada corrida consulta una página adicional y avanza un cursor. |
 | `MAX_BASES` (`rastreo/descubrimiento.py`) | 24 | PDF de bases descargados por corrida. |
+
+**Frecuencia de 12 horas (22/11/2026).** El piso está en el código: `FRECUENCIA_MINIMA_MIN` = 720 (`rastreo/models.py`, migración `0015`), y `set_frequency` solo admite de 720 a 10080 minutos. La fuente SIAU pasó de 1440 a 720 con el comando auditado `rastreo configurar-frecuencia --frecuencia-min 720` (actor 1). La tarea programada y el botón «Iniciar rastreo» del panel usan la misma ventana (`next_due`): inicio de la última captura no omitida + `frecuencia_min`. «Próxima disponibilidad» se calcula igual. La tarea `BecaNexo-Rastreo-SIAU` no se volvió a registrar: ya se dispara cada hora (minuto :46), al iniciar sesión (con 2 min de retraso) y con «ejecutar lo antes posible si se perdió el inicio». Cada disparo antes de la ventana devuelve «no corresponde aún» sin crear ejecuciones (solo una línea diaria en el registro local), así que el disparo horario no genera ruido en la lista.
 
 Para volver a la política anterior: `rastreo revertir-paginacion --actor-id <ID> --motivo "<motivo>" --clave <UUID>`. El script de la tarea programada acepta `/2`, `/3` y `/4`.
 
