@@ -106,7 +106,7 @@ Las pruebas backend usan una base de pruebas separada; las de frontend están en
 
 El rastreo respeta la política y frecuencia de cada fuente, robots, límites HTTP, bloqueos 429/503 y `Retry-After`. El acceso público a una página o un `robots.txt` permisivo no equivalen por sí solos a autorización para capturar y conservar sus contenidos. La documentación técnica está en `docs/`, en particular [rastreo](docs/comandos-rastreo.md), [recomendación](docs/recomendacion-semantica.md) y [correo](docs/correo-gmail.md).
 
-No hay todavía un archivo de licencia para redistribución del proyecto; conviene decidirlo antes de publicar el repositorio.
+El proyecto se distribuye bajo la licencia MIT (ver [LICENSE](LICENSE)).
 
 ## Alcance y trabajo futuro
 
