@@ -83,7 +83,7 @@ La CLI es una operación local de confianza. `--actor-id` **atribuye** la operac
 
 ## Corrida programada: modos, revisión y cierre de interrumpidas
 
-`scripts/rastreo-programado.ps1` tiene tres modos, con `-FuenteId 1 -BaseEsperada becanexo_db` por defecto. Los tres rechazan otra base, una fuente inactiva, una política distinta de `siau-indice/2` o `siau-nacionales/3` y la publicación automática habilitada.
+`scripts/rastreo-programado.ps1` tiene tres modos, con `-FuenteId 1 -BaseEsperada becanexo_db` por defecto. Los tres rechazan otra base, una fuente inactiva, una política distinta de `siau-indice/2`, `siau-nacionales/3` o `siau-nacionales/4` y la publicación automática habilitada.
 
 ```powershell
 # Solo lectura: estado de la programación (base, política, frecuencia, última y próxima ejecución).
@@ -121,6 +121,23 @@ powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy R
 - El disparador de inicio de sesión puede lanzar la corrida justo al reanudar el equipo, cuando el sistema aún no terminó de estabilizarse.
 - Una corrida interrumpida cuenta como captura de la ventana de 24 horas, aunque no haya hecho ninguna petición.
 - La tarea solo corre con la sesión de Windows abierta y el equipo despierto; los disparos perdidos durante la suspensión se recuperan únicamente por `StartWhenAvailable`.
+
+## Política vigente siau-nacionales/4 (desde el 22/11/2026)
+
+La ejecución programada 14 (22/11/2026) terminó parcial con dos incidencias, cuya causa se diagnosticó en solo lectura:
+
+- **`INDICE_LIMITE`:** con `siau-nacionales/3` el índice nacional (`/portfolio/convocatorias/`) solo admitía tarjetas cuyo título dijera «becas nacionales» y no seguía la paginación AJAX que anuncia la página (`max_num_pages` = 3). La primera página tenía 19 tarjetas con «beca» y solo una con «becas nacionales»; por eso «Programa de Becas para Mujeres Ecuatorianas Universidad Europea» dejó de observarse.
+- **`BASE_NO_PERMITIDA` (publicación 5, OCCITEC):** las bases son un ZIP del propio SIAU (`/wp-content/uploads/2026/10/2026-0494.zip`). No es robots.txt: la regla `BASE` solo admite archivos `.pdf` en `/wp-content/uploads/AAAA/MM/` de `siau.senescyt.gob.ec`. Por decisión del responsable, el ZIP queda como base pendiente de revisión manual (`fuera_de_lista`), sin descarga.
+
+La fuente pasó a `siau-nacionales/4` con el comando auditado `rastreo habilitar-paginacion` (actor 1). Esta política admite cualquier tarjeta del índice con «beca» en el título y sigue la paginación AJAX solo si robots.txt permite `/wp-admin/admin-ajax.php` (hoy lo permite). Las fichas siguen el mismo clasificador: lo que no acredita oferente ecuatoriano queda pendiente o descartado y nada se publica solo.
+
+| Límite | Valor | Qué cuenta |
+| --- | ---: | --- |
+| `MAX_FICHAS` (`rastreo/descubrimiento.py`) | 12 | Fichas procesadas por corrida. Primero las no vistas y luego las vistas hace más tiempo, así que el índice completo se cubre por rotación en varias corridas. |
+| `MAX_INDEX_PAGES` (`rastreo/siau_ajax.py`) | 12 | Tope de seguridad de páginas AJAX. Cada corrida consulta una página adicional y avanza un cursor. |
+| `MAX_BASES` (`rastreo/descubrimiento.py`) | 24 | PDF de bases descargados por corrida. |
+
+Para volver a la política anterior: `rastreo revertir-paginacion --actor-id <ID> --motivo "<motivo>" --clave <UUID>`. El script de la tarea programada acepta `/2`, `/3` y `/4`.
 
 ## Configuración y comandos
 
