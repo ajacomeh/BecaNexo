@@ -206,7 +206,10 @@ class AjaxPaginationTests(TransactionTestCase):
         with patch('convocatorias.siau_red.Downloader.once', side_effect=self.network), patch(
                 'convocatorias.siau_red.Downloader.post_once', return_value=(200, {'content-type': 'text/html'}, card())):
             run = run_manual(source.pk, self.actor.pk, uuid.uuid4())
-        self.assertEqual(summary(run)['estado'], 'parcial')  # página 3 aún sin consultar
+        # La página 3 queda para la siguiente corrida: es rotación por diseño de /4, registrada como aviso
+        # (INDICE_LIMITE) sin degradar el estado. Antes esta prueba esperaba 'parcial'.
+        self.assertEqual(summary(run)['estado'], 'finalizada')
+        self.assertEqual(list(run.incidencias.filter(codigo='INDICE_LIMITE').values_list('gravedad', flat=True)), ['aviso'])
         self.assertTrue(run.accesos.filter(metodo='GET', parametros_publicos__isnull=True).exists())
         post = run.accesos.get(metodo='POST')
         self.assertEqual(post.parametros_publicos['pagina'], 2)

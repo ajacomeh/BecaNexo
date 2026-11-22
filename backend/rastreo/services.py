@@ -488,7 +488,9 @@ class PersistentDownloader(Downloader):
                     access = self.record(url, entry, status, 'descargado' if created else 'reutilizado', document, headers=headers)
                     if url in self.pdfs and prior and prior.documento_id != document.pk:
                         incident(self.execution, 'PDF_CAMBIADO', 'Nueva huella; no hereda revisión previa.', access, 'aviso')
-                    if url in self.pdfs:
+                    # Aviso una sola vez por documento y URL: al obtenerlo por primera vez o cuando cambia su huella.
+                    # Volver a descargar el mismo PDF no repite el aviso en cada corrida.
+                    if url in self.pdfs and (created or prior is None or prior.documento_id != document.pk):
                         incident(self.execution, 'REVISION_DOCUMENTAL_PENDIENTE', 'Descarga técnica correcta; bases no aprobadas.', access, 'aviso')
             except (StorageError, OSError, DatabaseError) as exc:
                 if self.page_url:
@@ -607,6 +609,7 @@ def summary(execution):
 
 
 INTERRUMPIDA_MINUTOS = 10
+ROTACION = 'Más fichas o páginas de las que caben en esta corrida; se cubren por rotación en las siguientes.'
 
 
 def _cerrar_interrumpidas(source):
@@ -767,7 +770,10 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                 if source.politica_version in ('siau-indice/2', 'siau-nacionales/3', 'siau-nacionales/4'):
                     discovered, truncated = index_pages(index['contenido'])
                     if truncated:
-                        incident(execution, 'INDICE_LIMITE', 'El índice supera el máximo de fichas; se requiere revisión.')
+                        if source.politica_version == 'siau-nacionales/4':
+                            incident(execution, 'INDICE_LIMITE', ROTACION, severity='aviso')
+                        else:
+                            incident(execution, 'INDICE_LIMITE', 'El índice supera el máximo de fichas; se requiere revisión.')
                     pages = list(dict.fromkeys([*PAGES, *discovered]))[:MAX_FICHAS]
                     downloader.pages.update(pages)
                     downloader.allowed_urls.update(pages)
@@ -825,7 +831,13 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                         truncated = truncated or len(pages) + len([url for url in discovered if url not in pages]) > MAX_FICHAS
                         pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
                     if truncated:
-                        incident(execution, 'INDICE_LIMITE', 'Índice nacional con cobertura parcial; existen más páginas o fichas que el límite.')
+                        # Con /4 la cobertura parcial es la rotación por diseño (12 fichas y una página AJAX por corrida):
+                        # aviso. Los fallos reales del índice o del AJAX (red, HTTP, 429/503, robots, respuesta inválida)
+                        # registran su propia incidencia de error y siguen degradando el estado.
+                        if source.politica_version == 'siau-nacionales/4':
+                            incident(execution, 'INDICE_LIMITE', ROTACION, severity='aviso')
+                        else:
+                            incident(execution, 'INDICE_LIMITE', 'Índice nacional con cobertura parcial; existen más páginas o fichas que el límite.')
                     downloader.pages.update(pages)
                     downloader.allowed_urls.update(pages)
                 except SourceBackoff:

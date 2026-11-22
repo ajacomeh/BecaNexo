@@ -150,6 +150,13 @@ El HTML de las fichas de SIAU trae identificadores aleatorios de plugins de Word
 - **Contadores:** `versiones_nuevas` y `observaciones_sin_cambios` conservan su significado en la base (los valida el disparador `rast_contadores_ejec`). La API y el resumen añaden `versiones_con_cambios` (primera observación o cambio relevante), que es lo que el panel muestra como «Versiones nuevas», y `cambios_tecnicos` (resultado `cambio_bytes`: versión nueva por cambio de extractor, normalizador o contrato), mostrado como «Cambio técnico, sin cambios de contenido».
 - **Regla de trabajo:** cada vez que cambie lo que se extrae del HTML (campos, normalización, texto), hay que subir la versión del extractor (por ejemplo, de `siau-html/2` a `siau-html/3`). Así el cambio de código aparece como cambio técnico y no como cambio de la fuente. El 19/11/2026 se añadió `cierres_por_modalidad` sin subir la versión y eso produjo 5 `cambio_relevante` que no venían de SIAU.
 
+## Incidencias y estado de la corrida (22/11/2026)
+
+- **Qué degrada el estado:** solo las incidencias de gravedad «error» dejan una corrida en «parcial». Los avisos son informativos.
+- **`REVISION_DOCUMENTAL_PENDIENTE` (aviso):** se registra una sola vez por documento y URL, al obtener un PDF de bases por primera vez o cuando cambia su huella (junto con `PDF_CAMBIADO`). Volver a descargar el mismo PDF ya no repite el aviso en cada corrida.
+- **`INDICE_LIMITE` con `siau-nacionales/4`:** es aviso cuando la causa es la rotación por diseño (más fichas o páginas de las que caben en una corrida: 12 fichas y una página AJAX). Con `/2` y `/3` sigue siendo error.
+- **Fallos reales del índice o del AJAX:** siempre registran su propia incidencia de error y degradan el estado. Son red (`RED`), HTTP (`HTTP`), respuesta inválida (`INDICE_ESTRUCTURA`) y `robots.txt` que no autoriza el AJAX (`ROBOTS`). Un HTTP 429/503 detiene la corrida (`fallida`). `BASE_NO_PERMITIDA` sigue siendo error.
+
 ## Configuración y comandos
 
 Consultas nuevas del bloque 2, **sin red y sin escrituras** (sustituir IDs por los listados):
