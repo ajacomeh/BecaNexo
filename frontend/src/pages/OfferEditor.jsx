@@ -45,6 +45,16 @@ function DeleteRecord({ name, record, offer, catalogs, onConfirm, onCancel }) {
   </ConfirmDelete>
 }
 
+function safeBasesUrl(url) {
+  try { const parsed = new URL(url); return parsed.protocol === 'https:' && !parsed.username && !parsed.password } catch { return false }
+}
+
+// Borrador del rastreo sin beneficios: la ficha de SIAU no los publica (están en las bases); no es un fallo del rastreo.
+function BasesHint({ offer }) {
+  return <p className="profile-note offer-bases-hint" role="note">La ficha de SIAU no publica beneficios; consúltalos en las bases oficiales (archivo ZIP) y complétalos aquí antes de publicar.
+    {safeBasesUrl(offer.url_bases) && <> <a href={offer.url_bases} target="_blank" rel="noopener noreferrer">Abrir bases oficiales</a></>}</p>
+}
+
 function Records({ name, title, offer, catalogs, onSaved }) {
   const [editing, setEditing] = useState(null)
   const [deleting, setDeleting] = useState(null)
@@ -77,6 +87,7 @@ function Records({ name, title, offer, catalogs, onSaved }) {
     <ul className="record-list offer-records">{records.map((r) => <li key={r.id}><span>{name === 'opciones' ? `${optionLabel(r, catalogs.paises, records)}${r.activa ? '' : ' · Inactiva'}` : name === 'beneficios' ? r.concepto : `${catalogs.tipos_requisito.find((t) => t.id === r.tipo_requisito)?.nombre}: ${r.texto_original}${r.activo ? '' : ' · Inactivo'}`}</span>
       <div className="record-actions"><button className="text-button" disabled={editing !== null} onClick={() => { setEditing(r); setTypeId(String(r.tipo_requisito || '')) }}><Icon name="edit" /><span>Editar</span></button>
         <button className="text-button danger-text" disabled={editing !== null} onClick={() => setDeleting(r)}><Icon name="delete" /><span>Eliminar</span></button></div></li>)}</ul>
+    {name === 'beneficios' && !records.length && offer.origen_automatico && <BasesHint offer={offer} />}
     {!records.length && <p className="empty-note">Todavía no hay registros. Lo no informado se conserva como desconocido.</p>}
     {!editing ? <Button icon="add" className="button-light" onClick={() => { setEditing({}); setTypeId('') }}>Añadir {title.toLowerCase()}</Button> : <div className="record-editor"><h3>{editing.id ? 'Editar registro' : 'Nuevo registro'}</h3>
       {name === 'requisitos' && <div className="field"><label htmlFor="requirement-type">Tipo de requisito</label><select id="requirement-type" value={typeId} onChange={(e) => setTypeId(e.target.value)}><option value="">Selecciona un tipo</option>{catalogs.tipos_requisito.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select></div>}
@@ -126,7 +137,7 @@ export default function OfferEditor() {
     <Message>{error}</Message>{!loaded && (error ? <Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button> : <p role="status"><Icon name="loading" />Cargando editor…</p>)}<Message kind="success">{notice}</Message>
     {loaded && <><section className="profile-card"><h2>01 · Identificación, fechas y condiciones</h2>{loaded.offer && <p className="profile-note">Revisión: {loaded.offer.revision} · Estado: {stateLabel(loaded.offer.estado)}. Editar retira la publicación hasta una nueva revisión.</p>}
       {!loaded.offer && <p>Guarda el borrador antes de añadir opciones.</p>}
-      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions).map(field => field.name === 'institucion' ? { ...field, required: !loaded.offer?.origen_automatico, hint: <Link className="offer-institution-link" to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> } : field)} initial={loaded.offer ? { ...loaded.offer, institucion: loaded.offer.institucion?.id ?? null } : { alcance_academico: 'pendiente' }} label="Guardar convocatoria" onSubmit={async (values) => {
+      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions).map(field => field.name === 'institucion' ? { ...field, required: !loaded.offer?.origen_automatico, hint: <Link className="offer-institution-link" to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> } : field.name === 'tipo_beca' && loaded.offer?.origen_automatico && !loaded.offer?.tipo_beca ? { ...field, hint: 'Tipo por definir: la ficha de SIAU no indica el tipo de beca. Selecciónalo según las bases oficiales; no se infiere.' } : field)} initial={loaded.offer ? { ...loaded.offer, institucion: loaded.offer.institucion?.id ?? null } : { alcance_academico: 'pendiente' }} label="Guardar convocatoria" onSubmit={async (values) => {
         const offer = await offersApi.write(id ? `gestion/convocatorias/${id}` : 'gestion/convocatorias', id ? 'PATCH' : 'POST', values)
         if (!id) navigate(`/gestion/convocatorias/${offer.id}`)
         else { setLoaded((old) => ({ ...old, offer })); setNotice('Cambios guardados. Publica de nuevo después de revisar.') }
