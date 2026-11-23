@@ -210,8 +210,11 @@ class Evento(models.Model):
     class Meta:
         db_table = "AUD_EVENTO"
         ordering = ["-id"]
+        # Un evento apunta a una convocatoria o a una entidad. Si la entidad se eliminó, el evento conserva su
+        # instantánea en cambios["institucion_eliminada"] (historial de la entidad y el propio evento de eliminación).
         constraints = [models.CheckConstraint(
-            condition=Q(convocatoria__isnull=False, institucion__isnull=True) | Q(convocatoria__isnull=True, institucion__isnull=False),
+            condition=Q(convocatoria__isnull=False, institucion__isnull=True) | Q(convocatoria__isnull=True, institucion__isnull=False)
+            | Q(convocatoria__isnull=True, institucion__isnull=True, cambios__has_key="institucion_eliminada"),
             name="evento_un_objeto")]
 
 

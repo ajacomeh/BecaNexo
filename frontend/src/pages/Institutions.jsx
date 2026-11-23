@@ -1,10 +1,11 @@
 import Icon from '../components/Icon'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { offersApi } from '../api/client'
 import OffersLayout from '../components/OffersLayout'
 import Message from '../components/Message'
 import Button from '../components/Button'
 import InstitutionDialog from '../components/InstitutionDialog'
+import InstitutionDelete from '../components/InstitutionDelete'
 import './Institutions.css'
 
 const PAGE_SIZE = 25
@@ -12,6 +13,7 @@ const FETCH_SIZE = 50 // máximo de la API; se recorren las páginas para filtra
 const MAX_PAGES = 40
 const DEMO_PREFIX = /^DEMOSTRACIÓN\s*·\s*/i
 const sectors = [['', 'Todos'], ['publico', 'Pública'], ['privado', 'Privada']]
+const draftsText = (n, singular = 'quedó', plural = 'quedaron') => `${n} ${n === 1 ? 'borrador' : 'borradores'} ${n === 1 ? singular : plural}`
 const sectorLabel = (value) => sectors.find(([key]) => key === value)?.[1] || value
 
 // Solo presentación: el nombre registrado no cambia.
@@ -34,6 +36,8 @@ export default function Institutions() {
   const [loaded, setLoaded] = useState({ key: null, rows: null, error: '' })
   const [catalogs, setCatalogs] = useState(null)
   const [editing, setEditing] = useState(null)
+  const [deleting, setDeleting] = useState(null)
+  const notices = useRef(null)
   const [notice, setNotice] = useState('')
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
@@ -69,11 +73,20 @@ export default function Institutions() {
     await offersApi.write(`gestion/instituciones${editing.id ? `/${editing.id}` : ''}`, editing.id ? 'PATCH' : 'POST', values)
     setEditing(null); setNotice('Entidad guardada.'); setRevision((value) => value + 1)
   }
+  const removed = (result) => {
+    // El diálogo ya confirmó el DELETE (el servidor decide; un 409 lo convierte en «No se puede eliminar»).
+    const n = result.borradores_desvinculados || 0
+    if (visible.length === 1 && current > 1) setPage(current - 1) // la página queda vacía: se retrocede una
+    setDeleting(null)
+    setNotice(n ? `Entidad eliminada. ${draftsText(n)} sin entidad y ${n === 1 ? 'pasó' : 'pasaron'} a «Oferente por confirmar».` : 'Entidad eliminada.')
+    setRevision((value) => value + 1)
+    notices.current?.focus()
+  }
 
   return <OffersLayout><div className="institutions-page">
     <div className="page-heading"><div><p className="eyebrow">ADMINISTRACIÓN</p><h1>Entidades oferentes</h1><p>Solo entidades ecuatorianas. El país de estudio se define por separado en cada opción.</p></div>
       <div className="heading-actions"><Button icon="add" disabled={!catalogs} onClick={() => setEditing({})}>Añadir entidad oferente</Button></div></div>
-    {notice && <div className="institution-notice"><Message kind="success">{notice}</Message></div>}
+    <div className="institution-notice" ref={notices} tabIndex={-1}>{notice && <Message kind="success">{notice}</Message>}</div>
     <form className="profile-card institution-search" role="search" aria-label="Filtrar entidades oferentes" onSubmit={apply}>
       <label htmlFor="institution-query">Buscar entidad<input id="institution-query" type="search" maxLength={200} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
       <label htmlFor="institution-sector">Sector<select id="institution-sector" value={sector} onChange={(event) => setSector(event.target.value)}>
@@ -93,7 +106,10 @@ export default function Institutions() {
             <div className="institution-identity"><strong title={r.nombre}>{title}</strong>
               <div className="institution-tags"><span className={`status-pill institution-sector institution-sector-${r.sector}`}>{sectorLabel(r.sector)}</span>
                 {demo && <span className="status-pill institution-demo">Demostración</span>}</div></div>
-            <button type="button" className="text-button" disabled={!catalogs} aria-label={`Editar ${title}`} onClick={() => setEditing(r)}><Icon name="edit" /><span>Editar</span></button>
+            <div className="institution-actions">
+              <button type="button" className="text-button" disabled={!catalogs} aria-label={`Editar ${title}`} onClick={() => setEditing(r)}><Icon name="edit" /><span>Editar</span></button>
+              <button type="button" className="text-button institution-delete" aria-label={`Eliminar ${title}`} onClick={() => setDeleting({ ...r, title })}><Icon name="delete" /><span>Eliminar</span></button>
+            </div>
           </li>
         })}</ul>
         : <p className="empty-note">{active ? 'No hay entidades con esos filtros.' : 'No hay entidades oferentes registradas.'}</p>}
@@ -102,6 +118,7 @@ export default function Institutions() {
         <span aria-live="polite">{(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, count)} de {count}</span>
         <Button icon="next" disabled={current >= totalPages} onClick={() => setPage(current + 1)}>Siguiente</Button></nav>}
     </section>
+    {deleting && <InstitutionDelete entity={deleting} onClose={() => setDeleting(null)} onDeleted={removed} />}
     {editing && catalogs && <InstitutionDialog institution={editing} catalogs={catalogs} onClose={() => setEditing(null)} onSaved={save} />}
   </div></OffersLayout>
 }

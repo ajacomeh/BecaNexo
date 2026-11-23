@@ -2,7 +2,8 @@ import json
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Exists, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from rest_framework.exceptions import ValidationError
 from . import models as m, serializers as s
 from .reglas import EXTERNOS
@@ -23,13 +24,25 @@ def descartado(obj):
     return ultimo == "descartar_borrador"
 
 
+ACCION_OFERENTE_ELIMINADO = "oferente_eliminado"
+
+
+def entidad_eliminada(obj):
+    """Nombre de la entidad oferente eliminada que dejó a este borrador sin entidad; None si no aplica."""
+    if obj.institucion_id:
+        return None
+    cambios = m.Evento.objects.filter(convocatoria=obj, accion=ACCION_OFERENTE_ELIMINADO).order_by("-id").values_list("cambios", flat=True).first()
+    return ((cambios or {}).get("entidad_eliminada") or {}).get("nombre") if cambios else None
+
+
 def oferente_sin_entidad(obj):
-    """Para un borrador del rastreo sin entidad del catálogo: (marca de oferente no ecuatoriano, nombre detectado)."""
+    """Para un borrador sin entidad del catálogo: (marca de oferente no ecuatoriano, nombre detectado).
+    Un borrador manual cuya entidad se eliminó queda como «Oferente por confirmar» (sin nombre)."""
     if obj.institucion_id:
         return None
     origin = m.BorradorRastreo.objects.filter(convocatoria=obj).first()
     if not origin:
-        return None
+        return {"no_ecuatoriano": False, "nombre": None} if entidad_eliminada(obj) else None
     from rastreo.auto_borradores import oferente_externo
     no_ec, nombre = oferente_externo(origin)
     return {"no_ecuatoriano": no_ec, "nombre": nombre or None}
@@ -122,7 +135,7 @@ def errores_publicacion(obj, estricto=True):
     if obj.institucion_id and obj.institucion.pais.codigo != "EC":
         errors.append("El oferente identificado debe ser ecuatoriano.")
     # La falta de entidad oferente ecuatoriana ya no bloquea: publicar() exige la confirmación expresa del administrador.
-    if not obj.institucion_id and not auto_origin:
+    if not obj.institucion_id and not auto_origin and not entidad_eliminada(obj):
         errors.append("Asigna una institución oferente ecuatoriana antes de publicar.")
     if auto_origin and descartado(obj):
         errors.append("El borrador está descartado; restáuralo antes de publicar.")
@@ -211,3 +224,70 @@ def publicar(obj, actor=None, confirmar_oferente=False):
     if not era_publica:
         from notificaciones.services import avisar_publicacion
         avisar_publicacion(obj)
+
+
+# --- Eliminación de entidades oferentes ---------------------------------------------------------------
+# Una convocatoria está o estuvo en el catálogo público si hoy está validada (abierta, próxima, cierra hoy, sin fecha,
+# cerrada o pausada tras publicarse) o si alguna vez se confirmó su publicación (editar el oferente o la oferta la devuelve
+# a «pendiente», pero ya fue pública). El resto son borradores privados: pendientes de revisión o descartados.
+def en_catalogo():
+    return Q(revision="validada") | Exists(m.Evento.objects.filter(convocatoria=OuterRef("pk"), accion="confirmar_publicacion"))
+
+
+def _conteo(publicas_):
+    filas = (m.Convocatoria.objects.filter(institucion=OuterRef("pk")).filter(en_catalogo() if publicas_ else ~en_catalogo())
+             .order_by().values("institucion").annotate(n=Count("id")).values("n"))
+    return Coalesce(Subquery(filas, output_field=IntegerField()), Value(0))
+
+
+def con_contadores(qs):
+    """Anota convocatorias_publicas y borradores_privados por entidad, sin consultas N+1."""
+    return qs.annotate(convocatorias_publicas=_conteo(True), borradores_privados=_conteo(False))
+
+
+def muestra_publicas(obj, limite=5):
+    """Hasta `limite` convocatorias de la entidad que están o estuvieron en el catálogo público (para explicar el bloqueo)."""
+    return list(m.Convocatoria.objects.filter(institucion=obj).filter(en_catalogo()).order_by("titulo", "id").values("id", "titulo")[:limite])
+
+
+class EntidadConConvocatoriasPublicas(Exception):
+    def __init__(self, n, muestra=()):
+        self.n = n
+        self.muestra = list(muestra)
+        plural = "convocatoria" if n == 1 else "convocatorias"
+        super().__init__(f"No se puede eliminar: la entidad tiene {n} {plural} en el catálogo público. "
+                         "Despublica o reasigna esas convocatorias antes.")
+
+
+def eliminar_institucion(obj, actor):
+    """Elimina la entidad; el llamador abre la transacción atómica y bloquea `obj` con select_for_update.
+
+    - Con convocatorias en el catálogo público: se bloquea (EntidadConConvocatoriasPublicas).
+    - Sus borradores privados no se borran: quedan sin entidad, vuelven a revisión pendiente y se marcan como
+      «Oferente por confirmar»; publicarlos exige «Publicar bajo mi responsabilidad».
+    - El historial de AUD_EVENTO de la entidad se conserva: pierde el vínculo y guarda `institucion_eliminada`.
+    """
+    convocatorias = list(m.Convocatoria.objects.select_for_update().filter(institucion=obj).order_by("id"))
+    publicas_ = m.Convocatoria.objects.filter(pk__in=[c.pk for c in convocatorias]).filter(en_catalogo()).count()
+    if publicas_:
+        raise EntidadConConvocatoriasPublicas(publicas_, muestra_publicas(obj))
+    entidad = {"id": obj.pk, "nombre": obj.nombre, "sector": obj.sector, "pais": obj.pais.codigo, "url_oficial": obj.url_oficial}
+    for conv in convocatorias:
+        antes = detalle(conv)
+        conv.institucion = None
+        conv.save(update_fields=["institucion"])
+        touch(conv)
+        cambios = {"origen": "manual", "antes": antes, "despues": detalle(conv), "entidad_eliminada": entidad}
+        m.Evento.objects.create(actor=actor, accion=ACCION_OFERENTE_ELIMINADO, convocatoria=conv,
+                                cambios=json.loads(json.dumps(cambios, cls=DjangoJSONEncoder)))
+    historicos = list(m.Evento.objects.select_for_update().filter(institucion=obj))
+    for evento in historicos:
+        evento.cambios = {**(evento.cambios or {}), "institucion_eliminada": entidad}
+        evento.institucion = None
+        evento.save(update_fields=["cambios", "institucion"])
+    resumen = {"borradores_desvinculados": len(convocatorias)}
+    m.Evento.objects.create(actor=actor, accion="eliminar_institucion", convocatoria=None, institucion=None, cambios=json.loads(json.dumps(
+        {"origen": "manual", "institucion_eliminada": entidad, **resumen, "convocatorias_desvinculadas": [c.pk for c in convocatorias],
+         "eventos_historicos_conservados": len(historicos)}, cls=DjangoJSONEncoder)))
+    obj.delete()
+    return resumen

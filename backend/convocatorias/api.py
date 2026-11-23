@@ -14,7 +14,7 @@ from .comparacion import evaluar_convocatoria
 from .recomendaciones import recomendar
 from . import models as m, serializers as s
 from .reglas import CONTRATOS, esquema
-from .services import descartado, detalle, audit, touch, publicar, publicas, postulables
+from .services import descartado, detalle, audit, touch, publicar, publicas, postulables, con_contadores, eliminar_institucion, EntidadConConvocatoriasPublicas, muestra_publicas
 
 
 class Administrador(permissions.BasePermission):
@@ -67,15 +67,21 @@ class Catalogos(CatalogosPerfil):
 
 class Instituciones(AuthView):
     permission_classes = [Administrador]
-    http_method_names = ["get", "post", "patch", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "options"]
 
     def get(self, request, pk=None):
         parametros(request, {"page", "page_size", "q"})
         qs = m.Institucion.objects.select_related("pais")
-        if pk is not None: return Response(s.InstitucionSerializer(get_object_or_404(qs, pk=pk)).data)
+        if pk is not None:
+            obj = get_object_or_404(con_contadores(qs), pk=pk)
+            # Contadores y una muestra breve de convocatorias públicas para explicar por qué no se puede eliminar.
+            return Response({**s.InstitucionSerializer(obj).data, "convocatorias_publicas": obj.convocatorias_publicas,
+                             "borradores_privados": obj.borradores_privados, "muestra_publicas": muestra_publicas(obj)})
         query = request.query_params.get("q", "")
         if len(query) > 200: raise serializers.ValidationError({"q": "Máximo 200 caracteres."})
-        return paginar(request, qs.filter(nombre__icontains=query), lambda x: s.InstitucionSerializer(x).data)
+        # Contadores por entidad (anotaciones, sin N+1): convocatorias en el catálogo público y borradores privados.
+        return paginar(request, con_contadores(qs.filter(nombre__icontains=query)), lambda x: {
+            **s.InstitucionSerializer(x).data, "convocatorias_publicas": x.convocatorias_publicas, "borradores_privados": x.borradores_privados})
 
     def write(self, request, pk=None):
         with escritura():
@@ -97,6 +103,17 @@ class Instituciones(AuthView):
         return self.http_method_not_allowed(request) if pk else self.write(request)
     def patch(self, request, pk=None):
         return self.write(request, pk) if pk else self.http_method_not_allowed(request)
+
+    def delete(self, request, pk=None):
+        if pk is None: return self.http_method_not_allowed(request)
+        parametros(request, set())
+        try:
+            with escritura():
+                obj = get_object_or_404(m.Institucion.objects.select_for_update(of=("self",)).select_related("pais"), pk=pk)
+                resumen = eliminar_institucion(obj, request.user)
+        except EntidadConConvocatoriasPublicas as exc:
+            return Response({"detail": str(exc), "convocatorias_publicas": exc.n, "muestra_publicas": exc.muestra}, status=409)
+        return Response(resumen, status=200)
 
 
 def filtrar(request, qs, admin=False):

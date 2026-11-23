@@ -31,8 +31,8 @@ Prefijo `/api/`, barra final y JSON. Las escrituras requieren sesión activa, ro
 | `becas/catalogos/` | GET | 200: países, idiomas, áreas, dominios, tipos de beca y contratos de requisitos |
 | `becas/` | GET | 200: convocatorias públicas paginadas |
 | `becas/<id>/` | GET | 200: detalle público; 404 si no existe, es borrador o está pausada |
-| `gestion/instituciones/` | GET, POST | Lista paginada / creación 201 |
-| `gestion/instituciones/<id>/` | GET, PATCH | Lectura / actualización 200 |
+| `gestion/instituciones/` | GET, POST | Lista paginada con `convocatorias_publicas` y `borradores_privados` por entidad / creación 201 |
+| `gestion/instituciones/<id>/` | GET, PATCH, DELETE | Lectura / actualización 200 / eliminación 200 `{borradores_desvinculados: n}`; 409 si la entidad tiene convocatorias que están o estuvieron en el catálogo público (validadas, incluidas cerradas y pausadas, o con publicación confirmada). Sus borradores privados quedan sin entidad («Oferente por confirmar») y el historial de AUD_EVENTO se conserva con `institucion_eliminada` |
 | `gestion/convocatorias/` | GET, POST | Lista administrativa paginada / borrador 201 |
 | `gestion/convocatorias/<id>/` | GET, PATCH | Detalle / edición 200, vuelve a pendiente |
 | `gestion/convocatorias/<id>/opciones/` | GET, POST | Lista paginada / creación 201 |

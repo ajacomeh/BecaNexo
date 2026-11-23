@@ -147,7 +147,7 @@ Se muestran métodos de negocio; se omite OPTIONS. `{id}` representa el entero d
 | `/api/becas/catalogos/`, `/api/becas/`, `/api/becas/{id}/` | GET catálogos, lista y detalle público | Incluye anónimo |
 | `/api/becas/{id}/comparacion/` | GET evaluación actual | Postulante |
 | `/api/favoritos/`, `/api/favoritos/{id}/` | GET/POST lista; DELETE favorito | Postulante propietario |
-| `/api/gestion/instituciones/`, `/{id}/` | GET/POST colección; GET/PATCH detalle | Administrador |
+| `/api/gestion/instituciones/`, `/{id}/` | GET/POST colección; GET/PATCH/DELETE detalle | Administrador |
 | `/api/gestion/convocatorias/`, `/{id}/` | GET/POST colección; GET/PATCH detalle | Administrador |
 | `/api/gestion/convocatorias/{id}/publicar/`, `/pausar/` | POST acción | Administrador |
 | `/api/gestion/convocatorias/{id}/auditoria/` | GET historial | Administrador |

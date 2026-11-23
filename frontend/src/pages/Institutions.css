@@ -38,8 +38,17 @@
   .institution-search { grid-template-columns: minmax(0, 1fr); }
   .institution-search-actions .button { flex: 1; }
   .institution-row { grid-template-columns: auto minmax(0, 1fr); }
-  .institution-row .text-button { grid-column: 2; justify-self: start; }
   .institution-dialog { width: calc(100% - 16px); max-width: none; max-height: calc(100dvh - 16px); padding: 20px 16px; }
   .institution-dialog .field-grid { grid-template-columns: minmax(0, 1fr); }
   .institution-dialog .form-actions { position: sticky; bottom: -20px; background: #fff; padding-block: 12px; }
 }
+
+.institution-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .25rem 1rem; }
+.institution-delete { color: #a22018; }
+.institution-actions .text-button:focus-visible { outline: 3px solid #167b88; outline-offset: 2px; border-radius: 6px; }
+.institution-notice:focus { outline: none; }
+.institution-notice:empty { display: none; }
+@media (max-width: 700px) { .institution-actions { grid-column: 2; justify-content: flex-start; } }
+.institution-delete-list { margin: 0 0 20px; padding-left: 1.25rem; line-height: 1.6; }
+.institution-delete-list a { overflow-wrap: anywhere; }
+.institution-delete-dialog .button { min-width: 0; }
