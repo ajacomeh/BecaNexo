@@ -4,6 +4,7 @@ import { offersApi } from '../api/client'
 import Button from './Button'
 import Message from './Message'
 import { remaining } from './crawlTime'
+import { estadoEjecucion } from '../pages/estadoEjecucion'
 
 const path = 'gestion/rastreo/control'
 const date = value => value ? new Date(value).toLocaleString('es-EC') : 'Sin fecha programada'
@@ -135,7 +136,7 @@ export default function CrawlingControl() {
     <Message>{error}</Message>
     {state && <div className="crawl-control-status">
       <dl className="crawl-control-metrics"><div><dt>Fuentes activas</dt><dd>{state.fuentes_activas == null ? '—' : `${state.fuentes_activas} ${state.fuentes_activas === 1 ? 'fuente activa' : 'fuentes activas'}`}</dd></div><div><dt>Publicaciones detectadas</dt><dd>{state.publicaciones_total ?? '—'}</dd></div><div><dt>Borradores automáticos</dt><dd>{state.borradores_total ?? '—'}</dd></div></dl>
-      <p className="crawl-control-line">Última corrida: {run ? <><Link to={`/gestion/rastreo/ejecuciones/${run.id}`}>#{run.id}</Link> · {run.estado}{run.inicio && ` · ${date(run.inicio)}`}{incidents > 0 && ` · ${incidents} ${incidents === 1 ? 'incidencia' : 'incidencias'}`}</> : 'sin ejecuciones'}</p>
+      <p className="crawl-control-line">Última corrida: {run ? <><Link to={`/gestion/rastreo/ejecuciones/${run.id}`}>#{run.id}</Link> · {estadoEjecucion(run.estado)}{run.inicio && ` · ${date(run.inicio)}`}{incidents > 0 && ` · ${incidents} ${incidents === 1 ? 'incidencia' : 'incidencias'}`}</> : 'sin ejecuciones'}</p>
       <p className="crawl-control-line">Próxima disponibilidad: {state.puede_iniciar ? `disponible ahora para ${state.fuente_nombre || 'una fuente autorizada'}` : state.proxima_manual ? `${date(state.proxima_manual)}${waiting(state.proxima_manual, now) ? ` · ${remaining(state.proxima_manual, now)}` : ''}` : 'sin fecha disponible'}</p>
       {blockReason && visibleReason && <p id="crawl-availability" className="crawl-control-availability">No se puede iniciar: {blockReason}</p>}
       {failedStart && <p className="crawl-control-availability">El último inicio desde el panel no se completó: {failedStart}.</p>}

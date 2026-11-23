@@ -92,7 +92,9 @@ def execution_data(e):
             'candidatos_registrados': e.candidatos_total,
             # Campos nuevos (los anteriores no cambian): versiones con contenido nuevo (primera observación o cambio
             # relevante) y cambios técnicos (nueva versión por cambio de extractor, normalizador o contrato).
-            'versiones_con_cambios': e.con_cambios_total, 'cambios_tecnicos': e.tecnicos_total}
+            'versiones_con_cambios': e.con_cambios_total, 'cambios_tecnicos': e.tecnicos_total,
+            # Contadores por gravedad: «parcial» solo se debe a incidencias de error (fallos reales).
+            'incidencias_error': e.errores_total, 'incidencias_aviso': e.avisos_total}
 
 
 def executions():
@@ -101,7 +103,9 @@ def executions():
         documentos_total=Count('accesos__documento', distinct=True),
         candidatos_total=Count('candidatoindice', distinct=True),
         con_cambios_total=Count('observaciones', filter=Q(observaciones__resultado__in=('nueva', 'cambio_relevante')), distinct=True),
-        tecnicos_total=Count('observaciones', filter=Q(observaciones__resultado='cambio_bytes'), distinct=True))
+        tecnicos_total=Count('observaciones', filter=Q(observaciones__resultado='cambio_bytes'), distinct=True),
+        errores_total=Count('incidencias', filter=Q(incidencias__gravedad='error'), distinct=True),
+        avisos_total=Count('incidencias', filter=Q(incidencias__gravedad='aviso'), distinct=True))
 
 
 class ReadOnly(AuthView):
@@ -219,21 +223,43 @@ class Ejecuciones(ReadOnly):
         return paginar(request, executions().order_by('-inicio', '-id'), execution_data)
 
 
+PAGINA_DETALLE = 25  # Detalle de ejecución: 25 por página por defecto (máximo 50).
+GRAVEDADES = ('error', 'aviso')
+
+
 class Accesos(ReadOnly):
     def get(self, request, pk):
         parametros(request, {'page', 'page_size'})
         identified(Ejecucion, pk)
         return paginar(request, Acceso.objects.filter(ejecucion_id=pk).order_by('secuencia'),
-            lambda a: {f: getattr(a, f) for f in ('id', 'secuencia', 'rol', 'url_original', 'http_status', 'resultado', 'documento_id', 'publicacion_id', 'inicio_peticion_en', 'fin')})
+            lambda a: {f: getattr(a, f) for f in ('id', 'secuencia', 'rol', 'url_original', 'http_status', 'resultado', 'documento_id', 'publicacion_id', 'inicio_peticion_en', 'fin')},
+            default_size=PAGINA_DETALLE)
 
 
 class Incidencias(ReadOnly):
     def get(self, request, pk):
-        parametros(request, {'page', 'page_size'})
+        parametros(request, {'page', 'page_size', 'gravedad', 'codigo'})
         identified(Ejecucion, pk)
+        todas = Incidencia.objects.filter(ejecucion_id=pk)
+        filtro = {}
+        if 'gravedad' in request.query_params:
+            if request.query_params['gravedad'] not in GRAVEDADES:
+                raise serializers.ValidationError({'gravedad': 'Usa error o aviso.'})
+            filtro['gravedad'] = request.query_params['gravedad']
+        if 'codigo' in request.query_params:
+            codigo = request.query_params['codigo']
+            if not 0 < len(codigo) <= 60:
+                raise serializers.ValidationError({'codigo': 'Código no válido.'})
+            filtro['codigo'] = codigo
         # Código y gravedad son suficientes; no trasladar posibles mensajes técnicos internos.
-        return paginar(request, Incidencia.objects.filter(ejecucion_id=pk).order_by('id'),
-            lambda i: {f: getattr(i, f) for f in ('id', 'codigo', 'gravedad', 'detectada_en', 'publicacion_id', 'version_id')})
+        response = paginar(request, todas.filter(**filtro).order_by('id'),
+            lambda i: {f: getattr(i, f) for f in ('id', 'codigo', 'gravedad', 'detectada_en', 'publicacion_id', 'version_id')},
+            default_size=PAGINA_DETALLE)
+        # Resumen agrupado de toda la ejecución (no depende de los filtros): errores primero y luego por frecuencia.
+        grupos = todas.values('codigo', 'gravedad').annotate(total=Count('id'))
+        response.data['resumen'] = sorted(({'codigo': g['codigo'], 'gravedad': g['gravedad'], 'total': g['total']} for g in grupos),
+                                          key=lambda g: (g['gravedad'] != 'error', -g['total'], g['codigo']))
+        return response
 
 
 class Descargar(ReadOnly):

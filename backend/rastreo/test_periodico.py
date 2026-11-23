@@ -224,7 +224,8 @@ class PeriodicTests(TransactionTestCase):
 
         with patch('convocatorias.siau_red.Downloader.once', side_effect=network) as calls:
             execution = run_manual(source.pk, self.actor.pk, uuid.uuid4())
-        self.assertEqual(summary(execution)['estado'], 'parcial')
+        # Un enlace de bases fuera de la lista cerrada es un aviso por diseño: la corrida no queda «parcial».
+        self.assertEqual(summary(execution)['estado'], 'finalizada')
         publication = Publicacion.objects.get(url_normalizada=NATIONAL_PAGE)
         version = publication.versiones.get()
         self.assertEqual(version.documentos.filter(rol='ficha_html').count(), 1)

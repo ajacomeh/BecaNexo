@@ -105,6 +105,9 @@ class IndiceYBasesV4Tests(TransactionTestCase):
         self.assertEqual(pendientes.get(ZIP_SIAU), 'fuera_de_lista')
         self.assertEqual(pendientes.get(PDF_EXTERNO), 'fuera_de_lista')
         self.assertTrue(run.incidencias.filter(codigo='BASE_NO_PERMITIDA', publicacion=publicacion).exists())
+        # Omitir enlaces fuera de la lista cerrada es una decisión por diseño: aviso, sin degradar a «parcial»
+        self.assertEqual(set(run.incidencias.filter(codigo='BASE_NO_PERMITIDA').values_list('gravedad', flat=True)), {'aviso'})
+        # (El estado «finalizada» con solo este aviso se comprueba en test_periodico.)
 
     @base.ventana_cumplida()
     def test_robots_sigue_mandando_sobre_las_fichas(self):

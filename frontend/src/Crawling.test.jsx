@@ -49,7 +49,7 @@ it('separa descubrimiento de metadatos y muestra candidatos asociados en la ejec
   })
   open('/gestion/rastreo/ejecuciones/10')
   expect(await screen.findByText(/Descubrimiento de metadatos/)).toBeVisible()
-  expect(screen.getByText('SIAU · Estado: parcial')).toBeVisible()
+  expect(screen.getByText('SIAU · Parcial: hubo fallos de red, HTTP o análisis')).toBeVisible()
   expect(screen.getByText('Candidatos registrados').nextSibling).toHaveTextContent('12')
   expect(screen.getByText('Métricas documentales de esta ejecución')).toBeVisible()
   await userEvent.click(screen.getByText('Métricas documentales de esta ejecución'))
@@ -67,7 +67,7 @@ it('presenta las ejecuciones 9 y 10 como descubrimientos parciales con doce cand
   }))))
   open('/gestion/rastreo/ejecuciones')
   await screen.findByRole('link', { name: 'Ejecución 9' })
-  expect(screen.getAllByText('SIAU · Estado: parcial')).toHaveLength(2)
+  expect(screen.getAllByText('SIAU · Parcial: hubo fallos de red, HTTP o análisis')).toHaveLength(2)
   expect(screen.getAllByText('Candidatos registrados')).toHaveLength(2)
   expect(screen.getAllByText('12')).toHaveLength(2)
 })
@@ -117,7 +117,7 @@ it('identifica fuente, estado, última ejecución y borradores en el panel', asy
   expect(screen.getByText('Borradores automáticos').nextSibling).toHaveTextContent('1')
   // La última corrida se resume en una línea: número, estado y fecha (la fuente figura en «Fuentes registradas»).
   const run = screen.getByText(/Última corrida:/).closest('p')
-  expect(run).toHaveTextContent(/^Última corrida: #8 · parcial · /)
+  expect(run).toHaveTextContent(/^Última corrida: #8 · Parcial: hubo fallos de red, HTTP o análisis · /)
   expect(run).toBeVisible()
   expect(screen.queryByText(/siau-nacionales\/3/)).not.toBeVisible()
   await userEvent.click(screen.getByText('Configuración y detalles técnicos'))
@@ -246,7 +246,7 @@ it('presenta el error de descarga sin éxito ficticio', async () => {
 it('ejecución sin publicaciones conserva contadores y acceso a incidencias', async () => {
   vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('ejecuciones/1') ? { id: 1, fuente: { nombre: 'SIAU' }, estado: 'finalizada', accesos: 6, documentos_distintos: 6, publicaciones_observadas: 0, versiones_nuevas: 0, observaciones_sin_cambios: 0 } : list())
   open('/gestion/rastreo/ejecuciones/1')
-  expect(await screen.findByText('SIAU · Descarga finalizada')).toBeVisible()
+  expect(await screen.findByText('SIAU · Completada')).toBeVisible()
   expect(screen.getByText('Publicaciones observadas').nextSibling).toHaveTextContent('0')
   expect(screen.getByRole('heading', { name: 'Incidencias' })).toBeVisible()
 })
@@ -256,7 +256,7 @@ it('cuenta como versiones nuevas solo los cambios de contenido y etiqueta los ca
     accesos: 9, documentos_distintos: 7, publicaciones_observadas: 5, versiones_nuevas: 2, observaciones_sin_cambios: 3,
     versiones_con_cambios: 0, cambios_tecnicos: 2 } : list())
   open('/gestion/rastreo/ejecuciones/2')
-  expect(await screen.findByText('SIAU · Descarga finalizada')).toBeVisible()
+  expect(await screen.findByText('SIAU · Completada')).toBeVisible()
   // versiones_nuevas (2) incluye versiones técnicas; el panel muestra solo las de contenido (versiones_con_cambios).
   expect(screen.getByText('Versiones nuevas').nextSibling).toHaveTextContent('0')
   expect(screen.getByText('Observaciones sin cambios').nextSibling).toHaveTextContent('3')
@@ -267,7 +267,7 @@ it('sin campos nuevos de la API conserva el contador anterior y no muestra cambi
   vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path.endsWith('ejecuciones/3') ? { id: 3, fuente: { nombre: 'SIAU' }, estado: 'finalizada',
     accesos: 4, documentos_distintos: 4, publicaciones_observadas: 2, versiones_nuevas: 2, observaciones_sin_cambios: 0 } : list())
   open('/gestion/rastreo/ejecuciones/3')
-  expect(await screen.findByText('SIAU · Descarga finalizada')).toBeVisible()
+  expect(await screen.findByText('SIAU · Completada')).toBeVisible()
   expect(screen.getByText('Versiones nuevas').nextSibling).toHaveTextContent('2')
   expect(screen.queryByText('Cambio técnico, sin cambios de contenido')).not.toBeInTheDocument()
 })
@@ -365,4 +365,12 @@ it('selecciona por ID global distinto del número, maneja error y agrupa context
   expect(within(group).getAllByText('Contexto compartido')).toHaveLength(1)
   expect(within(group).getByText('maestría · especialización')).toBeVisible()
   expect(get).toHaveBeenCalledWith('gestion/rastreo/publicaciones/1/versiones/22/documentos', {page: 1})
+})
+
+it('estado de ejecución: «Completada», «Completada con avisos» y «Parcial» solo por fallos reales', async () => {
+  const { estadoEjecucion } = await import('./pages/estadoEjecucion')
+  expect(estadoEjecucion('finalizada')).toBe('Completada')
+  expect(estadoEjecucion('finalizada', 12)).toBe('Completada con avisos')
+  expect(estadoEjecucion('parcial', 3)).toBe('Parcial: hubo fallos de red, HTTP o análisis')
+  expect(estadoEjecucion('fallida')).toBe('Fallida')
 })

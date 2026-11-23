@@ -44,9 +44,9 @@ def entero(params, key, default, minimum=1, maximum=2147483647):
     return value
 
 
-def paginar(request, qs, render):
+def paginar(request, qs, render, default_size=12):
     page = entero(request.query_params, "page", 1)
-    size = entero(request.query_params, "page_size", 12, maximum=50)
+    size = entero(request.query_params, "page_size", default_size, maximum=50)
     count = qs.count()
     return Response({"count": count, "page": page, "page_size": size,
                      "results": [render(x) for x in qs[(page-1)*size:page*size]]})

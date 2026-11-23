@@ -883,7 +883,9 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                         candidate = candidate_url(link['url'], BASE) if source.politica_version in ('siau-indice/2', 'siau-nacionales/3', 'siau-nacionales/4') else None
                         if link['url'] not in downloader.pdfs and (not candidate or candidate != link['url'] or len(downloader.pdfs) >= MAX_BASES):
                             pending.append({'url': link['url'], 'estado': 'fuera_de_lista'})
-                            incident(execution, 'BASE_NO_PERMITIDA', 'Enlace de bases fuera de lista cerrada.', publication=publication)
+                            # Aviso: un enlace de bases fuera de la lista cerrada (o por encima del tope de bases) se omite por diseño;
+                            # no es un fallo de red, HTTP ni de análisis y no degrada la corrida a «parcial».
+                            incident(execution, 'BASE_NO_PERMITIDA', 'Enlace de bases fuera de lista cerrada.', severity='aviso', publication=publication)
                             continue
                         if candidate:
                             downloader.pdfs.add(candidate)
