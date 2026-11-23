@@ -464,9 +464,10 @@ class CandidateTransitionTests(TransactionTestCase):
         offer = origin.convocatoria
         self.assertIsNone(offer.institucion_id)
         self.assertTrue(any('entidad oferente' in note for note in origin.pendientes_iniciales))
-        # La entidad oferente la exige errores_publicacion (pending_for_publication solo revisa el enlace oficial).
-        from convocatorias.services import errores_publicacion
-        self.assertTrue(any('institución oferente' in note for note in errores_publicacion(offer, estricto=False)))
+        # La falta de entidad ya no bloquea en errores_publicacion: publicar exige la confirmación expresa (aviso_oferente).
+        from convocatorias.services import aviso_oferente, errores_publicacion
+        self.assertFalse(any('institución oferente' in note for note in errores_publicacion(offer, estricto=False)))
+        self.assertEqual(aviso_oferente(offer), 'Esta beca no tiene una entidad oferente ecuatoriana asignada')
         repeated, created, _ = prepare_automatic_draft(origin.publicacion_id, origin.version_id, allow_partial=True)
         self.assertFalse(created)
         self.assertEqual(repeated.pk, origin.pk)
@@ -492,12 +493,15 @@ class CandidateTransitionTests(TransactionTestCase):
         # (mismo criterio que test_auto_borradores).
         self.assertFalse(any('participación ecuatoriana' in note for note in pending_for_publication(offer, origin)))
 
-    def test_foreign_offerer_is_only_detected_publication(self):
+    def test_foreign_offerer_creates_marked_private_draft(self):
+        # Antes: solo publicación detectada, sin borrador. Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
         run, _ = self.execute(fiche(foreign=True))
         self.assertEqual(run.estado, 'finalizada')
         self.assertEqual(Publicacion.objects.count(), 1)
-        self.assertEqual(BorradorRastreo.objects.count(), 0)
-        self.assertTrue(run.incidencias.filter(codigo='CANDIDATO_PENDIENTE').exists())
+        origin = BorradorRastreo.objects.get()
+        self.assertTrue(origin.datos_iniciales['oferente_no_ecuatoriano'])
+        self.assertIsNone(origin.convocatoria.institucion_id)
+        self.assertFalse(publicas().filter(pk=origin.convocatoria_id).exists())
 
     def test_closed_opportunity_keeps_evidence_without_open_catalog_entry(self):
         run, _ = self.execute(fiche(deadline_text='20 de noviembre de 2020'))

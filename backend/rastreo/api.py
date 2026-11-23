@@ -56,8 +56,15 @@ def publication_situation(p, classify=False):
     recalcula la clasificación vigente con la última versión observada.
     """
     if p.borrador_convocatoria_id:
-        return {'tipo': 'borrador', 'convocatoria_id': p.borrador_convocatoria_id,
-                'motivo': None}
+        from convocatorias.models import BorradorRastreo
+        from convocatorias.services import descartado
+        from .auto_borradores import oferente_externo
+        origin = BorradorRastreo.objects.select_related('convocatoria').get(convocatoria_id=p.borrador_convocatoria_id)
+        no_ec, nombre = oferente_externo(origin)
+        return {'tipo': 'borrador', 'convocatoria_id': p.borrador_convocatoria_id, 'motivo': None,
+                'pendientes': len(origin.pendientes_iniciales or []),
+                'oferente_no_ecuatoriano': no_ec and not origin.convocatoria.institucion_id, 'oferente_detectado': nombre or None,
+                'descartado': descartado(origin.convocatoria)}
     if p.convocatoria_id:
         return {'tipo': 'integrada', 'convocatoria_id': p.convocatoria_id, 'motivo': None}
     if not p.version_observada_id:

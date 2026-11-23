@@ -124,18 +124,35 @@ it('identifica fuente, estado, última ejecución y borradores en el panel', asy
   expect(screen.getByText(/siau-nacionales\/3/)).toBeVisible()
 })
 
-it('muestra en la bandeja el borrador o el motivo claro de descarte, sin confianza', async () => {
-  const draft = { ...publication, situacion: { tipo: 'borrador', convocatoria_id: 22, motivo: null } }
-  const discarded = { ...publication, id: 2, titulo: 'Beca extranjera', situacion: { tipo: 'descartada', convocatoria_id: null,
-    motivo: 'Descartada: oferente extranjero (Universidad extranjera), sin entidad ecuatoriana.' } }
-  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes') ? list([{ id: 1, nombre: 'SIAU prueba' }]) : list([draft, discarded]))
+it('muestra el borrador privado con datos pendientes y oferente no ecuatoriano; lo que no es beca sigue descartado', async () => {
+  // Desde el cambio de regla toda publicación con «beca» en el título tiene borrador privado; el chip «Descartada»
+  // solo queda para contenido que no es una beca (no hay borrador).
+  const draft = { ...publication, situacion: { tipo: 'borrador', convocatoria_id: 22, motivo: null, pendientes: 4,
+    oferente_no_ecuatoriano: true, oferente_detectado: 'Universidad extranjera', descartado: false } }
+  const national = { ...publication, id: 3, titulo: 'Beca nacional', situacion: { tipo: 'borrador', convocatoria_id: 23, motivo: null, pendientes: 0,
+    oferente_no_ecuatoriano: false, oferente_detectado: null, descartado: false } }
+  const discarded = { ...publication, id: 2, titulo: 'Noticia', situacion: { tipo: 'descartada', convocatoria_id: null,
+    motivo: 'Descartada: contenido informativo sin una beca individual identificable.' } }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes') ? list([{ id: 1, nombre: 'SIAU prueba' }]) : list([draft, national, discarded]))
   open()
-  expect(await screen.findByText('Borrador privado', { selector: '.status-pill' })).toBeVisible()
-  expect(screen.getByText(/Borrador privado #22/)).toBeVisible()
+  expect((await screen.findAllByText('Borrador privado', { selector: '.status-pill' })).length).toBe(2)
+  expect(screen.getByText('Datos pendientes (4)', { selector: '.status-pill' })).toBeVisible()
+  expect(screen.getAllByText('Oferente no ecuatoriano', { selector: '.status-pill' })).toHaveLength(1)
+  expect(screen.queryByText('Datos pendientes (0)')).not.toBeInTheDocument()
   expect(screen.queryByText(/onfianza/)).not.toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Abrir borrador' })).toHaveAttribute('href', '/gestion/convocatorias/22')
+  expect(screen.getByRole('link', { name: 'Abrir borrador #22' })).toHaveAttribute('href', '/gestion/convocatorias/22')
+  expect(screen.getByText(/Oferente detectado: Universidad extranjera/)).toBeVisible()
+  expect(screen.queryByText('Sin borrador', { selector: '.status-pill' })).not.toBeInTheDocument()
   expect(screen.getByText('Descartada', { selector: '.status-pill' })).toBeVisible()
-  expect(screen.getByText('Descartada: oferente extranjero (Universidad extranjera), sin entidad ecuatoriana.')).toBeVisible()
+})
+
+it('señala el borrador descartado por el administrador', async () => {
+  const draft = { ...publication, situacion: { tipo: 'borrador', convocatoria_id: 22, motivo: null, pendientes: 1,
+    oferente_no_ecuatoriano: false, oferente_detectado: null, descartado: true } }
+  vi.spyOn(offersApi, 'get').mockImplementation(async path => path.endsWith('/fuentes') ? list([{ id: 1, nombre: 'SIAU prueba' }]) : list([draft]))
+  open()
+  expect(await screen.findByText('Borrador descartado', { selector: '.status-pill' })).toBeVisible()
+  expect(screen.queryByText('Borrador privado', { selector: '.status-pill' })).not.toBeInTheDocument()
 })
 
 it('limpia los filtros de publicaciones y mantiene el acceso al detalle', async () => {

@@ -1,7 +1,7 @@
 import Icon from './Icon'
 import { Link } from 'react-router-dom'
 import FavoriteButton from './FavoriteButton'
-import { stateLabel, closingText } from '../pages/offerDisplay'
+import { stateLabel, closingText, providerLabel } from '../pages/offerDisplay'
 
 import { readable, benefitSummary, unique } from '../pages/catalogPresentation'
 
@@ -20,7 +20,7 @@ export default function CatalogCard({ offer, catalogs, recommendation }) {
   const countries = destinations.map(id => catalogs.paises.find(p => p.id === id)?.nombre).filter(Boolean)
   const financing = benefitSummary(offer.beneficios)
   return <article className="offer-card catalog-card">
-    <div className="offer-card-heading">{recommendation ? <div className="offer-card-statuses">{offer.estado !== 'sin_fecha' && <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>}<span className={`status-pill recommendation-status recommendation-status-${requirementState}`} role="img" aria-label={requirementLabel}><Icon name={requirementIcon} /><span>{requirementLabel}</span></span></div> : <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>}<h2>{offer.titulo}</h2><p className="offer-provider">{offer.institucion?.nombre || 'Entidad oferente: No identificada'}</p></div>
+    <div className="offer-card-heading">{recommendation ? <div className="offer-card-statuses">{offer.estado !== 'sin_fecha' && <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>}<span className={`status-pill recommendation-status recommendation-status-${requirementState}`} role="img" aria-label={requirementLabel}><Icon name={requirementIcon} /><span>{requirementLabel}</span></span></div> : <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>}<h2>{offer.titulo}</h2><p className="offer-provider">{providerLabel(offer)}</p></div>
     <dl className="offer-card-facts"><div><dt>Cierre</dt><dd>{closingText(offer, true)}</dd></div>
       {options.length === 1 && <><div><dt>Nivel y modalidad</dt><dd>{readable(options[0].nivel)} · {readable(options[0].modalidad)}</dd></div></>}
       {options.length > 1 && <div><dt>Opciones de estudio</dt><dd>{options.length} · {unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</dd></div>}

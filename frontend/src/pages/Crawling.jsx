@@ -16,9 +16,19 @@ const situationLabels = { borrador: 'Borrador privado', integrada: 'Borrador int
   sin_borrador: 'Sin borrador', sin_version: 'Sin versión', apta_sin_borrador: 'Apta para borrador' }
 const situationLabel = (situation) => situationLabels[situation?.tipo] || 'Detectada'
 
+// Borrador privado con sus indicadores; las demás situaciones conservan su etiqueta.
+function SituationChips({ situation }) {
+  if (situation?.tipo !== 'borrador') return <span className={`status-pill situation-${situation?.tipo || 'detectada'}`}>{situationLabel(situation)}</span>
+  return <span className="crawl-situation-chips">
+    <span className={`status-pill situation-${situation.descartado ? 'descartada' : 'borrador'}`}>{situation.descartado ? 'Borrador descartado' : 'Borrador privado'}</span>
+    {situation.pendientes > 0 && <span className="status-pill situation-pendientes">Datos pendientes ({situation.pendientes})</span>}
+    {situation.oferente_no_ecuatoriano && <span className="status-pill situation-oferente" title={situation.oferente_detectado || undefined}>Oferente no ecuatoriano</span>}
+  </span>
+}
+
 function SituationNote({ situation }) {
   if (situation?.convocatoria_id) {
-    return <p className="profile-note">Borrador privado #{situation.convocatoria_id} · <Link to={`/gestion/convocatorias/${situation.convocatoria_id}`}>Abrir borrador</Link></p>
+    return <p className="profile-note"><Link to={`/gestion/convocatorias/${situation.convocatoria_id}`}>Abrir borrador #{situation.convocatoria_id}</Link>{situation.oferente_detectado ? ` · Oferente detectado: ${situation.oferente_detectado}` : ''}</p>
   }
   return <p className="profile-note">{situation?.motivo || 'No es una convocatoria aprobada del catálogo.'}</p>
 }
@@ -76,7 +86,7 @@ function Publications() {
     event.preventDefault()
     setFilters({ q: query, ...(source ? { fuente: source } : {}) })
   }}><label htmlFor="crawl-query">Buscar título o URL<input id="crawl-query" name="q" maxLength={200} type="search" value={query} onChange={event => setQuery(event.target.value)} /></label><SourceFilter value={source} onChange={setSource} /><div className="crawl-filter-actions"><Button icon="search" type="submit">Buscar</Button>{(query || source || filters.q || filters.fuente) && <Button icon="clear" className="button-light" type="button" onClick={() => { setQuery(''); setSource(''); setFilters({}) }}>Limpiar</Button>}</div></form>
-    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article className="crawl-publication"><div className="crawl-publication-heading"><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><span className={`status-pill situation-${p.situacion?.tipo || 'detectada'}`}>{situationLabel(p.situacion)}</span></div><p className="crawl-publication-source">{p.fuente.nombre}</p><p className="crawl-publication-url"><Origin url={p.url_original} /></p><dl className="crawl-publication-dates"><div><dt>Primera detección</dt><dd>{date(p.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(p.ultima_deteccion)}</dd></div></dl><div className="crawl-publication-footer"><SituationNote situation={p.situacion} /><Link className="secondary-link" to={`publicaciones/${p.id}`}><Icon name="detail" /><span>Abrir publicación</span></Link></div></article>} />
+    <PageList key={JSON.stringify(filters)} title="Publicaciones detectadas" path="publicaciones" params={filters} render={(p) => <article className="crawl-publication"><div className="crawl-publication-heading"><h3><Link to={`publicaciones/${p.id}`}>{p.titulo}</Link></h3><SituationChips situation={p.situacion} /></div><p className="crawl-publication-source">{p.fuente.nombre}</p><p className="crawl-publication-url"><Origin url={p.url_original} /></p><dl className="crawl-publication-dates"><div><dt>Primera detección</dt><dd>{date(p.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(p.ultima_deteccion)}</dd></div></dl><div className="crawl-publication-footer"><SituationNote situation={p.situacion} /><Link className="secondary-link" to={`publicaciones/${p.id}`}><Icon name="detail" /><span>Abrir publicación</span></Link></div></article>} />
   </>
 }
 

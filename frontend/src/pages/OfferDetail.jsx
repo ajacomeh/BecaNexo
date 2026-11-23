@@ -7,7 +7,7 @@ import Message from '../components/Message'
 import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
 import Comparison from '../components/Comparison'
-import { display, date, dayDate, stateLabel, closingText, publishedPeriod } from './offerDisplay'
+import { display, date, dayDate, stateLabel, closingText, publishedPeriod, providerLabel } from './offerDisplay'
 import { readable, unique, benefitSummary } from './catalogPresentation'
 
 export function BenefitList({ records, nested = false }) {
@@ -169,7 +169,7 @@ export default function OfferDetail() {
   return <OffersLayout><Link className="back-link" to="/becas"><Icon name="back" /><span>Volver al catálogo</span></Link>
     {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
     {!data && !error && <p role="status"><Icon name="loading" />Cargando convocatoria…</p>}
-    {offer && <><header className="offer-detail-hero"><div className="offer-hero-top"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{offer.institucion?.nombre ? `${offer.institucion.nombre} · Entidad oferente ecuatoriana` : 'Entidad oferente: No identificada · Consulta la fuente oficial'}</p></div>
+    {offer && <><header className="offer-detail-hero"><div className="offer-hero-top"><div className="offer-detail-heading"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h1>{offer.titulo}</h1><p className="offer-provider">{providerLabel(offer, { detailed: true })}</p></div>
       <div className="offer-hero-actions">{demonstration ? <><Link className="button offer-official-link" to={`/becas/${offer.id}/postulacion-demo`}><Icon name="external" /><span>Ir a postulación (demostración)</span></Link><p className="small-note">Convocatoria ficticia para demostración; no admite postulaciones.</p></> : officialUrl ? <a className="button offer-official-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver convocatoria oficial</span></a> : <p className="small-note">El enlace oficial no está disponible. Consulta la información publicada antes de continuar.</p>}
         <FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div></div>
       <dl className="offer-hero-facts"><div><dt>Cierre</dt><dd>{closingText(offer)}</dd></div>

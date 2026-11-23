@@ -69,24 +69,32 @@ class ConfianzaTests(TestCase):
                 self.assertTrue(any(mark.startswith('Oferente o cooferente ecuatoriano por verificar') for mark in result['marcas']))
 
     def test_recipients_alone_are_not_an_ecuadorian_offerer(self):
+        # Antes: 'pendiente' sin borrador. Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
         result, _, _ = evaluate('Beca internacional de maestría', 'Dirigida a ciudadanos ecuatorianos y estudiantes del Ecuador.')
-        self.assertEqual(result['estado'], 'pendiente')
-        self.assertEqual(result['confianza'], 'baja')
-        self.assertEqual(result['motivo'], 'Sin borrador: la ficha no nombra una entidad ecuatoriana como oferente o cooferente.')
+        self.assertEqual((result['estado'], result['confianza']), ('apta', 'baja'))
+        self.assertEqual(result['motivo'], 'Borrador privado: la ficha no nombra una entidad ecuatoriana como oferente o cooferente.')
+        self.assertTrue(result['oferente_no_ecuatoriano'])
+        self.assertEqual(result['oferente_detectado'], '')
 
     def test_foreign_only_offerer_is_discarded_even_for_ecuadorian_recipients(self):
+        # Antes: 'fuera_alcance' (Descartada). Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
         result, _, _ = evaluate('Becas Internacionales de Maestría', 'Becas otorgadas por la Universidad Americana de Europa para ecuatorianos.')
-        self.assertEqual(result['estado'], 'fuera_alcance')
-        self.assertTrue(result['motivo'].startswith('Descartada: oferente extranjero (Universidad Americana de Europa'))
+        self.assertEqual(result['estado'], 'apta')
+        self.assertTrue(result['motivo'].startswith('Borrador privado: oferente extranjero (Universidad Americana de Europa'))
+        self.assertTrue(result['oferente_no_ecuatoriano'])
         verified = [{'nombre': 'University abroad', 'rol': 'oferente', 'pais_codigo': 'US', 'pais_verificado': True, 'evidencia': 'Ofrece.'}]
         result, _, _ = evaluate('Beca de grado', 'Para personas ecuatorianas.', oferentes=verified)
-        self.assertEqual(result['estado'], 'fuera_alcance')
-        self.assertEqual(result['motivo'], 'Descartada: oferente extranjero (University abroad), sin entidad ecuatoriana.')
+        self.assertEqual((result['estado'], result['confianza']), ('apta', 'baja'))
+        self.assertEqual(result['motivo'], 'Borrador privado: oferente extranjero (University abroad); no consta entidad ecuatoriana.')
+        self.assertEqual(result['oferente_detectado'], 'University abroad')
 
     def test_unregistered_entity_without_ecuadorian_marker_stays_without_draft(self):
+        # Antes: 'pendiente' sin borrador. Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
         result, _, _ = evaluate('Beca de grado', 'Beca otorgada por la Universidad San Martín.')
-        self.assertEqual(result['estado'], 'pendiente')
+        self.assertEqual(result['estado'], 'apta')
         self.assertIn('no consta como ecuatoriana', result['motivo'])
+        self.assertTrue(result['oferente_no_ecuatoriano'])
+        self.assertIn('Universidad San Martín', result['oferente_detectado'])
 
     def test_national_siau_is_media_and_missing_data_becomes_marks(self):
         result, strict, _ = evaluate('Programa de Becas Nacionales de Grado', '', requisitos='', cierre='', completa=False)
@@ -162,7 +170,8 @@ class BorradorConfianzaFlujoTests(TransactionTestCase):
         offer = origin.convocatoria
         self.assertEqual(row['diagnostico']['pendientes_publicacion'], errores_publicacion(offer, estricto=False))
         self.assertEqual(row['diagnostico']['faltan'], len(row['diagnostico']['pendientes_publicacion']))
-        self.assertGreater(row['diagnostico']['faltan'], 0)
+        # La falta de entidad ya no es un pendiente bloqueante: la exige la confirmación expresa al publicar.
+        self.assertEqual(row['aviso_oferente'], 'Esta beca no tiene una entidad oferente ecuatoriana asignada')
         for params in ({'confianza': 'media'}, {'orden': 'confianza'}):
             self.assertEqual(client.get('/api/gestion/convocatorias/', params).status_code, 400)
         # La publicación sigue bloqueada con sus reglas actuales.
@@ -172,17 +181,19 @@ class BorradorConfianzaFlujoTests(TransactionTestCase):
         self.assertEqual((situation['tipo'], situation['convocatoria_id']), ('borrador', origin.convocatoria_id))
         self.assertNotIn('confianza', situation)
 
-    def test_foreign_only_offer_has_no_draft_and_shows_clear_reason_in_crawl_tray(self):
+    def test_foreign_only_offer_creates_marked_draft_and_shows_it_in_crawl_tray(self):
+        # Antes: sin borrador y «Descartada» en la bandeja. Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
         foreign = [{'nombre': 'Universidad extranjera sintética', 'rol': 'oferente', 'pais_codigo': 'US',
                     'pais_verificado': True, 'evidencia': 'La universidad extranjera ofrece la beca.'}]
         publication = self.capture(offerers=foreign)
-        self.assertFalse(BorradorRastreo.objects.filter(publicacion=publication).exists())
-        incident = Incidencia.objects.get(publicacion=publication, codigo='CANDIDATO_FUERA_ALCANCE')
-        self.assertEqual(incident.detalle, 'Descartada: oferente extranjero (Universidad extranjera sintética), sin entidad ecuatoriana.')
+        origin = BorradorRastreo.objects.get(publicacion=publication)
+        self.assertIsNone(origin.convocatoria.institucion_id)
+        self.assertEqual(origin.datos_iniciales['oferente_detectado'], 'Universidad extranjera sintética')
+        self.assertFalse(Incidencia.objects.filter(publicacion=publication, codigo='CANDIDATO_FUERA_ALCANCE').exists())
         client = self.admin()
         listed = client.get('/api/gestion/rastreo/publicaciones/').data['results']
         situation = next(row['situacion'] for row in listed if row['id'] == publication.pk)
-        self.assertEqual((situation['tipo'], situation['motivo']), ('descartada', incident.detalle))
+        self.assertEqual((situation['tipo'], situation['oferente_no_ecuatoriano'], situation['oferente_detectado']),
+                         ('borrador', True, 'Universidad extranjera sintética'))
         detail = client.get(f'/api/gestion/rastreo/publicaciones/{publication.pk}/').data['situacion']
-        self.assertEqual((detail['tipo'], detail['motivo']), ('descartada', incident.detalle))
-        self.assertEqual(Publicacion.objects.filter(pk=publication.pk, convocatoria__isnull=True).count(), 1)
+        self.assertEqual((detail['tipo'], detail['convocatoria_id']), ('borrador', origin.convocatoria_id))

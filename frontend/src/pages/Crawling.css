@@ -178,3 +178,6 @@
   opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s; }
 .crawl-start:hover .crawl-tooltip, .crawl-start:focus-within .crawl-tooltip { opacity: 1; visibility: visible; }
 .crawl-control-line { color: #2b3d55; }
+.crawl-situation-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.situation-pendientes { background: #fff4dd; color: #765016; }
+.situation-oferente { background: #f4ecea; color: #9b3b24; }

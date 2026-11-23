@@ -605,3 +605,8 @@ a > .ui-icon, .text-button > .ui-icon, .edit-name-link > .ui-icon { margin-right
   .field-meta { flex-direction: column; gap: 4px; }
   .record-rows li { align-items: flex-start; }
 }
+/* Publicación sin entidad oferente ecuatoriana: aviso y confirmación expresa. */
+.publish-warning { margin: 0 0 16px; padding: 12px 14px; border: 1px solid #e3c98a; border-left: 4px solid #8a6519; border-radius: 8px; background: #fff8e8; color: #4b3a12; line-height: 1.55; }
+.publish-warning p { margin: 0 0 8px; }
+.publish-confirm { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; cursor: pointer; }
+.publish-confirm input { width: 18px; height: 18px; accent-color: #8a6519; }

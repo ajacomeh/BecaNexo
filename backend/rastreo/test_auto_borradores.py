@@ -52,9 +52,12 @@ class AutoDraftTests(TransactionTestCase):
         version.datos_extraidos['oferentes'] = [
             {'nombre': 'Universidad extranjera', 'rol': 'oferente', 'pais_codigo': 'US',
              'pais_verificado': True, 'evidencia': 'Universidad extranjera ofrece la beca.'}]
-        self.assertEqual(classify_candidate(publication, version)['estado'], 'fuera_alcance')
+        # Antes: 'fuera_alcance' y 'pendiente'. Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
+        foreign = classify_candidate(publication, version)
+        self.assertEqual((foreign['estado'], foreign['oferente_no_ecuatoriano']), ('apta', True))
         version.datos_extraidos['oferentes'] = []
-        self.assertEqual(classify_candidate(publication, version)['estado'], 'pendiente')
+        missing = classify_candidate(publication, version)
+        self.assertEqual((missing['estado'], missing['oferente_no_ecuatoriano']), ('apta', True))
         version.datos_extraidos['oferentes'] = [
             {'nombre': 'Entidad ecuatoriana sintética', 'rol': 'cooferente', 'pais_codigo': 'EC',
              'pais_verificado': True, 'evidencia': 'Entidad ecuatoriana coofrece la beca.'}]
@@ -278,12 +281,14 @@ class AutoDraftTests(TransactionTestCase):
         option.paises.add(ec)
         self.assertTrue(any('Requisitos extraídos' in note for note in review_notes(offer, origin)))
         from convocatorias.services import errores_publicacion
-        self.assertTrue(any('institución oferente' in note for note in errores_publicacion(offer, estricto=False)))
+        # La entidad ya no figura entre los pendientes bloqueantes; publicar sin ella exige la confirmación expresa.
+        self.assertFalse(any('institución oferente' in note for note in errores_publicacion(offer, estricto=False)))
         admin = APIClient(enforce_csrf_checks=True)
         admin.force_login(self.actor)
         token = admin.get('/api/auth/csrf/').data['csrfToken']
         response = admin.post(f'/api/gestion/convocatorias/{offer.pk}/publicar/', {}, format='json', HTTP_X_CSRFTOKEN=token)
         self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.data['requiere_confirmacion_oferente'])
         self.assertFalse(publicas().filter(pk=offer.pk).exists())
         institution = Institucion.objects.create(nombre='Oferente ecuatoriano revisado', sector='publico', pais=ec)
         offer.institucion = institution
@@ -411,8 +416,10 @@ class AutoDraftTests(TransactionTestCase):
         publication = self.capture(citizenship=False, offerer=False)
         version = latest_version(publication)
         version.datos_extraidos['titulo']['texto_original'] = 'Programa de becas internacionales'
-        self.assertEqual(classify_candidate(publication, version)['estado'], 'pendiente')
-        self.assertFalse(_candidate(publication, version))
+        # Antes: 'pendiente' y no candidata. Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
+        result = classify_candidate(publication, version)
+        self.assertEqual((result['estado'], result['oferente_no_ecuatoriano']), ('apta', True))
+        self.assertTrue(_candidate(publication, version))
 
     def test_verified_foreign_offerer_is_out_of_scope_even_with_ecuadorian_recipients(self):
         foreign = [{'nombre': 'Entidad extranjera sintética', 'rol': 'oferente',
@@ -421,8 +428,11 @@ class AutoDraftTests(TransactionTestCase):
              'evidencia': 'El portal difunde la noticia.'}]
         publication = self.capture(offerers=foreign)
         version = latest_version(publication)
-        self.assertEqual(classify_candidate(publication, version)['estado'], 'fuera_alcance')
-        self.assertIsNone(publication.convocatoria_id)
+        # Antes: 'fuera_alcance' y sin convocatoria. Regla vigente (23/11/2026): toda ficha con «beca» en el título genera borrador privado; sin entidad ecuatoriana lleva la marca de oferente no ecuatoriano.
+        result = classify_candidate(publication, version)
+        self.assertEqual((result['estado'], result['oferente_detectado']), ('apta', 'Entidad extranjera sintética'))
+        publication.refresh_from_db()
+        self.assertIsNone(publication.convocatoria.institucion_id)
 
     def test_editable_candidates_keep_literal_source_and_require_complete_option(self):
         publication = self.capture()

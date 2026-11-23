@@ -118,8 +118,10 @@ class LlenadoAutomaticoTests(TransactionTestCase):
         offer.refresh_from_db()
         self.assertEqual((offer.estado, offer.revision), ('borrador', 'pendiente'))
         pendientes = errores_publicacion(offer, estricto=False)
-        self.assertTrue(pendientes)
         self.assertFalse(any('precargadas' in texto for texto in pendientes))
+        # Sin entidad oferente la publicación exige la confirmación expresa (antes figuraba como pendiente bloqueante).
+        from convocatorias.services import aviso_oferente
+        self.assertIsNotNone(aviso_oferente(offer))
         self.assertEqual(Notificacion.objects.count(), 0)
 
     def test_origen_devuelve_para_publicar_y_evidencia_y_los_endpoints_de_precarga_no_existen(self):

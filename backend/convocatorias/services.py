@@ -9,8 +9,40 @@ from .reglas import EXTERNOS
 
 
 def publicas():
-    return m.Convocatoria.objects.filter(activa=True, revision="validada",
-        institucion__pais__codigo="EC").select_related("institucion", "tipo_beca")
+    # Sin entidad del catálogo solo hay borradores del rastreo publicados con confirmación expresa del administrador.
+    return m.Convocatoria.objects.filter(activa=True, revision="validada").filter(
+        Q(institucion__pais__codigo="EC") | Q(institucion__isnull=True)).select_related("institucion", "tipo_beca")
+
+
+ACCIONES_DESCARTE = ("descartar_borrador", "restaurar_borrador")
+
+
+def descartado(obj):
+    """Un borrador del rastreo está descartado si su último evento de descarte o restauración es un descarte."""
+    ultimo = m.Evento.objects.filter(convocatoria=obj, accion__in=ACCIONES_DESCARTE).order_by("-id").values_list("accion", flat=True).first()
+    return ultimo == "descartar_borrador"
+
+
+def oferente_sin_entidad(obj):
+    """Para un borrador del rastreo sin entidad del catálogo: (marca de oferente no ecuatoriano, nombre detectado)."""
+    if obj.institucion_id:
+        return None
+    origin = m.BorradorRastreo.objects.filter(convocatoria=obj).first()
+    if not origin:
+        return None
+    from rastreo.auto_borradores import oferente_externo
+    no_ec, nombre = oferente_externo(origin)
+    return {"no_ecuatoriano": no_ec, "nombre": nombre or None}
+
+
+def aviso_oferente(obj):
+    """Mensaje que exige la confirmación expresa al publicar sin entidad oferente ecuatoriana; None si no aplica."""
+    if obj.institucion_id:
+        return None
+    externo = oferente_sin_entidad(obj) or {"no_ecuatoriano": False, "nombre": None}
+    if externo["no_ecuatoriano"]:
+        return "Esta beca no corresponde a una entidad oferente ecuatoriana" + (f" (oferente detectado: {externo['nombre']})" if externo["nombre"] else "")
+    return "Esta beca no tiene una entidad oferente ecuatoriana asignada"
 
 
 def postulables():
@@ -25,7 +57,11 @@ def postulables():
 def detalle(obj, publico=False, con_diagnostico=False):
     data = dict(s.ConvocatoriaSerializer(obj).data)
     data["institucion"] = s.InstitucionSerializer(obj.institucion).data if obj.institucion_id else None
+    # Oferente detectado en la ficha cuando no hay entidad del catálogo (texto; nunca se registra como entidad).
+    data["oferente_externo"] = oferente_sin_entidad(obj)
     if not publico:
+        data["descartado"] = descartado(obj)
+        data["aviso_oferente"] = aviso_oferente(obj)
         origin = m.BorradorRastreo.objects.filter(convocatoria=obj).select_related("publicacion__fuente", "version").first()
         data["origen_automatico"] = {"publicacion_id": origin.publicacion_id, "version_id": origin.version_id} if origin else None
         if con_diagnostico:
@@ -85,8 +121,11 @@ def errores_publicacion(obj, estricto=True):
         errors.extend(pending_for_publication(obj, auto_origin))
     if obj.institucion_id and obj.institucion.pais.codigo != "EC":
         errors.append("El oferente identificado debe ser ecuatoriano.")
-    if not obj.institucion_id:
+    # La falta de entidad oferente ecuatoriana ya no bloquea: publicar() exige la confirmación expresa del administrador.
+    if not obj.institucion_id and not auto_origin:
         errors.append("Asigna una institución oferente ecuatoriana antes de publicar.")
+    if auto_origin and descartado(obj):
+        errors.append("El borrador está descartado; restáuralo antes de publicar.")
     if not obj.titulo.strip() or not obj.descripcion.strip() or not obj.url_oficial:
         errors.append("Completa título, descripción y enlace oficial.")
     opciones = list(obj.opciones.filter(activa=True))
@@ -133,22 +172,33 @@ TEXTO_CONFIRMACION = ("Al publicar confirmas que la beca es ofrecida o coofrecid
                       "y que la información coincide con las bases oficiales.")
 
 
+TEXTO_CONFIRMACION_SIN_ENTIDAD = ("Publicar bajo mi responsabilidad: confirmo que la beca no corresponde a una entidad oferente "
+                                  "ecuatoriana registrada y que la información coincide con las bases oficiales.")
+
+
 @transaction.atomic
-def publicar(obj, actor=None):
+def publicar(obj, actor=None, confirmar_oferente=False):
     """Publica si se cumplen los controles. Con `actor` (el administrador que pulsa «Validar y publicar»)
-    valida los requisitos activos pendientes y registra la confirmación en un Evento de auditoría."""
+    valida los requisitos activos pendientes y registra la confirmación en un Evento de auditoría.
+    Sin entidad oferente ecuatoriana, la primera publicación exige `confirmar_oferente` («Publicar bajo mi responsabilidad»)."""
     era_publica = obj.activa and obj.revision == "validada" and (
-        bool(obj.institucion_id) and obj.institucion.pais.codigo == "EC")
+        not obj.institucion_id or obj.institucion.pais.codigo == "EC")
     errors = errores_publicacion(obj)
     if errors: raise ValidationError({"detail": " ".join(errors)})
+    aviso = aviso_oferente(obj)
+    if aviso and not era_publica and not confirmar_oferente:
+        raise ValidationError({"detail": f"{aviso}. Confirma «Publicar bajo mi responsabilidad» para continuar.",
+                               "requiere_confirmacion_oferente": True})
     if actor is not None:
         pendientes = list(obj.requisitos.filter(activo=True, validado=False).values_list("pk", flat=True))
         if pendientes:
             m.Requisito.objects.filter(pk__in=pendientes).update(validado=True)
         origen = m.BorradorRastreo.objects.filter(convocatoria=obj).first()
         ahora = timezone.now()
-        cambios = {"entidad": {"id": obj.institucion_id, "nombre": obj.institucion.nombre, "pais": obj.institucion.pais.codigo},
-                   "fecha": ahora.isoformat(), "texto_confirmacion": TEXTO_CONFIRMACION,
+        externo = oferente_sin_entidad(obj)
+        cambios = {"entidad": {"id": obj.institucion_id, "nombre": obj.institucion.nombre, "pais": obj.institucion.pais.codigo} if obj.institucion_id else None,
+                   "oferente_detectado": externo, "confirmacion_sin_entidad": bool(aviso),
+                   "fecha": ahora.isoformat(), "texto_confirmacion": TEXTO_CONFIRMACION_SIN_ENTIDAD if aviso else TEXTO_CONFIRMACION,
                    "requisitos_validados": pendientes, "oferta_version": obj.version + 1,
                    "version_ficha_id": origen.version_id if origen else None}
         m.Evento.objects.create(actor=actor, accion="confirmar_publicacion", convocatoria=obj,

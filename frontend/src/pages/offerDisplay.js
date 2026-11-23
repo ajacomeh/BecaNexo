@@ -1,3 +1,11 @@
+// Oferente visible: entidad del catálogo o, sin ella, el oferente detectado en la ficha (texto, no ecuatoriano o por confirmar).
+export function providerLabel(offer, { detailed = false } = {}) {
+  if (offer.institucion?.nombre) return detailed ? `${offer.institucion.nombre} · Entidad oferente ecuatoriana` : offer.institucion.nombre
+  const external = offer.oferente_externo
+  if (external?.no_ecuatoriano && external.nombre) return `Oferente: ${external.nombre} (no ecuatoriano)`
+  if (external) return 'Oferente por confirmar'
+  return detailed ? 'Entidad oferente: No identificada · Consulta la fuente oficial' : 'Entidad oferente: No identificada'
+}
 export const display = (value) => value == null || value === '' ? 'No especificado' : String(value)
 export const date = (value) => value ? new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Guayaquil' }).format(new Date(value)) : 'No especificado'
 export const dayDate = (value) => value ? new Intl.DateTimeFormat('es-EC', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`)) : 'No especificado'

@@ -7,7 +7,7 @@ import CatalogFilters from '../components/CatalogFilters'
 import Message from '../components/Message'
 import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
-import { display, closingText, stateLabel } from './offerDisplay'
+import { display, closingText, stateLabel, providerLabel } from './offerDisplay'
 import { readable } from './catalogPresentation'
 import PublicCatalog from './PublicCatalog'
 
@@ -67,7 +67,7 @@ function AdministrativeOffers({ admin }) {
     {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={applyFilters} onClear={clearFilters} stateValues={['borrador', 'pausada', 'abierta', 'cerrada', 'proxima', 'sin_fecha']} activeCount={activeFilterCount} />}
     {catalogs && !data && !error && <p role="status"><Icon name="loading" />Cargando convocatorias…</p>}
     {data && <><div className="catalog-results-heading"><p role="status">{data.count} convocatorias encontradas</p><div className="field"><label htmlFor="admin-offer-order">Ordenar por</label><select id="admin-offer-order" value={params.get('orden') || 'recientes'} onChange={e => orderResults(e.target.value)}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option></select></div></div><div className="offer-grid">{data.results.map((offer) => <article className="offer-card" key={offer.id}>
-      <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span><h2>{offer.titulo}</h2><p>{offer.institucion?.nombre || (offer.revision === 'validada' ? 'Entidad oferente: No identificada' : 'Oferente pendiente de confirmar')}</p>{offer.origen_automatico && <p className="small-note">Borrador del rastreo · Publicación {offer.origen_automatico.publicacion_id}</p>}
+      <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>{offer.descartado && <span className="status-pill situation-descartada">Borrador descartado</span>}<h2>{offer.titulo}</h2><p>{offer.institucion?.nombre || (offer.oferente_externo ? providerLabel(offer) : offer.revision === 'validada' ? 'Entidad oferente: No identificada' : 'Oferente pendiente de confirmar')}</p>{offer.origen_automatico && <p className="small-note">Borrador del rastreo · Publicación {offer.origen_automatico.publicacion_id}</p>}
       <PublicationReadiness offer={offer} /><p>Tipo: {display(offer.tipo_beca_nombre)}</p>
       <p className="accent-note">{offer.beneficios.length ? offer.beneficios.map((b) => `${b.concepto}: ${b.porcentaje != null ? `${b.porcentaje} %` : 'porcentaje no especificado'}`).join(' · ') : 'Beneficios no especificados'}</p>
       <StudySummary options={offer.opciones} /><p>Cierre: {closingText(offer)}</p>

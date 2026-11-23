@@ -155,14 +155,27 @@ def _offerer_evidence(data):
             else 'No se identificó una entidad oferente en la ficha.')
 
 
+MARCA_OFERENTE_NO_EC = 'Oferente no ecuatoriano / no consta entidad ecuatoriana'
+
+
+def oferente_externo(origin):
+    """Marca y nombre detectado del oferente guardados al crear el borrador (sin entidad del catálogo)."""
+    data = origin.datos_iniciales or {}
+    if 'oferente_no_ecuatoriano' in data:
+        return bool(data['oferente_no_ecuatoriano']), data.get('oferente_detectado') or ''
+    return False, ''
+
+
 def classify_candidate(publication, version, *, allow_partial=False):
     """Clasificación al crear el borrador: exige solo lo necesario para revisarlo.
 
-    Crea borrador con confianza alta (oferente ecuatoriano verificado y destinatarios
-    confirmados) o media (entidad ecuatoriana concreta nombrada como oferente o cooferente,
-    o beca nacional de SIAU). Sin esa evidencia, o con oferente solo extranjero, no crea
-    borrador y deja el motivo en lenguaje claro. Lo demás queda como marca visible y se
-    exige al publicar (pending_for_publication). El lugar de estudio no interviene.
+    Toda ficha de una fuente autorizada cuyo título nombra una beca genera un borrador privado:
+    confianza alta (oferente ecuatoriano verificado y destinatarios confirmados), media (entidad
+    ecuatoriana nombrada o beca nacional de SIAU) o baja (oferente extranjero o sin entidad
+    ecuatoriana). En el último caso el borrador lleva la marca de oferente no ecuatoriano y el
+    nombre detectado como texto, sin registrarlo en el catálogo de entidades; publicarla es
+    decisión del administrador. No hay borrador si la ficha no es una beca, si falta evidencia o si
+    excluye expresamente a ciudadanos ecuatorianos (la beca debe admitirlos, no necesariamente en exclusiva).
     """
     marks = []
 
@@ -173,7 +186,14 @@ def classify_candidate(publication, version, *, allow_partial=False):
                 'oferente_mencionado': details.get('oferente_mencionado', ''),
                 'elegibilidad': details.get('elegibilidad', 'no_especificada'),
                 'naturaleza': details.get('naturaleza', 'sin_confirmar'),
-                'datos_esenciales': details.get('datos_esenciales', False)}
+                'datos_esenciales': details.get('datos_esenciales', False),
+                'oferente_no_ecuatoriano': details.get('oferente_no_ecuatoriano', False),
+                'oferente_detectado': details.get('oferente_detectado', '')}
+
+    def no_ecuadorian(name, reason, **details):
+        marks.append(f'{MARCA_OFERENTE_NO_EC}: {name}.' if name else f'{MARCA_OFERENTE_NO_EC}.')
+        details.update(oferente_no_ecuatoriano=True, oferente_detectado=name)
+        return result('apta', reason, 'baja', **details)
     data = version.datos_extraidos or {}
     full_title = _texto(data.get('titulo'))
     title = full_title[:250]
@@ -226,6 +246,7 @@ def classify_candidate(publication, version, *, allow_partial=False):
     details = {'oferente': offerer, 'oferente_mencionado': mentioned,
                'naturaleza': 'beca_individual', 'datos_esenciales': bool(
                    data.get('seccion_completa') and _texto(data.get('requisitos')) and _texto(data.get('cierre')))}
+    # La beca debe admitir ciudadanos ecuatorianos (no necesariamente de forma exclusiva): la exclusión expresa descarta la ficha.
     if re.search(r'\b(?:no\s+(?:pueden|podran)\s+postular|no\s+se\s+admiten|se\s+excluye(?:n)?\s+a?)\s+(?:personas|ciudadan[oa]s?)?\s*ecuatorian[oa]s?\b', scope):
         return result('fuera_alcance', 'Descartada: la ficha excluye expresamente a ciudadanos ecuatorianos.',
                       elegibilidad='excluida', **details)
@@ -239,7 +260,7 @@ def classify_candidate(publication, version, *, allow_partial=False):
     if recipient != 'confirmada':
         marks.append('Participación de ciudadanos ecuatorianos por confirmar en las bases.')
     if offerer == 'solo_extranjero':
-        return result('fuera_alcance', f'Descartada: oferente extranjero ({mentioned}), sin entidad ecuatoriana.', **details)
+        return no_ecuadorian(mentioned, f'Borrador privado: oferente extranjero ({mentioned}); no consta entidad ecuatoriana.', **details)
     if offerer == 'verificado_ec':
         if recipient == 'confirmada':
             return result('apta', 'Borrador privado con oferente ecuatoriano verificado y destinatarios confirmados.', 'alta', **details)
@@ -260,11 +281,11 @@ def classify_candidate(publication, version, *, allow_partial=False):
         return result('apta', 'Borrador privado de beca nacional difundida por SIAU.', 'media', **details)
     if foreign:
         details.update(oferente='extranjero_nombrado', oferente_mencionado=' / '.join(foreign))
-        return result('fuera_alcance', f'Descartada: oferente extranjero ({" / ".join(foreign)}), sin entidad ecuatoriana.', **details)
+        return no_ecuadorian(' / '.join(foreign), f'Borrador privado: oferente extranjero ({" / ".join(foreign)}); no consta entidad ecuatoriana.', **details)
     if unknown:
-        return result('pendiente', f'Sin borrador: la entidad nombrada ({" / ".join(unknown)}) no consta como ecuatoriana. '
-                      'Regístrala en Entidades oferentes si corresponde y vuelve a evaluar la publicación.', **details)
-    return result('pendiente', 'Sin borrador: la ficha no nombra una entidad ecuatoriana como oferente o cooferente.', **details)
+        return no_ecuadorian(' / '.join(unknown), f'Borrador privado: la entidad nombrada ({" / ".join(unknown)}) no consta como ecuatoriana. '
+                             'Si lo es, regístrala en Entidades oferentes y asígnala.', **details)
+    return no_ecuadorian('', 'Borrador privado: la ficha no nombra una entidad ecuatoriana como oferente o cooferente.', **details)
 
 
 def candidate_assessment(publication, version):
@@ -448,7 +469,11 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
         institution_suggestion = matches[0] if len(matches) == 1 else None
     requirements = _texto(data.get('requisitos'))
     pending = []
-    pending.append('Identificar entidad oferente si la evidencia lo permite; no atribuir la fuente difusora.')
+    if assessment['oferente_no_ecuatoriano']:
+        pending.append('Oferente no ecuatoriano o sin entidad ecuatoriana: publicarla exige confirmación expresa '
+                       '(«Publicar bajo mi responsabilidad»).')
+    else:
+        pending.append('Identificar entidad oferente si la evidencia lo permite; no atribuir la fuente difusora.')
     if assessment['elegibilidad'] == 'no_especificada':
         pending.append('Confirmar en las bases si ciudadanos ecuatorianos pueden participar.')
     if not description: pending.append('Completar descripción respaldada.')
@@ -468,6 +493,8 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
                 'destino_mencionado': _literal((data.get('estudios') or {}).get('destino'), 500),
                 'beneficio_original': _texto(data.get('beneficio')),
                 'url_publicacion': publication.url_original,
+                'oferente_no_ecuatoriano': assessment['oferente_no_ecuatoriano'],
+                'oferente_detectado': assessment['oferente_detectado'],
                 'clasificacion_inicial': assessment}
     identity = hashlib.sha256(f'rastreo:{publication.pk}'.encode()).hexdigest()
     offer = Convocatoria.objects.create(institucion=None, titulo=title, descripcion=description,

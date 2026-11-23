@@ -81,7 +81,9 @@ class PublicacionDirectaTests(TransactionTestCase):
         client = self.admin()
         respuesta = self.publicar(client, offer)
         self.assertEqual(respuesta.status_code, 400)
-        self.assertIn('institución oferente ecuatoriana', str(respuesta.data))
+        # Sin entidad ya no es un bloqueo duro: se exige la confirmación «Publicar bajo mi responsabilidad».
+        self.assertIn('Publicar bajo mi responsabilidad', str(respuesta.data))
+        self.assertTrue(respuesta.data['requiere_confirmacion_oferente'])
         extranjera = Institucion.objects.create(nombre='Universidad extranjera de prueba', sector='privado',
                                                 pais=Pais.objects.get_or_create(codigo='US', defaults={'nombre': 'Estados Unidos'})[0])
         type(offer).objects.filter(pk=offer.pk).update(institucion=extranjera)

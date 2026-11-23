@@ -94,6 +94,8 @@ export default function OfferEditor() {
   const [loaded, setLoaded] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmProvider, setConfirmProvider] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [notice, setNotice] = useState('')
   const [retry, setRetry] = useState(0)
   useEffect(() => {
@@ -102,11 +104,17 @@ export default function OfferEditor() {
       .then(([catalogs, institutions, offer]) => { if (live) { setLoaded({ catalogs, institutions, offer }); setError('') } }).catch((e) => { if (live) setError(e.message) })
     return () => { live = false }
   }, [id, retry])
-  async function action(name) {
+  async function action(name, data = {}) {
     setBusy(true); setError(''); setNotice('')
-    try { const offer = await offersApi.write(`gestion/convocatorias/${id}/${name}`, 'POST'); setLoaded((old) => ({ ...old, offer })); setNotice(name === 'publicar' ? 'Convocatoria publicada.' : 'Convocatoria pausada.') }
+    try {
+      const offer = await offersApi.write(`gestion/convocatorias/${id}/${name}`, 'POST', data)
+      setLoaded((old) => ({ ...old, offer })); setConfirmProvider(false); setConfirmDiscard(false)
+      setNotice({ publicar: 'Convocatoria publicada.', pausar: 'Convocatoria pausada.', descartar: 'Borrador descartado. No se publicará ni se volverá a crear desde el rastreo.', restaurar: 'Borrador restaurado.' }[name])
+    }
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
+  const providerWarning = loaded?.offer?.aviso_oferente
+  const automaticDraft = Boolean(loaded?.offer?.origen_automatico) && loaded?.offer?.revision !== 'validada'
   function childSaved(name, row, deletedId) {
     setNotice(deletedId ? 'Registro eliminado. Revisa y publica nuevamente para mostrar los cambios.' : 'Registro guardado. Revisa y publica nuevamente para mostrar los cambios.')
     setLoaded((old) => ({ ...old, offer: { ...old.offer, version: old.offer.version + 1, revision: 'pendiente', estado: old.offer.activa ? 'borrador' : 'pausada',
@@ -124,8 +132,16 @@ export default function OfferEditor() {
         else { setLoaded((old) => ({ ...old, offer })); setNotice('Cambios guardados. Publica de nuevo después de revisar.') }
       }} /></section>
       {loaded.offer && <><OriginPanel offer={loaded.offer} /><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
-        <section className="profile-card"><h2>Revisión y publicación</h2><p className="profile-note">Al publicar confirmas que la beca es ofrecida o coofrecida por la entidad ecuatoriana indicada y que la información coincide con las bases oficiales.</p>
-          <div className="form-actions"><Button icon="publish" busy={busy} onClick={() => action('publicar')}>Validar y publicar</Button>{loaded.offer.revision === 'validada' && loaded.offer.activa && <><Button icon="pause" disabled={busy} className="button-light" onClick={() => action('pausar')}>Pausar convocatoria</Button><Link to={`/becas/${id}`}>Ver en el catálogo</Link></>}</div></section></>}
+        <section className="profile-card"><h2>Revisión y publicación</h2>
+          {loaded.offer.descartado && <p className="publish-warning" role="note">Borrador descartado: no se publica ni se vuelve a crear desde el rastreo. Puedes restaurarlo.</p>}
+          {providerWarning && !loaded.offer.descartado ? <div className="publish-warning" role="note"><p><strong>{providerWarning}.</strong> Solo puedes publicarla bajo tu responsabilidad; en el catálogo se mostrará el oferente detectado o «Oferente por confirmar».</p>
+            <label className="publish-confirm"><input type="checkbox" checked={confirmProvider} onChange={(event) => setConfirmProvider(event.target.checked)} disabled={busy} /> Publicar bajo mi responsabilidad</label></div>
+            : !loaded.offer.descartado && <p className="profile-note">Al publicar confirmas que la beca es ofrecida o coofrecida por la entidad ecuatoriana indicada y que la información coincide con las bases oficiales.</p>}
+          <div className="form-actions"><Button icon="publish" busy={busy} disabled={loaded.offer.descartado || (providerWarning && !confirmProvider)} onClick={() => action('publicar', providerWarning ? { confirmar_oferente_no_ecuatoriano: true } : {})}>Validar y publicar</Button>
+          {automaticDraft && (loaded.offer.descartado
+            ? <Button icon="refresh" disabled={busy} className="button-light" onClick={() => action('restaurar')}>Restaurar borrador</Button>
+            : confirmDiscard ? <><Button icon="delete" disabled={busy} className="button-danger" onClick={() => action('descartar')}>Confirmar descarte</Button><Button icon="cancel" disabled={busy} className="button-light" onClick={() => setConfirmDiscard(false)}>Cancelar</Button></>
+              : <Button icon="delete" disabled={busy} className="button-light" onClick={() => setConfirmDiscard(true)}>Descartar borrador</Button>)}{loaded.offer.revision === 'validada' && loaded.offer.activa && <><Button icon="pause" disabled={busy} className="button-light" onClick={() => action('pausar')}>Pausar convocatoria</Button><Link to={`/becas/${id}`}>Ver en el catálogo</Link></>}</div></section></>}
     </>}
   </OffersLayout>
 }

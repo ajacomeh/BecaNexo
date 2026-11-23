@@ -14,7 +14,7 @@ from .comparacion import evaluar_convocatoria
 from .recomendaciones import recomendar
 from . import models as m, serializers as s
 from .reglas import CONTRATOS, esquema
-from .services import detalle, audit, touch, publicar, publicas, postulables
+from .services import descartado, detalle, audit, touch, publicar, publicas, postulables
 
 
 class Administrador(permissions.BasePermission):
@@ -313,14 +313,30 @@ class Accion(AuthView):
     http_method_names = ["post", "options"]
 
     def post(self, request, pk, accion):
-        if request.data: raise serializers.ValidationError({"detail": "Esta acción no acepta campos."})
+        datos = dict(request.data) if hasattr(request.data, "keys") else request.data
+        confirmar = False
+        if accion == "publicar" and datos:
+            # Único campo admitido: la confirmación expresa de publicar sin entidad oferente ecuatoriana.
+            if set(datos) != {"confirmar_oferente_no_ecuatoriano"} or datos["confirmar_oferente_no_ecuatoriano"] is not True:
+                raise serializers.ValidationError({"detail": "Solo se admite confirmar_oferente_no_ecuatoriano: true."})
+            confirmar = True
+        elif datos:
+            raise serializers.ValidationError({"detail": "Esta acción no acepta campos."})
         with escritura():
             institution_id = get_object_or_404(m.Convocatoria, pk=pk).institucion_id
             if institution_id is not None:
                 m.Institucion.objects.select_for_update().get(pk=institution_id)
             obj = get_object_or_404(m.Convocatoria.objects.select_for_update(), pk=pk)
             before = detalle(obj)
-            if accion == "publicar": publicar(obj, request.user)
+            if accion == "publicar": publicar(obj, request.user, confirmar)
+            elif accion in ("descartar", "restaurar"):
+                if not m.BorradorRastreo.objects.filter(convocatoria=obj).exists() or obj.revision == "validada":
+                    raise serializers.ValidationError({"detail": "Solo se descarta o restaura un borrador privado del rastreo."})
+                if (accion == "descartar") == descartado(obj):
+                    raise serializers.ValidationError({"detail": "El borrador ya está descartado." if accion == "descartar" else "El borrador no está descartado."})
+                result = detalle(obj)
+                audit(request.user, f"{accion}_borrador", before, result, convocatoria=obj)
+                return Response(detalle(obj))
             else:
                 if not obj.activa or obj.revision != "validada":
                     raise serializers.ValidationError({"detail": "Solo se puede pausar una convocatoria publicada y activa."})
