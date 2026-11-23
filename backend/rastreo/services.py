@@ -610,6 +610,26 @@ def summary(execution):
 
 INTERRUMPIDA_MINUTOS = 10
 ROTACION = 'Más fichas o páginas de las que caben en esta corrida; se cubren por rotación en las siguientes.'
+# Cupo de MAX_FICHAS reservado para volver a observar publicaciones ya conocidas (la más antigua primero).
+MAX_FICHAS_CONOCIDAS = 6
+
+
+def seleccionar_fichas(source, candidates, limit=MAX_FICHAS, known_limit=MAX_FICHAS_CONOCIDAS):
+    """Reparte el cupo entre publicaciones conocidas y candidatos nuevos.
+
+    Hasta `known_limit` conocidas de la fuente, por última detección más antigua, aunque no aparezcan en el
+    índice de esta corrida (se piden por su URL guardada si cumple el contrato de ficha de SIAU); el resto,
+    candidatos nuevos en el orden del índice. Los cupos que sobran de un lado pasan al otro; nunca más de `limit`.
+    Devuelve (fichas, hay_mas).
+    """
+    known = [url for url in Publicacion.objects.filter(fuente=source).order_by('ultima_deteccion', 'id')
+             .values_list('url_normalizada', flat=True) if candidate_url(url, NATIONAL_FICHA) == url]
+    known_set = set(known)
+    new = [url for url in dict.fromkeys(candidates) if url not in known_set]
+    take_known = known[:max(known_limit, limit - len(new))]
+    take_new = new[:limit - len(take_known)]
+    take_known = known[:limit - len(take_new)]
+    return [*take_known, *take_new], len(known) + len(new) > limit
 
 
 def _cerrar_interrumpidas(source):
@@ -823,10 +843,8 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                                 except AccessError:
                                     pass  # Se conserva la posición anterior para el próximo ciclo.
                         candidates = list(dict.fromkeys([*discovered, *extra, *pages]))
-                        known = {url: seen for url, seen in Publicacion.objects.filter(
-                            fuente=source, url_normalizada__in=candidates).values_list('url_normalizada', 'ultima_deteccion')}
-                        pages = sorted(candidates, key=lambda url: (url in known, known.get(url) or timezone.now()))[:MAX_FICHAS]
-                        truncated = truncated or config['max_num_pages'] > 2 or len(candidates) > MAX_FICHAS
+                        pages, more = seleccionar_fichas(source, candidates)
+                        truncated = truncated or config['max_num_pages'] > 2 or more
                     else:
                         truncated = truncated or len(pages) + len([url for url in discovered if url not in pages]) > MAX_FICHAS
                         pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
