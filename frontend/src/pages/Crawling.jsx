@@ -1,6 +1,6 @@
 import Icon from '../components/Icon'
 import { useEffect, useRef, useState } from 'react'
-import { Link, Route, Routes, useParams, useLocation } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useParams, useLocation } from 'react-router-dom'
 import { offersApi } from '../api/client'
 import ProfileLayout from '../components/ProfileLayout'
 import Button from '../components/Button'
@@ -216,18 +216,6 @@ function Publication() {
   </Remote></>
 }
 
-function Candidate({ item }) {
-  return <article className="crawl-publication crawl-candidate"><div className="crawl-publication-heading"><h3>{item.titulo}</h3><span className="status-pill">Pendiente</span></div>
-    <p className="crawl-publication-source">{item.fuente}</p><p className="crawl-publication-url"><Origin url={item.url} /></p>
-    <dl className="crawl-publication-dates"><div><dt>Primera detección</dt><dd>{date(item.primera_deteccion)}</dd></div><div><dt>Última detección</dt><dd>{date(item.ultima_deteccion)}</dd></div><div><dt>Página de origen</dt><dd>{item.pagina}</dd></div><div><dt>Ejecución de registro</dt><dd><Link to={`/gestion/rastreo/ejecuciones/${item.ejecucion_id}`}>Ejecución {item.ejecucion_id}</Link></dd></div></dl>
-  </article>
-}
-
-function Candidates({ execution }) {
-  return <><p className="crawl-detail-warning">Estos registros son enlaces detectados automáticamente. Todavía no constituyen convocatorias verificadas ni publicadas.</p>
-    <PageList key={execution || 'all'} title={execution ? 'Candidatos registrados en esta ejecución' : 'Candidatos del índice'} path="candidatos-indice" params={execution ? { ejecucion: execution } : {}} render={(item) => <Candidate item={item} />} /></>
-}
-
 function ExecutionInfo({ item }) {
   const metadata = item.tipo === 'metadatos_indice'
   const documentaryMetrics = <dl className="crawl-metrics"><div><dt>{metadata ? 'Accesos documentales registrados' : 'Accesos HTTP (incluye intentos)'}</dt><dd>{item.accesos}</dd></div><div><dt>Documentos distintos de esta ejecución</dt><dd>{item.documentos_distintos}</dd></div><div><dt>Publicaciones observadas</dt><dd>{item.publicaciones_observadas}</dd></div><div><dt>Versiones nuevas</dt><dd>{item.versiones_con_cambios ?? item.versiones_nuevas}</dd></div><div><dt>Observaciones sin cambios</dt><dd>{item.observaciones_sin_cambios}</dd></div>{item.cambios_tecnicos > 0 && <div><dt>Cambio técnico, sin cambios de contenido</dt><dd>{item.cambios_tecnicos}</dd></div>}</dl>
@@ -236,7 +224,7 @@ function ExecutionInfo({ item }) {
 
 function Execution() {
   const { id } = useParams()
-  return <><Link to="/gestion/rastreo/ejecuciones"><Icon name="back" /><span>Volver a ejecuciones</span></Link><h2>Ejecución {id}</h2><Remote key={id} path={`ejecuciones/${id}`}>{(e) => <><ExecutionInfo item={e} />{e.tipo === 'metadatos_indice' ? <Candidates execution={id} /> : <p>Una ejecución completada no aprueba documentos. Los documentos distintos pueden incluir evidencia almacenada anteriormente.</p>}
+  return <><Link to="/gestion/rastreo/ejecuciones"><Icon name="back" /><span>Volver a ejecuciones</span></Link><h2>Ejecución {id}</h2><Remote key={id} path={`ejecuciones/${id}`}>{(e) => <><ExecutionInfo item={e} />{e.tipo !== 'metadatos_indice' && <p>Una ejecución completada no aprueba documentos. Los documentos distintos pueden incluir evidencia almacenada anteriormente.</p>}
     <ExecutionTabs key={id} execution={id} item={e} label={label} /></>}</Remote>
   </>
 }
@@ -244,8 +232,7 @@ function Execution() {
 export default function Crawling() {
   const { pathname } = useLocation()
   const executions = pathname.includes("/ejecuciones")
-  const candidates = pathname.includes("/candidatos-indice")
-  return <ProfileLayout><div className="crawl"><h1>Rastreo</h1><p>Consulta publicaciones y evidencias detectadas por fuentes autorizadas. La revisión y publicación se completan en Convocatorias.</p><nav className="heading-actions crawl-tabs" aria-label="Secciones de rastreo"><Link aria-current={!executions && !candidates ? "page" : undefined} to="/gestion/rastreo">Publicaciones detectadas</Link><Link aria-current={executions ? "page" : undefined} to="/gestion/rastreo/ejecuciones">Ejecuciones</Link><Link aria-current={candidates ? "page" : undefined} to="/gestion/rastreo/candidatos-indice">Candidatos del índice</Link></nav>
-    <Routes><Route index element={<Publications />} /><Route path="publicaciones/:id" element={<Publication />} /><Route path="candidatos-indice" element={<Candidates />} /><Route path="ejecuciones" element={<PageList title="Ejecuciones" path="ejecuciones" render={(e) => <div><h3><Link to={`/gestion/rastreo/ejecuciones/${e.id}`}>Ejecución {e.id}</Link></h3><ExecutionInfo item={e} /><Link className="secondary-link" to={`/gestion/rastreo/ejecuciones/${e.id}`}><Icon name="detail" /><span>Ver detalle de ejecución</span></Link></div>} />} /><Route path="ejecuciones/:id" element={<Execution />} /><Route path="*" element={<p>Ruta de rastreo no encontrada.</p>} /></Routes>
+  return <ProfileLayout><div className="crawl"><h1>Rastreo</h1><p>Consulta publicaciones y evidencias detectadas por fuentes autorizadas. La revisión y publicación se completan en Convocatorias.</p><nav className="heading-actions crawl-tabs" aria-label="Secciones de rastreo"><Link aria-current={!executions ? "page" : undefined} to="/gestion/rastreo">Publicaciones detectadas</Link><Link aria-current={executions ? "page" : undefined} to="/gestion/rastreo/ejecuciones">Ejecuciones</Link></nav>
+    <Routes><Route index element={<Publications />} /><Route path="publicaciones/:id" element={<Publication />} />{/* Ruta antigua: la pestaña «Candidatos del índice» se retiró; los candidatos siguen en la API como auditoría. */}<Route path="candidatos-indice" element={<Navigate to="/gestion/rastreo" replace />} /><Route path="ejecuciones" element={<PageList title="Ejecuciones" path="ejecuciones" render={(e) => <div><h3><Link to={`/gestion/rastreo/ejecuciones/${e.id}`}>Ejecución {e.id}</Link></h3><ExecutionInfo item={e} /><Link className="secondary-link" to={`/gestion/rastreo/ejecuciones/${e.id}`}><Icon name="detail" /><span>Ver detalle de ejecución</span></Link></div>} />} /><Route path="ejecuciones/:id" element={<Execution />} /><Route path="*" element={<p>Ruta de rastreo no encontrada.</p>} /></Routes>
   </div></ProfileLayout>
 }

@@ -13,35 +13,19 @@ const publication = { id: 1, titulo: 'Publicación sintética', fuente: { id: 1,
 const candidate = { id: 24, titulo: 'Enlace de prueba', fuente: 'SIAU prueba', url: 'https://siau.senescyt.gob.ec/beca/', pagina: 3, primera_deteccion: '2026-11-15T10:00:00Z', ultima_deteccion: '2026-11-16T10:00:00Z', ejecucion_id: 10, estado: 'pendiente' }
 function open(path = '/gestion/rastreo') { render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>) }
 
-it('muestra los candidatos pendientes con total, procedencia y paginación', async () => {
-  const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path, params) => path.endsWith('/candidatos-indice')
-    ? list([{ ...candidate, id: params.page === 2 ? 23 : 24 }], 24) : list())
+it('la ruta antigua de candidatos redirige a Publicaciones detectadas y solo quedan dos pestañas', async () => {
+  const get = vi.spyOn(offersApi, 'get').mockImplementation(async () => list())
   open('/gestion/rastreo/candidatos-indice')
-  expect(await screen.findByRole('heading', { name: 'Candidatos del índice', level: 2 })).toBeVisible()
-  expect(screen.getByText(/Todavía no constituyen convocatorias verificadas ni publicadas/)).toBeVisible()
-  expect(screen.getByText('Página 1 de 2 · 24 registros')).toBeVisible()
-  expect(screen.getByText('Enlace de prueba')).toBeVisible()
-  expect(screen.getByRole('link', { name: candidate.url })).toHaveAttribute('href', candidate.url)
-  expect(screen.getByRole('link', { name: 'Ejecución 10' })).toHaveAttribute('href', '/gestion/rastreo/ejecuciones/10')
-  expect(document.querySelector('.crawl-candidate')).toHaveTextContent('Página de origen3')
-  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
-  expect(get).toHaveBeenCalledWith('gestion/rastreo/candidatos-indice', { page: 2 })
+  const nav = await screen.findByRole('navigation', { name: 'Secciones de rastreo' })
+  expect(within(nav).getAllByRole('link').map(link => link.textContent)).toEqual(['Publicaciones detectadas', 'Ejecuciones'])
+  expect(within(nav).getByRole('link', { name: 'Publicaciones detectadas' })).toHaveAttribute('aria-current', 'page')
+  expect(await screen.findByRole('heading', { name: 'Publicaciones detectadas', level: 2 })).toBeVisible()
+  expect(screen.queryByText('Ruta de rastreo no encontrada.')).not.toBeInTheDocument()
+  expect(screen.queryByText(/Candidatos del índice/)).not.toBeInTheDocument()
+  expect(get.mock.calls.some(([path]) => path.endsWith('/candidatos-indice'))).toBe(false)
 })
 
-it('permite reintentar una consulta de candidatos fallida', async () => {
-  let attempts = 0
-  vi.spyOn(offersApi, 'get').mockImplementation(async path => {
-    if (!path.endsWith('/candidatos-indice')) return list()
-    if (++attempts === 1) throw new Error('Consulta temporalmente no disponible')
-    return list([candidate])
-  })
-  open('/gestion/rastreo/candidatos-indice')
-  expect(await screen.findByText('Consulta temporalmente no disponible')).toBeVisible()
-  await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
-  expect(await screen.findByText('Enlace de prueba')).toBeVisible()
-})
-
-it('separa descubrimiento de metadatos y muestra candidatos asociados en la ejecución', async () => {
+it('separa descubrimiento de metadatos y deja solo el resumen, sin listado de candidatos', async () => {
   const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path) => {
     if (path.endsWith('/ejecuciones/10')) return { id: 10, fuente: { nombre: 'SIAU' }, estado: 'parcial', tipo: 'metadatos_indice', candidatos_registrados: 12, accesos: 0, documentos_distintos: 0, publicaciones_observadas: 0, versiones_nuevas: 0, observaciones_sin_cambios: 0 }
     if (path.endsWith('/candidatos-indice')) return list([candidate], 12)
@@ -54,9 +38,9 @@ it('separa descubrimiento de metadatos y muestra candidatos asociados en la ejec
   expect(screen.getByText('Métricas documentales de esta ejecución')).toBeVisible()
   await userEvent.click(screen.getByText('Métricas documentales de esta ejecución'))
   expect(screen.getByText('Publicaciones observadas').nextSibling).toHaveTextContent('0')
-  expect(await screen.findByRole('heading', { name: 'Candidatos registrados en esta ejecución' })).toBeVisible()
-  expect(get).toHaveBeenCalledWith('gestion/rastreo/candidatos-indice', { ejecucion: '10', page: 1 })
-  expect(screen.getByRole('link', { name: candidate.url })).toHaveAttribute('href', candidate.url)
+  expect(screen.queryByRole('heading', { name: 'Candidatos registrados en esta ejecución' })).not.toBeInTheDocument()
+  expect(screen.queryByText(candidate.url)).not.toBeInTheDocument()
+  expect(get.mock.calls.some(([path]) => path.endsWith('/candidatos-indice'))).toBe(false)
 })
 
 it('presenta las ejecuciones 9 y 10 como descubrimientos parciales con doce candidatos cada una', async () => {
