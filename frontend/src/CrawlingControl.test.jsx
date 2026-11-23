@@ -41,7 +41,7 @@ it('muestra el bloqueo HTTP 429 y lo levanta con motivo y clave estable al reint
   expect(write).toHaveBeenCalledTimes(2)
   expect(write.mock.calls[0][0]).toBe('gestion/rastreo/fuentes/1/desbloquear')
   expect(write.mock.calls[0][2]).toEqual({ motivo: 'Revisé la respuesta de la fuente.', clave_accion: write.mock.calls[1][2].clave_accion })
-  expect(get).toHaveBeenCalledTimes(2)
+  expect(get.mock.calls.filter(([ruta]) => ruta === 'gestion/rastreo/control')).toHaveLength(2)
 })
 
 it('muestra frecuencia, historial y deshabilita el botón antes de la próxima ventana', async () => {
@@ -73,7 +73,7 @@ it('solicita inicio con CSRF a través del cliente existente y sigue el estado',
   expect(write).toHaveBeenCalledWith('gestion/rastreo/control', 'POST', { motivo: 'Comprobación administrativa' })
   expect(await screen.findByText(/Inicio solicitado/)).toBeVisible()
   expectBlocked()
-  expect(get).toHaveBeenCalledTimes(2)
+  expect(get.mock.calls.filter(([ruta]) => ruta === 'gestion/rastreo/control')).toHaveLength(2)
 })
 
 it('informa errores de consulta sin presentar una captura ficticia', async () => {
@@ -207,4 +207,25 @@ it('resume la última corrida en una sola línea, sin detalles técnicos ni punt
   vi.mocked(offersApi.get).mockResolvedValue({ ...ready, ultima_ejecucion: null, ultima_programada: null })
   open()
   expect(await screen.findByText('Última corrida: sin ejecuciones')).toBeVisible()
+})
+
+it('la última corrida usa la misma etiqueta de estado que Ejecuciones («Completada con avisos»)', async () => {
+  const inicio = '2026-11-23T17:58:00Z'
+  const get = vi.spyOn(offersApi, 'get').mockImplementation(async (ruta) => ruta === 'gestion/rastreo/ejecuciones/16'
+    ? { id: 16, estado: 'finalizada', incidencias_error: 0, incidencias_aviso: 11 }
+    : { ...ready, ultima_ejecucion: { id: 16, estado: 'finalizada', inicio },
+        ultima_programada: { ejecucion_id: 16, origen: 'programada', estado: 'finalizada', inicio, incidencias_total: 11 } })
+  open()
+  const line = (await screen.findByText(/Última corrida:/)).closest('p')
+  await within(line).findByText(/Completada con avisos/)
+  expect(line).toHaveTextContent(/#16 · Completada con avisos · .* · 11 incidencias$/)
+  expect(get).toHaveBeenCalledWith('gestion/rastreo/ejecuciones/16')
+})
+
+it('una corrida parcial se etiqueta igual que en Ejecuciones sin consultar su detalle', async () => {
+  const get = vi.spyOn(offersApi, 'get').mockResolvedValue({ ...ready, ultima_ejecucion: { id: 17, estado: 'parcial', inicio: '2026-11-23T17:58:00Z' } })
+  open()
+  const line = (await screen.findByText(/Última corrida:/)).closest('p')
+  expect(line).toHaveTextContent('#17 · Parcial: hubo fallos de red, HTTP o análisis')
+  expect(get).not.toHaveBeenCalledWith('gestion/rastreo/ejecuciones/17')
 })

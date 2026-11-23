@@ -61,6 +61,21 @@ function unavailableReason(state, now) {
   return ['Ninguna fuente cumple ahora sus condiciones de inicio.', false]
 }
 
+// Misma etiqueta que la lista y el detalle de Ejecuciones: «Completada con avisos» depende de las incidencias
+// de aviso de esa ejecución, que se leen de su detalle (si la consulta falla, se muestra el estado sin avisos).
+function RunState({ run }) {
+  const [warnings, setWarnings] = useState({ id: null, count: 0 })
+  useEffect(() => {
+    if (run.estado !== 'finalizada') return undefined
+    let live = true
+    offersApi.get(`gestion/rastreo/ejecuciones/${run.id}`)
+      .then((data) => { if (live) setWarnings({ id: run.id, count: Number(data?.incidencias_aviso) || 0 }) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [run.id, run.estado])
+  return estadoEjecucion(run.estado, warnings.id === run.id ? warnings.count : 0)
+}
+
 const fallosDeInicio = { omitida_concurrencia: 'otra ejecución estaba en curso', fallo_infraestructura: 'fallo del proceso local' }
 
 export default function CrawlingControl() {
@@ -136,7 +151,7 @@ export default function CrawlingControl() {
     <Message>{error}</Message>
     {state && <div className="crawl-control-status">
       <dl className="crawl-control-metrics"><div><dt>Fuentes activas</dt><dd>{state.fuentes_activas == null ? '—' : `${state.fuentes_activas} ${state.fuentes_activas === 1 ? 'fuente activa' : 'fuentes activas'}`}</dd></div><div><dt>Publicaciones detectadas</dt><dd>{state.publicaciones_total ?? '—'}</dd></div><div><dt>Borradores automáticos</dt><dd>{state.borradores_total ?? '—'}</dd></div></dl>
-      <p className="crawl-control-line">Última corrida: {run ? <><Link to={`/gestion/rastreo/ejecuciones/${run.id}`}>#{run.id}</Link> · {estadoEjecucion(run.estado)}{run.inicio && ` · ${date(run.inicio)}`}{incidents > 0 && ` · ${incidents} ${incidents === 1 ? 'incidencia' : 'incidencias'}`}</> : 'sin ejecuciones'}</p>
+      <p className="crawl-control-line">Última corrida: {run ? <><Link to={`/gestion/rastreo/ejecuciones/${run.id}`}>#{run.id}</Link> · <RunState run={run} />{run.inicio && ` · ${date(run.inicio)}`}{incidents > 0 && ` · ${incidents} ${incidents === 1 ? 'incidencia' : 'incidencias'}`}</> : 'sin ejecuciones'}</p>
       <p className="crawl-control-line">Próxima disponibilidad: {state.puede_iniciar ? `disponible ahora para ${state.fuente_nombre || 'una fuente autorizada'}` : state.proxima_manual ? `${date(state.proxima_manual)}${waiting(state.proxima_manual, now) ? ` · ${remaining(state.proxima_manual, now)}` : ''}` : 'sin fecha disponible'}</p>
       {blockReason && visibleReason && <p id="crawl-availability" className="crawl-control-availability">No se puede iniciar: {blockReason}</p>}
       {failedStart && <p className="crawl-control-availability">El último inicio desde el panel no se completó: {failedStart}.</p>}
