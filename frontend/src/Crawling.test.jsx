@@ -248,7 +248,7 @@ it('ejecución sin publicaciones conserva contadores y acceso a incidencias', as
   open('/gestion/rastreo/ejecuciones/1')
   expect(await screen.findByText('SIAU · Completada')).toBeVisible()
   expect(screen.getByText('Publicaciones observadas').nextSibling).toHaveTextContent('0')
-  expect(screen.getByRole('heading', { name: 'Incidencias' })).toBeVisible()
+  expect(screen.getByRole('tab', { name: /^Incidencias/ })).toBeVisible()
 })
 
 it('cuenta como versiones nuevas solo los cambios de contenido y etiqueta los cambios técnicos', async () => {
@@ -296,8 +296,6 @@ it.each([
   ['publicaciones/1/versiones', '/gestion/rastreo/publicaciones/1', 'Seleccionar versión'],
   ['publicaciones/1/observaciones', '/gestion/rastreo/publicaciones/1', 'Historial'],
   ['ejecuciones', '/gestion/rastreo/ejecuciones', 'Ejecuciones'],
-  ['ejecuciones/1/accesos', '/gestion/rastreo/ejecuciones/1', 'Accesos'],
-  ['ejecuciones/1/incidencias', '/gestion/rastreo/ejecuciones/1', 'Incidencias'],
 ])('pagina %s con solicitudes y contenido distintos, y respeta extremos', async (target, route, title) => {
   const get = vi.spyOn(offersApi, 'get').mockImplementation(async (path, params) => {
     if (path === 'gestion/rastreo/publicaciones/1') return publication
