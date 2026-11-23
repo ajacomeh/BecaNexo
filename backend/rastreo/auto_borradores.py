@@ -258,7 +258,7 @@ def classify_candidate(publication, version, *, allow_partial=False):
     ) else 'no_especificada'
     details['elegibilidad'] = recipient
     if recipient != 'confirmada':
-        marks.append('Participación de ciudadanos ecuatorianos por confirmar en las bases.')
+        marks.append(MOTIVO_ELEGIBILIDAD)
     if offerer == 'solo_extranjero':
         return no_ecuadorian(mentioned, f'Borrador privado: oferente extranjero ({mentioned}); no consta entidad ecuatoriana.', **details)
     if offerer == 'verificado_ec':
@@ -288,10 +288,20 @@ def classify_candidate(publication, version, *, allow_partial=False):
     return no_ecuadorian('', 'Borrador privado: la ficha no nombra una entidad ecuatoriana como oferente o cooferente.', **details)
 
 
+MOTIVO_ELEGIBILIDAD = 'Participación de ciudadanos ecuatorianos por confirmar en las bases.'
+
+
+def motivo_revision(assessment):
+    """Motivo de la incidencia de revisión: el de la clasificación si la ficha no es apta; si es apta pero no confirma
+    que ciudadanos ecuatorianos pueden postular, ese es el motivo (no el del oferente, que ya consta como marca)."""
+    if assessment['estado'] != 'apta':
+        return assessment['motivo']
+    return MOTIVO_ELEGIBILIDAD if assessment['elegibilidad'] == 'no_especificada' else None
+
+
 def candidate_assessment(publication, version):
     assessment = classify_candidate(publication, version)
-    return assessment['estado'] == 'apta', (
-        assessment['motivo'] if assessment['estado'] != 'apta' or assessment['elegibilidad'] == 'no_especificada' else None)
+    return assessment['estado'] == 'apta', motivo_revision(assessment)
 
 
 def candidatos_de_datos(data, version_id, document_id=None, texto=''):
@@ -507,7 +517,7 @@ def prepare_automatic_draft(publication_id, version_id, *, allow_partial=False):
     # Escribe en los campos y listas normales lo identificado con claridad; un fallo no pierde el borrador.
     from .llenado import llenar_origen
     llenar_origen(origin)
-    return origin, True, assessment['motivo'] if assessment['elegibilidad'] == 'no_especificada' else None
+    return origin, True, motivo_revision(assessment)
 
 
 def _classify_for_publication(publication, version, *, allow_partial=False):

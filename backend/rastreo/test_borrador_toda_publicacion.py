@@ -167,3 +167,29 @@ class BorradorTodaPublicacionTests(TransactionTestCase):
         self.assertEqual((repetido['total_creados'], repetido['omitidas']), (0, 1))
         origin.convocatoria.refresh_from_db()
         self.assertEqual((origin.convocatoria.version, origin.convocatoria.titulo), antes)
+
+    def test_incidencia_de_revision_por_destinatarios_muestra_su_motivo_real(self):
+        from .auto_borradores import MOTIVO_ELEGIBILIDAD
+        html = fiche(foreign=True).replace('<ol><li>Ser ciudadano ecuatoriano.</li></ol>'.encode(), '<ol><li>Tener título de grado.</li></ol>'.encode())
+        run, _ = self.execute(html)
+        incidencia = run.incidencias.get(codigo='BORRADOR_REVISION_PENDIENTE')
+        self.assertEqual(incidencia.gravedad, 'aviso')
+        self.assertEqual(incidencia.detalle, MOTIVO_ELEGIBILIDAD)
+        self.assertNotIn('oferente', incidencia.detalle.lower())
+        # El motivo del oferente sigue en su propia marca del borrador, sin mezclarse.
+        marcas = BorradorRastreo.objects.get(publicacion__url_normalizada=URL).datos_iniciales['clasificacion_inicial']['marcas']
+        self.assertIn(MOTIVO_ELEGIBILIDAD, marcas)
+        self.assertTrue(any(MARCA_OFERENTE_NO_EC in marca for marca in marcas))
+
+    def test_con_destinatarios_confirmados_no_hay_incidencia_y_el_motivo_del_oferente_se_conserva(self):
+        from .auto_borradores import classify_candidate, motivo_revision
+        run, _ = self.execute(fiche(foreign=True))
+        self.assertFalse(run.incidencias.filter(codigo='BORRADOR_REVISION_PENDIENTE').exists())
+        origin = BorradorRastreo.objects.get(publicacion__url_normalizada=URL)
+        motivo = origin.datos_iniciales['clasificacion_inicial']['motivo']
+        self.assertTrue(motivo.startswith('Borrador privado:'), motivo)
+        self.assertNotIn('ciudadanos ecuatorianos por confirmar', motivo)
+        # Si la ficha no es apta, el motivo de la incidencia es el de la clasificación, tal cual.
+        evaluacion = classify_candidate(origin.publicacion, origin.version)
+        self.assertEqual(motivo_revision({**evaluacion, 'estado': 'pendiente'}), evaluacion['motivo'])
+        self.assertIsNone(motivo_revision({**evaluacion, 'estado': 'apta', 'elegibilidad': 'confirmada'}))
