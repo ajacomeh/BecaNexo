@@ -1,5 +1,7 @@
 # BecaNexo
 
+[![CI](https://github.com/ajacomeh/BecaNexo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ajacomeh/BecaNexo/actions/workflows/ci.yml)
+
 BecaNexo es un proyecto de tesis de Ingeniería de Software para consultar y recomendar becas a ciudadanos ecuatorianos. Registra únicamente ofertas de entidades ecuatorianas; el destino de estudio puede estar en Ecuador o en otro país. La aplicación **no tramita postulaciones ni adjudica becas**: el postulante debe consultar las bases y postular en el sitio oficial de la entidad oferente.
 
 ## Estado del proyecto
@@ -99,6 +101,22 @@ Abre `http://127.0.0.1:5173/`. Usa el mismo host `127.0.0.1` en ambos servicios 
 ```
 
 Las pruebas backend usan una base de pruebas separada; las de frontend están en `frontend/src` y `frontend/e2e`. Consulta [ejecución local](docs/ejecucion-local.md) antes de ejecutar pruebas E2E, porque algunos recorridos históricos escriben datos de demostración en la base configurada. La [demostración multifuente](scripts/demo-multifuente-visual.ps1) utiliza `test_becanexo_fusion_db`, puertos 8001/5174 y correo en memoria; no representa una consulta institucional real.
+
+## Integración continua
+
+Cada push, pull request o ejecución manual lanza el workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) en GitHub Actions:
+
+- **Backend** en `windows-latest`, porque Windows es la plataforma del proyecto (el lanzador web del rastreo usa `msvcrt`). Instala PostgreSQL 16 en el runner, Python 3.13 y las dependencias, descarga el modelo ONNX fijado con `backend/scripts/download_semantic_model.py` (con caché) y ejecuta `manage.py check`, `makemigrations --check --dry-run` y `manage.py test --noinput`.
+- **Frontend** en `ubuntu-latest` con Node 24: `npm ci`, `npm run lint`, `npm test -- --maxWorkers=2` y `npm run build`.
+
+No usa secretos: la clave de Django y la contraseña de PostgreSQL son valores ficticios de una base efímera, y el correo queda en memoria. La configuración de pruebas es [`backend/config/settings_ci.py`](backend/config/settings_ci.py): correo `locmem`, almacén documental temporal (nunca el `RASTREO_STORAGE_ROOT` real) e indicadores de rastreo y correo desactivados. Para usarla en local, desde `backend/`, con un usuario PostgreSQL que pueda crear la base de pruebas:
+
+```powershell
+$env:DJANGO_SETTINGS_MODULE = 'config.settings_ci'
+..\.venv\Scripts\python.exe manage.py test --noinput
+```
+
+Si el usuario local no tiene permiso para crear bases, usa una base de pruebas ya creada con `--keepdb`. Las seis pruebas de `rastreo/test_bases_pdf.py` que necesitan la copia local de los PDF reales se omiten cuando no está disponible.
 
 ## Seguridad y alcance operativo
 

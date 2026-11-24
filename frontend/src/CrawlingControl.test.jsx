@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { offersApi } from './api/client'
@@ -152,7 +152,7 @@ it('distingue ejecución activa, recuperación pendiente y bloqueo de la fuente'
   cleanup()
   get.mockResolvedValue({ ...ready, puede_iniciar: false, requiere_revision: true })
   open()
-  expect(await screen.findByRole('tooltip')).toHaveTextContent(/Pendiente de recuperación/)
+  await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent(/Pendiente de recuperación/))
   cleanup()
   // Una causa distinta de la frecuencia (bloqueo HTTP) sí se muestra a la vista y describe el botón.
   get.mockResolvedValue({ ...ready, puede_iniciar: false, bloqueo_fuente: true })
