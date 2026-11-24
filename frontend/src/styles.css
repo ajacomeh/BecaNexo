@@ -629,12 +629,13 @@ a > .ui-icon, .text-button > .ui-icon, .edit-name-link > .ui-icon { margin-right
 .catalog-card:focus-within, .admin-offer-card:focus-within { border-color: #9fb6dc; }
 .card-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; width: 100%; }
 .offer-card-heading.card-head { display: flex; justify-items: initial; }
-.card-head-main { flex: 1 1 260px; min-width: 0; display: grid; gap: 6px; }
-.card-head-main h2 { margin: 0; font-size: 1.2rem; line-height: 1.35; overflow-wrap: anywhere; }
+/* Icono grande en su columna; título, entidad y notas comparten el mismo borde izquierdo. */
+.scholarship-header { flex: 1 1 260px; min-width: 0; display: flex; align-items: flex-start; gap: .85rem; }
+.scholarship-header-text { flex: 1 1 auto; min-width: 0; display: grid; gap: 6px; }
+.scholarship-header-title { margin: 0; font-size: 1.2rem; line-height: 1.35; overflow-wrap: anywhere; padding-top: max(0px, calc((44px - 1lh) / 2)); }
 .card-head-status { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
-.card-provider { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding-left: calc(44px + .85rem); color: #53647e; font-size: .92rem; line-height: 1.45; overflow-wrap: anywhere; }
-.card-provider .ui-icon { flex: none; width: 16px; height: 16px; margin-top: .15em; }
-.card-origin { margin: 0; padding-left: calc(44px + .85rem); }
+.card-provider { margin: 0; color: #53647e; font-size: .92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.card-origin { margin: 0; }
 .card-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
 .card-facts > div { position: relative; border-top: 1px solid #e4eaf3; padding: 10px 0 0 26px; }
 .card-facts dt { display: block; }

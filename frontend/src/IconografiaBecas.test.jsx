@@ -19,7 +19,8 @@ const areas = [{ id: 1, nombre: 'Programas y certificaciones genéricos' }, { id
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }], areas, idiomas: [], niveles: [], modalidades: [], tipos_beca: [], tipos_requisito: [] }
 const offer = { id: 1, titulo: 'Beca sintética con un título largo que ocupa varias líneas en móvil', institucion: { nombre: 'Entidad' },
   estado: 'abierta', beneficios: [], opciones: [], areas: [10] }
-const iconOf = (heading) => heading.querySelector('.scholarship-icon')
+// En el catálogo y en Convocatorias el icono va junto al título, en la columna de la cabecera; en el resto, dentro del título.
+const iconOf = (heading) => heading.querySelector('.scholarship-icon') || heading.closest('.scholarship-header')?.querySelector('.scholarship-icon')
 
 describe('mapa de campo a icono', () => {
   it.each([

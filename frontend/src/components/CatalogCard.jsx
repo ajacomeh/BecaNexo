@@ -4,7 +4,7 @@ import FavoriteButton from './FavoriteButton'
 import { stateLabel, closingText, providerLabel } from '../pages/offerDisplay'
 
 import { readable, benefitSummary, unique } from '../pages/catalogPresentation'
-import { ScholarshipTitle } from './ScholarshipIcon'
+import { ScholarshipHeader } from './ScholarshipIcon'
 import { singleArea } from './scholarshipFields'
 
 // Estado de requisitos de una recomendación: mismo texto de siempre, con color e ícono como en la comparación.
@@ -25,7 +25,7 @@ export default function CatalogCard({ offer, catalogs, recommendation }) {
   return <article className="offer-card catalog-card">
     {/* Cabecera: icono y título a la izquierda, estado arriba a la derecha y la entidad debajo del título. */}
     <div className="offer-card-heading card-head">
-      <div className="card-head-main"><ScholarshipTitle size="lg" field={singleArea(offer.areas, catalogs?.areas)}>{offer.titulo}</ScholarshipTitle><p className="offer-provider card-provider"><Icon name="institutions" />{providerLabel(offer)}</p></div>
+      <ScholarshipHeader field={singleArea(offer.areas, catalogs?.areas)} title={offer.titulo}><p className="offer-provider card-provider">{providerLabel(offer)}</p></ScholarshipHeader>
       <div className="card-head-status">{statuses}</div>
     </div>
     <dl className="offer-card-facts card-facts"><div><dt><Icon name="calendar" />Cierre</dt><dd>{closingText(offer, true)}</dd></div>

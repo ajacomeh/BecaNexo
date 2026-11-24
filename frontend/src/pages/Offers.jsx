@@ -10,7 +10,7 @@ import FavoriteButton from '../components/FavoriteButton'
 import { display, closingText, stateLabel, providerLabel } from './offerDisplay'
 import { readable } from './catalogPresentation'
 import PublicCatalog from './PublicCatalog'
-import { ScholarshipTitle } from '../components/ScholarshipIcon'
+import { ScholarshipHeader } from '../components/ScholarshipIcon'
 import { singleArea } from '../components/scholarshipFields'
 
 function StudySummary({ options }) {
@@ -71,8 +71,8 @@ function AdministrativeOffers({ admin }) {
     {catalogs && !data && !error && <p role="status"><Icon name="loading" />Cargando convocatorias…</p>}
     {data && <><div className="catalog-results-heading"><p role="status">{data.count} convocatorias encontradas</p><div className="field"><label htmlFor="admin-offer-order">Ordenar por</label><select id="admin-offer-order" value={params.get('orden') || 'recientes'} onChange={e => orderResults(e.target.value)}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option></select></div></div><div className="offer-grid">{data.results.map((offer) => <article className="offer-card admin-offer-card" key={offer.id}>
       <div className="card-head">
-        <div className="card-head-main"><ScholarshipTitle size="lg" field={singleArea(offer.areas, catalogs?.areas)}>{offer.titulo}</ScholarshipTitle>
-          <p className="card-provider"><Icon name="institutions" />{offer.institucion?.nombre || (offer.oferente_externo ? providerLabel(offer) : offer.revision === 'validada' ? 'Entidad oferente: No identificada' : 'Oferente pendiente de confirmar')}</p>{offer.origen_automatico && <p className="small-note card-origin">Borrador del rastreo · Publicación {offer.origen_automatico.publicacion_id}</p>}</div>
+        <ScholarshipHeader field={singleArea(offer.areas, catalogs?.areas)} title={offer.titulo}>
+          <p className="card-provider">{offer.institucion?.nombre || (offer.oferente_externo ? providerLabel(offer) : offer.revision === 'validada' ? 'Entidad oferente: No identificada' : 'Oferente pendiente de confirmar')}</p>{offer.origen_automatico && <p className="small-note card-origin">Borrador del rastreo · Publicación {offer.origen_automatico.publicacion_id}</p>}</ScholarshipHeader>
         <div className="card-head-status offer-card-statuses"><span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>{offer.descartado && <span className="status-pill situation-descartada">Borrador descartado</span>}</div>
       </div>
       <PublicationReadiness offer={offer} />
