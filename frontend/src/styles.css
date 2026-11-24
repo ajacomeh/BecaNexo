@@ -616,3 +616,42 @@ a > .ui-icon, .text-button > .ui-icon, .edit-name-link > .ui-icon { margin-right
 .scholarship-title-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .scholarship-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-top: max(0px, calc((1lh - 32px) / 2)); border-radius: 8px; background: #edf3ff; color: #1d4ed8; }
 .scholarship-icon svg { width: 18px; height: 18px; }
+
+/* Tarjetas de becas (catálogo público y Convocatorias): cabecera con icono grande, datos en cuadrícula y pie al fondo.
+   Solo .catalog-card y .admin-offer-card; Favoritos y Notificaciones conservan su diseño. */
+.scholarship-icon-lg { width: 44px; height: 44px; border-radius: 12px; margin-top: 0; }
+.scholarship-icon-lg svg { width: 24px; height: 24px; }
+.scholarship-title-lg { gap: .85rem; align-items: flex-start; }
+.scholarship-title-lg .scholarship-title-text { padding-top: max(0px, calc((44px - 1lh) / 2)); }
+.catalog-card, .admin-offer-card { gap: 14px; padding: 22px; border-color: #dde5f0; box-shadow: 0 1px 2px #17243b0d, 0 2px 8px #17243b0a; }
+.catalog-card:hover, .admin-offer-card:hover { border-color: #c5d3e8; box-shadow: 0 2px 4px #17243b12, 0 8px 20px #17243b14; }
+@media (prefers-reduced-motion: no-preference) { .catalog-card, .admin-offer-card { transition: box-shadow .15s ease, border-color .15s ease; } }
+.catalog-card:focus-within, .admin-offer-card:focus-within { border-color: #9fb6dc; }
+.card-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 14px; width: 100%; }
+.offer-card-heading.card-head { display: flex; justify-items: initial; }
+.card-head-main { flex: 1 1 260px; min-width: 0; display: grid; gap: 6px; }
+.card-head-main h2 { margin: 0; font-size: 1.2rem; line-height: 1.35; overflow-wrap: anywhere; }
+.card-head-status { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-left: auto; }
+.card-provider { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding-left: calc(44px + .85rem); color: #53647e; font-size: .92rem; line-height: 1.45; overflow-wrap: anywhere; }
+.card-provider .ui-icon { flex: none; width: 16px; height: 16px; margin-top: .15em; }
+.card-origin { margin: 0; padding-left: calc(44px + .85rem); }
+.card-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.card-facts > div { position: relative; border-top: 1px solid #e4eaf3; padding: 10px 0 0 26px; }
+.card-facts dt { display: block; }
+.card-facts dt .ui-icon { position: absolute; left: 0; top: 11px; width: 18px; height: 18px; color: #1d4ed8; }
+.card-facts dd { font-weight: 700; color: #17243b; }
+.catalog-card .offer-card-financing { padding: 12px 16px; line-height: 1.55; }
+.catalog-card .offer-card-financing h3 { margin: 0 0 6px; }
+.card-foot { display: grid; gap: 10px; width: 100%; margin-top: auto; padding-top: 4px; }
+.card-foot .small-note { margin: 0; }
+.public-catalog .catalog-card .card-foot .catalog-card-actions { margin-top: 0; padding-top: 0; }
+.card-foot > .secondary-link { margin-top: 0; justify-self: start; }
+.card-readiness { width: 100%; margin: 0; padding: 9px 12px; border-radius: 8px; font-weight: 650; line-height: 1.45; }
+.card-readiness-pending { background: #fff4dd; color: #6b4a00; border: 1px solid #f0d9a6; }
+.card-readiness-ready { background: #e4f5ef; color: #086e50; border: 1px solid #b6e1d1; }
+.card-facts-admin { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; width: 100%; }
+.card-facts-admin .card-fact { margin: 0; padding-top: 8px; border-top: 1px solid #e4eaf3; font-size: .92rem; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .card-facts, .card-facts-admin { grid-template-columns: minmax(0, 1fr); }
+  .card-head-status { margin-left: calc(44px + .85rem); justify-content: flex-start; }
+}

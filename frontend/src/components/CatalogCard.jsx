@@ -21,16 +21,24 @@ export default function CatalogCard({ offer, catalogs, recommendation }) {
   const destinations = unique(options.flatMap(o => o.paises || []))
   const countries = destinations.map(id => catalogs.paises.find(p => p.id === id)?.nombre).filter(Boolean)
   const financing = benefitSummary(offer.beneficios)
+  const statuses = recommendation ? <div className="offer-card-statuses">{offer.estado !== 'sin_fecha' && <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>}<span className={`status-pill recommendation-status recommendation-status-${requirementState}`} role="img" aria-label={requirementLabel}><Icon name={requirementIcon} /><span>{requirementLabel}</span></span></div> : <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>
   return <article className="offer-card catalog-card">
-    <div className="offer-card-heading">{recommendation ? <div className="offer-card-statuses">{offer.estado !== 'sin_fecha' && <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>}<span className={`status-pill recommendation-status recommendation-status-${requirementState}`} role="img" aria-label={requirementLabel}><Icon name={requirementIcon} /><span>{requirementLabel}</span></span></div> : <span className={`status-pill state-${offer.estado}`}>{stateLabel(offer.estado)}</span>}<ScholarshipTitle field={singleArea(offer.areas, catalogs?.areas)}>{offer.titulo}</ScholarshipTitle><p className="offer-provider">{providerLabel(offer)}</p></div>
-    <dl className="offer-card-facts"><div><dt>Cierre</dt><dd>{closingText(offer, true)}</dd></div>
-      {options.length === 1 && <><div><dt>Nivel y modalidad</dt><dd>{readable(options[0].nivel)} · {readable(options[0].modalidad)}</dd></div></>}
-      {options.length > 1 && <div><dt>Opciones de estudio</dt><dd>{options.length} · {unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</dd></div>}
-      {countries.length > 0 && <div><dt>{countries.length === 1 ? 'Destino' : 'Destinos'}</dt><dd>{countries.join(', ')}</dd></div>}
+    {/* Cabecera: icono y título a la izquierda, estado arriba a la derecha y la entidad debajo del título. */}
+    <div className="offer-card-heading card-head">
+      <div className="card-head-main"><ScholarshipTitle size="lg" field={singleArea(offer.areas, catalogs?.areas)}>{offer.titulo}</ScholarshipTitle><p className="offer-provider card-provider"><Icon name="institutions" />{providerLabel(offer)}</p></div>
+      <div className="card-head-status">{statuses}</div>
+    </div>
+    <dl className="offer-card-facts card-facts"><div><dt><Icon name="calendar" />Cierre</dt><dd>{closingText(offer, true)}</dd></div>
+      {options.length === 1 && <><div><dt><Icon name="layers" />Nivel y modalidad</dt><dd>{readable(options[0].nivel)} · {readable(options[0].modalidad)}</dd></div></>}
+      {options.length > 1 && <div><dt><Icon name="layers" />Opciones de estudio</dt><dd>{options.length} · {unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</dd></div>}
+      {countries.length > 0 && <div><dt><Icon name="location" />{countries.length === 1 ? 'Destino' : 'Destinos'}</dt><dd>{countries.join(', ')}</dd></div>}
     </dl>
     {financing.length > 0 && <div className="offer-card-financing"><h3>Financiamiento</h3>{financing.map((text, index) => <p key={index}>{text}</p>)}</div>}
-    {options.length > 1 && !offer.beneficios.some(b => b.opcion_estudio != null) && <p className="small-note">Consulta las condiciones de cada opción en el detalle.</p>}
     {recommendation && <div className="recommendation-explanation"><p className={`recommendation-requirements recommendation-requirements-${requirementState}`}><strong><Icon name={requirementIcon} />Requisitos</strong><span>{recommendation.requirements}</span></p><p><strong>Afinidad temática</strong><span>{recommendation.affinity}</span></p><p><strong>Preferencias</strong><span>{recommendation.preferences}</span></p></div>}
-    <div className="catalog-card-actions"><Link className="secondary-link catalog-detail-link" to={`/becas/${offer.id}`}><Icon name="detail" /><span>Ver detalle</span></Link><FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div>
+    {/* Pie al fondo: los botones de tarjetas de una misma fila quedan a la misma altura. */}
+    <div className="card-foot">
+      {options.length > 1 && !offer.beneficios.some(b => b.opcion_estudio != null) && <p className="small-note">Consulta las condiciones de cada opción en el detalle.</p>}
+      <div className="catalog-card-actions"><Link className="secondary-link catalog-detail-link" to={`/becas/${offer.id}`}><Icon name="detail" /><span>Ver detalle</span></Link><FavoriteButton key={`${offer.id}-${offer.favorito_id}`} offerId={offer.id} initialId={offer.favorito_id} /></div>
+    </div>
   </article>
 }

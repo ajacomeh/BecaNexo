@@ -1,14 +1,15 @@
 import { fieldIcon } from './scholarshipFields'
 
 // Decorativo: el título ya nombra la beca. El tooltip indica el campo cuando es un icono de campo.
-export default function ScholarshipIcon({ field }) {
+// size="lg" (44 px) en las tarjetas del catálogo y de Convocatorias; por defecto 32 px (Favoritos, Notificaciones).
+export default function ScholarshipIcon({ field, size }) {
   const { Glyph, field: known } = fieldIcon(field)
-  return <span className="scholarship-icon" aria-hidden="true" title={known || undefined} data-field={known || 'beca'}>
-    <Glyph focusable="false" size={18} strokeWidth={1.8} />
+  return <span className={`scholarship-icon${size === 'lg' ? ' scholarship-icon-lg' : ''}`} aria-hidden="true" title={known || undefined} data-field={known || 'beca'}>
+    <Glyph focusable="false" size={size === 'lg' ? 24 : 18} strokeWidth={1.8} />
   </span>
 }
 
 /** Título de tarjeta con su icono a la izquierda, alineado con la primera línea. */
-export function ScholarshipTitle({ as: Heading = 'h2', field, children }) {
-  return <Heading className="scholarship-title"><ScholarshipIcon field={field} /><span className="scholarship-title-text">{children}</span></Heading>
+export function ScholarshipTitle({ as: Heading = 'h2', field, size, children }) {
+  return <Heading className={`scholarship-title${size === 'lg' ? ' scholarship-title-lg' : ''}`}><ScholarshipIcon field={field} size={size} /><span className="scholarship-title-text">{children}</span></Heading>
 }
