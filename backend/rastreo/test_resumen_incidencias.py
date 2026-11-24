@@ -61,3 +61,32 @@ class ResumenIncidenciasTests(TransactionTestCase):
         self.assertGreaterEqual(detalle['incidencias_error'], 3)
         self.assertGreaterEqual(detalle['incidencias_aviso'], 12)
         self.assertEqual(detalle['incidencias_error'] + detalle['incidencias_aviso'], self.get().data['count'])
+
+    def test_solo_las_incidencias_editoriales_traen_su_detalle(self):
+        from .api import CODIGOS_EDITORIALES
+        resumen_antes = self.get().data['resumen']
+        motivos = {'BORRADOR_REVISION_PENDIENTE': 'Participación de ciudadanos ecuatorianos por confirmar en las bases.',
+                   'CANDIDATO_PENDIENTE': 'Revisión editorial pendiente: oferente por confirmar.',
+                   'CANDIDATO_FUERA_ALCANCE': 'Descartada: la ficha excluye expresamente a ciudadanos ecuatorianos.'}
+        self.assertEqual(set(motivos), set(CODIGOS_EDITORIALES))
+        for codigo, motivo in motivos.items():
+            incident(self.run, codigo, motivo, severity='aviso')
+        incident(self.run, 'ALMACENAMIENTO', 'C:\ruta\privada\archivo.bin: permiso denegado')
+        incident(self.run, 'HTTP', 'HTTP 503; detalle interno del servidor')
+        for codigo, motivo in motivos.items():
+            filas = self.get(f'?codigo={codigo}').data['results']
+            self.assertEqual([fila['detalle'] for fila in filas], [motivo])
+        for codigo in ('ALMACENAMIENTO', 'HTTP', 'RED', 'BASE_NO_PERMITIDA'):
+            for fila in self.get(f'?codigo={codigo}&page_size=50').data['results']:
+                self.assertNotIn('detalle', fila, codigo)
+        texto = str(self.get('?page_size=50').data) + str(self.get('?page=2&page_size=50').data)
+        for interno in ('ruta', 'privada', 'detalle interno', 'ConnectionError', 'Enlace de bases'):
+            self.assertNotIn(interno, texto)
+        # El resumen agrupado por tipo y gravedad mantiene su forma y solo suma los nuevos grupos.
+        resumen = self.get().data['resumen']
+        self.assertTrue(all(set(g) == {'codigo', 'gravedad', 'total'} for g in resumen))
+        anteriores = {(g['codigo'], g['gravedad']): g['total'] for g in resumen_antes}
+        actuales = {(g['codigo'], g['gravedad']): g['total'] for g in resumen}
+        self.assertTrue(all(actuales.get(clave, 0) >= total for clave, total in anteriores.items()))
+        self.assertEqual(actuales[('BORRADOR_REVISION_PENDIENTE', 'aviso')], 1)
+        self.assertEqual(actuales[('ALMACENAMIENTO', 'error')], 1)

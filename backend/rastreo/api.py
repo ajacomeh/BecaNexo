@@ -26,7 +26,11 @@ def identified(model, pk):
     return get_object_or_404(model, pk=pk)
 
 
-DECISION_CODES = ('CANDIDATO_FUERA_ALCANCE', 'CANDIDATO_PENDIENTE')
+# Incidencias editoriales: su detalle es un motivo redactado para el administrador y puede mostrarse.
+# El resto (RED, HTTP, ALMACENAMIENTO, BASE_NO_PERMITIDA...) puede contener mensajes técnicos internos: nunca se expone.
+CODIGOS_EDITORIALES = ('CANDIDATO_FUERA_ALCANCE', 'CANDIDATO_PENDIENTE', 'BORRADOR_REVISION_PENDIENTE')
+# Decisión sobre un candidato sin borrador (situación de la publicación): solo los códigos de candidato.
+DECISION_CODES = tuple(code for code in CODIGOS_EDITORIALES if code.startswith('CANDIDATO_'))
 
 
 def latest_publications():
@@ -251,9 +255,10 @@ class Incidencias(ReadOnly):
             if not 0 < len(codigo) <= 60:
                 raise serializers.ValidationError({'codigo': 'Código no válido.'})
             filtro['codigo'] = codigo
-        # Código y gravedad son suficientes; no trasladar posibles mensajes técnicos internos.
-        response = paginar(request, todas.filter(**filtro).order_by('id'),
-            lambda i: {f: getattr(i, f) for f in ('id', 'codigo', 'gravedad', 'detectada_en', 'publicacion_id', 'version_id')},
+        # El detalle solo se incluye en las incidencias editoriales; en las técnicas se omite (mensajes internos).
+        response = paginar(request, todas.filter(**filtro).order_by('id'), lambda i: {
+            **{f: getattr(i, f) for f in ('id', 'codigo', 'gravedad', 'detectada_en', 'publicacion_id', 'version_id')},
+            **({'detalle': i.detalle} if i.codigo in CODIGOS_EDITORIALES and i.detalle else {})},
             default_size=PAGINA_DETALLE)
         # Resumen agrupado de toda la ejecución (no depende de los filtros): errores primero y luego por frecuencia.
         grupos = todas.values('codigo', 'gravedad').annotate(total=Count('id'))

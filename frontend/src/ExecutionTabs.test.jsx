@@ -126,3 +126,39 @@ it('sin incidencias muestra un mensaje en lugar de la lista', async () => {
   await userEvent.click(await screen.findByRole('tab', { name: /^Incidencias/ }))
   expect(await screen.findByText('No hay incidencias en esta ejecución.')).toBeVisible()
 })
+
+it('las incidencias editoriales muestran su motivo como texto plano; las técnicas quedan igual', async () => {
+  const MOTIVO = 'Participación de ciudadanos ecuatorianos por confirmar en las bases. <b>https://example.org</b>'
+  const summary = [{ codigo: 'RED', gravedad: 'error', total: 1 }, { codigo: 'BORRADOR_REVISION_PENDIENTE', gravedad: 'aviso', total: 2 }]
+  vi.spyOn(offersApi, 'get').mockImplementation(async (path, params = {}) => {
+    if (path === 'gestion/rastreo/ejecuciones/15') return { ...execution, incidencias_error: 1, incidencias_aviso: 2 }
+    if (path !== 'gestion/rastreo/ejecuciones/15/incidencias') return { results: [], count: 0, page: 1, page_size: 12 }
+    const base = { gravedad: params.gravedad, detectada_en: '2026-11-23T17:58:00Z', version_id: null }
+    const results = params.codigo === 'BORRADOR_REVISION_PENDIENTE'
+      ? [{ ...base, id: 1, codigo: params.codigo, publicacion_id: 27, detalle: MOTIVO }, { ...base, id: 2, codigo: params.codigo, publicacion_id: 28, detalle: '' }]
+      : params.codigo === 'RED' ? [{ ...base, id: 3, codigo: 'RED', publicacion_id: null }] : []
+    return { count: params.codigo ? results.length : 3, page: params.page, page_size: params.page_size, resumen: summary, results }
+  })
+  open()
+  await userEvent.click(await tab('Incidencias (3)'))
+  const groups = await screen.findByRole('list', { name: 'Incidencias agrupadas por tipo' })
+  const [red, borrador] = within(groups).getAllByRole('button')
+  expect(borrador).toHaveTextContent('AvisoBorrador con revisión pendiente×2') // el contador del grupo no cambia
+  await userEvent.click(borrador)
+  const detail = document.getElementById(borrador.getAttribute('aria-controls'))
+  const motivo = await within(detail).findByText(MOTIVO)
+  expect(motivo).toHaveClass('crawl-incident-reason')
+  expect(motivo.querySelector('b, a')).toBeNull() // texto plano: ni HTML ni enlaces automáticos
+  const filas = within(detail).getAllByRole('listitem')
+  expect(filas).toHaveLength(2)
+  expect(filas[1].querySelector('.crawl-incident-reason')).toBeNull() // sin detalle, la fila queda como siempre
+  await userEvent.click(red)
+  const tecnica = document.getElementById(red.getAttribute('aria-controls'))
+  await within(tecnica).findByText('Sin publicación asociada')
+  expect(tecnica.querySelector('.crawl-incident-reason')).toBeNull()
+  // El filtro por gravedad sigue funcionando con los motivos visibles.
+  await userEvent.selectOptions(screen.getByLabelText('Gravedad'), 'error')
+  expect(within(screen.getByRole('list', { name: 'Incidencias agrupadas por tipo' })).getAllByRole('button').map(b => b.textContent)).toEqual(['ErrorError de red×1'])
+  await userEvent.selectOptions(screen.getByLabelText('Gravedad'), 'aviso')
+  expect(within(screen.getByRole('list', { name: 'Incidencias agrupadas por tipo' })).getAllByRole('button').map(b => b.textContent)).toEqual(['AvisoBorrador con revisión pendiente×2'])
+})

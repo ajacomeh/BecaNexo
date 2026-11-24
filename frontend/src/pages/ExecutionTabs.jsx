@@ -92,6 +92,8 @@ function IncidentRows({ execution, group }) {
     <ul className="crawl-incidents">{data.results.map((i) => <li key={i.id}>
       <time dateTime={i.detectada_en || undefined}>{hour(i.detectada_en)}</time>
       {i.publicacion_id ? <Link to={`/gestion/rastreo/publicaciones/${i.publicacion_id}`}>Publicación #{i.publicacion_id}</Link> : <span>Sin publicación asociada</span>}
+      {/* Motivo de las incidencias editoriales (la API solo lo envía para ellas); texto plano, sin enlaces. */}
+      {typeof i.detalle === 'string' && i.detalle.trim() && <p className="crawl-incident-reason">{i.detalle}</p>}
     </li>)}</ul>
     <Pager data={data} page={page} setPage={setPage} label={`${group.codigo} (${group.gravedad})`} />
   </>}</Loading>
