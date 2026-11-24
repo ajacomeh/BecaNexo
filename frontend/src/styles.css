@@ -610,3 +610,9 @@ a > .ui-icon, .text-button > .ui-icon, .edit-name-link > .ui-icon { margin-right
 .publish-warning p { margin: 0 0 8px; }
 .publish-confirm { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; cursor: pointer; }
 .publish-confirm input { width: 18px; height: 18px; accent-color: #8a6519; }
+
+/* Iconografía del título en tarjetas de becas: decorativa, a la izquierda y alineada con la primera línea. */
+.scholarship-title { display: flex; align-items: flex-start; gap: .6rem; }
+.scholarship-title-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.scholarship-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-top: max(0px, calc((1lh - 32px) / 2)); border-radius: 8px; background: #edf3ff; color: #1d4ed8; }
+.scholarship-icon svg { width: 18px; height: 18px; }

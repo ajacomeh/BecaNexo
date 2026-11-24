@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from usuarios.api import AuthView
 from perfiles.api import EsPostulante
 from convocatorias.api import parametros, paginar
-from convocatorias.services import publicas
+from convocatorias.services import campos_conocimiento, publicas
 from .models import Favorito
 
 
@@ -18,7 +18,7 @@ class GuardarSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
-def representar(fav, disponibles):
+def representar(fav, disponibles, campos=None):
     convocatoria = disponibles.get(fav.convocatoria_id)
     if convocatoria is None:
         return {"id": fav.pk, "disponible": False, "convocatoria": None,
@@ -26,7 +26,9 @@ def representar(fav, disponibles):
     return {"id": fav.pk, "creado_en": fav.creado_en, "disponible": True, "convocatoria": {
         "id": convocatoria.pk, "titulo": convocatoria.titulo, "institucion": convocatoria.institucion.nombre if convocatoria.institucion_id else "No identificada",
         "tipo_beca": convocatoria.tipo_beca.nombre if convocatoria.tipo_beca else None,
-        "estado": convocatoria.estado, "cierre": convocatoria.cierre}}
+        "estado": convocatoria.estado, "cierre": convocatoria.cierre,
+        # Área única de la convocatoria (icono de la tarjeta); None si tiene varias o ninguna.
+        "campo_conocimiento": (campos if campos is not None else campos_conocimiento([convocatoria.pk])).get(convocatoria.pk)}}
 
 
 class Lista(AuthView):
@@ -40,7 +42,8 @@ class Lista(AuthView):
         response = paginar(request, qs, lambda f: f)
         rows = response.data["results"]
         disponibles = {c.pk: c for c in publicas().filter(pk__in=[f.convocatoria_id for f in rows])}
-        response.data["results"] = [representar(f, disponibles) for f in rows]
+        campos = campos_conocimiento(disponibles)
+        response.data["results"] = [representar(f, disponibles, campos) for f in rows]
         return response
 
     def post(self, request):

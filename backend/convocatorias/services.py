@@ -291,3 +291,12 @@ def eliminar_institucion(obj, actor):
          "eventos_historicos_conservados": len(historicos)}, cls=DjangoJSONEncoder)))
     obj.delete()
     return resumen
+
+
+def campos_conocimiento(convocatoria_ids):
+    """{id de convocatoria: nombre de su área única o None si tiene varias o ninguna}, en una sola consulta."""
+    areas = {}
+    for convocatoria_id, nombre in m.ConvocatoriaArea.objects.filter(convocatoria_id__in=set(convocatoria_ids)).values_list(
+            "convocatoria_id", "area__nombre"):
+        areas.setdefault(convocatoria_id, []).append(nombre)
+    return {pk: (areas[pk][0] if len(areas.get(pk, [])) == 1 else None) for pk in set(convocatoria_ids)}

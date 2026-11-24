@@ -4,7 +4,7 @@ from django.utils import timezone
 from rest_framework import permissions, serializers
 from rest_framework.response import Response
 from usuarios.api import AuthView
-from convocatorias.services import publicas
+from convocatorias.services import campos_conocimiento, publicas
 from .models import Notificacion, PreferenciaCorreo
 
 
@@ -13,12 +13,14 @@ class PostulanteActivo(permissions.BasePermission):
         return request.user.is_authenticated and request.user.is_active and request.user.rol == "postulante"
 
 
-def representar(aviso, publicas_ids):
+def representar(aviso, publicas_ids, campos=None):
     disponible = aviso.convocatoria_id in publicas_ids
     return {"id": aviso.pk, "convocatoria_id": aviso.convocatoria_id,
             "titulo": aviso.convocatoria.titulo if disponible else "Convocatoria no disponible públicamente",
             "motivos": aviso.motivos,
-            "creada_en": aviso.creada_en, "leida_en": aviso.leida_en, "disponible": disponible}
+            "creada_en": aviso.creada_en, "leida_en": aviso.leida_en, "disponible": disponible,
+            # Área única de la convocatoria (icono de la tarjeta); None si no está disponible, tiene varias o ninguna.
+            "campo_conocimiento": (campos or {}).get(aviso.convocatoria_id) if disponible else None}
 
 
 class Bandeja(AuthView):
@@ -41,8 +43,9 @@ class Bandeja(AuthView):
         unread = qs.filter(leida_en=None).count()
         items = list(qs[(page - 1) * size: page * size])
         publicas_ids = set(publicas().filter(pk__in=[item.convocatoria_id for item in items]).values_list("id", flat=True))
+        campos = campos_conocimiento(publicas_ids)
         return Response({"count": count, "no_leidas": unread, "page": page, "page_size": size,
-                         "results": [representar(item, publicas_ids) for item in items]})
+                         "results": [representar(item, publicas_ids, campos) for item in items]})
 
 
 class MarcarLeida(AuthView):

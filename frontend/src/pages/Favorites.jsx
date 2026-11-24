@@ -7,6 +7,7 @@ import FavoriteButton from '../components/FavoriteButton'
 import Button from '../components/Button'
 import Message from '../components/Message'
 import { display, stateLabel, closingText } from './offerDisplay'
+import { ScholarshipTitle } from '../components/ScholarshipIcon'
 
 export default function Favorites() {
   const [page, setPage] = useState(1)
@@ -29,7 +30,7 @@ export default function Favorites() {
     {!current && <p role="status"><Icon name="loading" />Cargando favoritos…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => setRevision(revision + 1)}>Reintentar</Button></>}
     {current?.data && <>{!current.data.count ? <section className="profile-card"><h2>Aún no tienes favoritos</h2><p>Guarda una oportunidad desde el catálogo o su detalle.</p></section> : <div className="offer-grid">{current.data.results.map((favorite) => <article className="offer-card favorite-card" key={favorite.id}>
-      {favorite.disponible ? <><div className="offer-card-heading"><span className={`status-pill state-${favorite.convocatoria.estado}`}>{stateLabel(favorite.convocatoria.estado)}</span><h2>{favorite.convocatoria.titulo}</h2><p className="offer-provider">{favorite.convocatoria.institucion}</p></div><dl className="offer-card-facts"><div><dt>Cierre</dt><dd>{favorite.convocatoria.cierre ? closingText(favorite.convocatoria) : 'Consulta el detalle para confirmar el cierre'}</dd></div><div><dt>Tipo de beca</dt><dd>{display(favorite.convocatoria.tipo_beca)}</dd></div></dl><div className="catalog-card-actions"><Link className="secondary-link" to={`/becas/${favorite.convocatoria.id}`}><Icon name="detail" /><span>Ver convocatoria</span></Link><FavoriteButton initialId={favorite.id} onRemoved={() => setRevision((v) => v + 1)} /></div></> : <><h2>{favorite.aviso}</h2><FavoriteButton initialId={favorite.id} onRemoved={() => setRevision((v) => v + 1)} /></>}
+      {favorite.disponible ? <><div className="offer-card-heading"><span className={`status-pill state-${favorite.convocatoria.estado}`}>{stateLabel(favorite.convocatoria.estado)}</span><ScholarshipTitle field={favorite.convocatoria.campo_conocimiento}>{favorite.convocatoria.titulo}</ScholarshipTitle><p className="offer-provider">{favorite.convocatoria.institucion}</p></div><dl className="offer-card-facts"><div><dt>Cierre</dt><dd>{favorite.convocatoria.cierre ? closingText(favorite.convocatoria) : 'Consulta el detalle para confirmar el cierre'}</dd></div><div><dt>Tipo de beca</dt><dd>{display(favorite.convocatoria.tipo_beca)}</dd></div></dl><div className="catalog-card-actions"><Link className="secondary-link" to={`/becas/${favorite.convocatoria.id}`}><Icon name="detail" /><span>Ver convocatoria</span></Link><FavoriteButton initialId={favorite.id} onRemoved={() => setRevision((v) => v + 1)} /></div></> : <><h2>{favorite.aviso}</h2><FavoriteButton initialId={favorite.id} onRemoved={() => setRevision((v) => v + 1)} /></>}
     </article>)}</div>}
     {totalPages > 1 && <nav className="pagination" aria-label="Paginación"><Button icon="previous" disabled={page <= 1} onClick={() => setPage(page - 1)}>Anterior</Button><span>Página {page} de {totalPages}</span><Button icon="next" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Siguiente</Button></nav>}</>}
   </OffersLayout>

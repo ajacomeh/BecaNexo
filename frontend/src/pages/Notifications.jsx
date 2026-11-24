@@ -5,6 +5,7 @@ import OffersLayout from '../components/OffersLayout'
 import Button from '../components/Button'
 import Icon from '../components/Icon'
 import Message from '../components/Message'
+import { ScholarshipTitle } from '../components/ScholarshipIcon'
 
 export default function Notifications() {
   const [page, setPage] = useState(1)
@@ -63,7 +64,7 @@ export default function Notifications() {
     const fecha = new Date(item.creada_en).toLocaleDateString('es-EC')
     return <li className={`profile-card notification-item${item.leida_en ? ' notification-read' : ' notification-unread'}`} key={item.id}>
       <div className="notification-content">
-        <h3>{item.titulo}</h3>
+        <ScholarshipTitle as="h3" field={item.campo_conocimiento}>{item.titulo}</ScholarshipTitle>
         <div className="notification-meta"><span className={`notification-state${item.leida_en ? ' notification-state-read' : ''}`}>{item.leida_en ? 'Leída' : 'Sin leer'}</span><span className="notification-date">Recibida: {fecha}</span></div>
         <div className="notification-reason"><span className="notification-reason-label">Coincidencia:</span><ul className="notification-chips" aria-label="Motivos de la coincidencia">{item.motivos.map((motivo) => <li key={motivo}>{motivo}</li>)}</ul></div>
         <div className="notification-actions">{item.disponible
