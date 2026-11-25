@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from django.db import transaction, IntegrityError
-from django.db.models import Case, F, IntegerField, Q, Value, When
+from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Q, Value, When
 from django.db.models.functions import Coalesce, TruncDate
 from zoneinfo import ZoneInfo
 from django.shortcuts import get_object_or_404
@@ -119,9 +119,20 @@ class Instituciones(AuthView):
 INCLUIR_NO_ECUATORIANAS = {"1": True, "true": True, "0": False, "false": False}
 
 
-def filtrar(request, qs, admin=False):
+AMBITOS_DESTINO = ("ecuador", "exterior")
+
+
+def destino_q(ambito=None, codigo=None):
+    """Condición sobre una opción de estudio: un país concreto, Ecuador o algún destino distinto de Ecuador."""
+    paises = m.OpcionPais.objects.filter(opcion_estudio=OuterRef("pk"))
+    if codigo is not None: return Exists(paises.filter(pais__codigo=codigo))
+    if ambito == "ecuador": return Exists(paises.filter(pais__codigo="EC"))
+    return Exists(paises.exclude(pais__codigo="EC"))
+
+
+def filtrar(request, qs, admin=False, facetas=False):
     allowed = {"page", "page_size", "q", "nivel", "modalidad", "destino", "tipo_beca", "estado", "orden"}
-    allowed.add("revision" if admin else "incluir_no_ecuatorianas")
+    allowed |= {"revision"} if admin else {"incluir_no_ecuatorianas", "destino_ambito"}
     parametros(request, allowed)
     p = request.query_params
     if not admin:
@@ -134,25 +145,20 @@ def filtrar(request, qs, admin=False):
             qs = qs.filter(institucion__isnull=False)
     query = p.get("q", "").strip()
     if len(query) > 200: raise serializers.ValidationError({"q": "Máximo 200 caracteres."})
-    options = {"activa": True}
+    # Condiciones que debe cumplir una misma opción de estudio, por dimensión (nivel, modalidad y destino).
+    condiciones = {}
     for key, choices in (("nivel", m.NIVELES_OPCION), ("modalidad", m.MODALIDADES)):
         if key in p:
             if p[key] not in dict(choices): raise serializers.ValidationError({key: "Valor no permitido."})
-            options[key] = p[key]
+            condiciones[key] = Q(**{key: p[key]})
+    if "destino" in p and "destino_ambito" in p:
+        raise serializers.ValidationError({"destino_ambito": "No combines el destino rápido con un país concreto."})
     if "destino" in p:
         if not m.Pais.objects.filter(codigo=p["destino"]).exists(): raise serializers.ValidationError({"destino": "País desconocido."})
-        options["paises__codigo"] = p["destino"]
-    opciones_filtradas = m.OpcionEstudio.objects.filter(**options)
-    if query:
-        # Al buscar por programa, el texto y los filtros académicos deben pertenecer a la misma opción.
-        qs = qs.filter(
-            Q(titulo__icontains=query) | Q(institucion__nombre__icontains=query) |
-            Q(areas__area__nombre__icontains=query) | Q(descripcion__icontains=query) |
-            Q(pk__in=opciones_filtradas.filter(programa__icontains=query).values("convocatoria_id"))
-        )
-    if len(options) > 1:
-        # Una única subconsulta garantiza que todos los atributos pertenezcan a la misma opción.
-        qs = qs.filter(pk__in=opciones_filtradas.values("convocatoria_id"))
+        condiciones["destino"] = destino_q(codigo=p["destino"])
+    if "destino_ambito" in p:
+        if p["destino_ambito"] not in AMBITOS_DESTINO: raise serializers.ValidationError({"destino_ambito": "Usa ecuador o exterior."})
+        condiciones["destino"] = destino_q(ambito=p["destino_ambito"])
     if "tipo_beca" in p:
         tipo = entero(p, "tipo_beca", 0)
         if not m.TipoBeca.objects.filter(pk=tipo).exists(): raise serializers.ValidationError({"tipo_beca": "Tipo desconocido."})
@@ -179,9 +185,44 @@ def filtrar(request, qs, admin=False):
     order = p.get("orden", "recientes")
     orders = {"recientes": ["-actualizado_en", "-id"], "titulo": ["titulo", "id"], "cierre": [F("fecha_cierre_orden").asc(nulls_last=True), "id"]}
     if order not in orders: raise serializers.ValidationError({"orden": "Orden no permitido."})
+    base = qs
+    texto = (Q(titulo__icontains=query) | Q(institucion__nombre__icontains=query) |
+             Q(areas__area__nombre__icontains=query) | Q(descripcion__icontains=query))
+
+    def opciones(sin=None):
+        return m.OpcionEstudio.objects.filter(*[c for k, c in condiciones.items() if k != sin], activa=True)
+
+    if query:
+        # Al buscar por programa, el texto y los filtros académicos deben pertenecer a la misma opción.
+        qs = qs.filter(texto | Q(pk__in=opciones().filter(programa__icontains=query).values("convocatoria_id")))
+    if condiciones:
+        # Una única subconsulta garantiza que todos los atributos pertenezcan a la misma opción.
+        qs = qs.filter(pk__in=opciones().values("convocatoria_id"))
     if order == "cierre":
         qs = qs.annotate(fecha_cierre_orden=Coalesce("cierre_dia", TruncDate("cierre", tzinfo=ZoneInfo("America/Guayaquil"))))
-    return qs.order_by(*orders[order]).distinct()
+    qs = qs.order_by(*orders[order]).distinct()
+    if not facetas: return qs
+
+    def candidatas(sin):
+        # Opciones con las que habría resultados si se eligiera su valor en la dimensión `sin`, manteniendo los demás
+        # filtros (búsqueda facetada: el conteo de un selector no cuenta su propio filtro). Una convocatoria cuenta si
+        # una misma opción cumple ese valor y las demás condiciones, y la búsqueda coincide en la convocatoria o en el
+        # programa de esa opción; equivale exactamente a aplicar el valor junto con el resto de filtros.
+        ops = opciones(sin).filter(convocatoria__in=base.values("pk"))
+        if query: ops = ops.filter(Q(convocatoria__in=base.filter(texto).values("pk")) | Q(programa__icontains=query))
+        return ops
+
+    def conteo(sin, campo):
+        filas = (candidatas(sin).exclude(**{f"{campo}__isnull": True}).values(campo)
+                 .annotate(total=Count("convocatoria", distinct=True)).order_by(campo))
+        return [{"valor": f[campo], "total": f["total"]} for f in filas]
+
+    destinos = candidatas("destino")
+    resumen = {"nivel": conteo("nivel", "nivel"), "modalidad": conteo("modalidad", "modalidad"),
+               "destino": conteo("destino", "paises__codigo"),
+               "destino_ambito": {a: destinos.filter(destino_q(ambito=a)).aggregate(total=Count("convocatoria", distinct=True))["total"]
+                                  for a in AMBITOS_DESTINO}}
+    return qs, resumen
 
 
 class Consulta(AuthView):
@@ -202,7 +243,11 @@ class Consulta(AuthView):
         if pk is not None:
             parametros(request, set())
             return Response(render(get_object_or_404(qs, pk=pk)))
-        return paginar(request, filtrar(request, qs), render)
+        # El listado público añade las facetas: valores presentes y su número de resultados según los demás filtros.
+        resultados, facetas = filtrar(request, qs, facetas=True)
+        respuesta = paginar(request, resultados, render)
+        respuesta.data["facetas"] = facetas
+        return respuesta
 
 
 class Comparacion(AuthView):

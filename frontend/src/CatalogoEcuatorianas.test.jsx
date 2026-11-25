@@ -8,7 +8,7 @@ import PublicCatalog from './pages/PublicCatalog'
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: null }) }))
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
-const ETIQUETA = 'Incluir becas de entidades no ecuatorianas o sin confirmar'
+const ETIQUETA = 'Incluir entidades no ecuatorianas'
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }], niveles: [{ valor: 'grado', nombre: 'Grado' }],
   modalidades: [{ valor: 'virtual', nombre: 'Virtual' }], tipos_beca: [{ id: 1, nombre: 'Mérito' }], areas: [] }
 const ecuatoriana = { id: 1, titulo: 'Beca de entidad ecuatoriana', institucion: { nombre: 'Universidad Ecuatoriana' }, estado: 'abierta', beneficios: [], opciones: [] }
@@ -39,11 +39,11 @@ it('la casilla está desmarcada por defecto y la consulta no incluye a las demá
   expect(screen.getByText('1 convocatoria encontrada')).toHaveAttribute('role', 'status')
 })
 
-it('marcar y aplicar incluye las demás, deja el parámetro en la URL y desmarcar lo quita', async () => {
+it('activar el interruptor incluye las demás al instante, deja el parámetro en la URL y desactivarlo lo quita', async () => {
   const get = open()
   const u = userEvent.setup()
-  await u.click(await screen.findByLabelText(ETIQUETA))
-  await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+  expect(await screen.findByRole('switch', { name: ETIQUETA })).not.toBeChecked()
+  await u.click(screen.getByLabelText(ETIQUETA))
   expect(await screen.findByText('Beca de entidad extranjera')).toBeVisible()
   expect(screen.getByText('Oferente: Universidad Extranjera (no ecuatoriano)')).toBeVisible()
   expect(screen.getByText('2 convocatorias encontradas')).toBeVisible()
@@ -51,7 +51,6 @@ it('marcar y aplicar incluye las demás, deja el parámetro en la URL y desmarca
   expect(ultimaConsulta(get)).toMatchObject({ incluir_no_ecuatorianas: '1' })
   expect(screen.getByLabelText(ETIQUETA)).toBeChecked()
   await u.click(screen.getByLabelText(ETIQUETA))
-  await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
   await waitFor(() => expect(screen.queryByText('Beca de entidad extranjera')).not.toBeInTheDocument())
   expect(screen.getByTestId('url')).not.toHaveTextContent('incluir_no_ecuatorianas')
 })
@@ -64,11 +63,11 @@ it('se conserva al recargar o compartir la URL y al cambiar de pestaña', async 
   await waitFor(() => expect(ultimaConsulta(get)).toMatchObject({ estado: 'cerrada', incluir_no_ecuatorianas: '1' }))
 })
 
-it('«Limpiar filtros» la desmarca y quita el parámetro', async () => {
+it('«Limpiar todo» lo desactiva y quita el parámetro', async () => {
   open('/becas?incluir_no_ecuatorianas=1&q=beca')
   const u = userEvent.setup()
   expect(await screen.findByLabelText(ETIQUETA)).toBeChecked()
-  await u.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+  await u.click(screen.getByRole('button', { name: 'Limpiar todo' }))
   await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent(/^$/))
   expect(await screen.findByLabelText(ETIQUETA)).not.toBeChecked()
 })
