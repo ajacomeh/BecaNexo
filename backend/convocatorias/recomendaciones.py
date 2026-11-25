@@ -75,7 +75,8 @@ def recomendar(usuario):
             modelo_disponible = False
     resultados = []
     areas_declaradas = {item.area.nombre for item in perfil.areas.select_related("area")} if perfil else set()
-    convocatorias = list(postulables().order_by("id"))
+    # Mismo criterio por defecto que el catálogo público: solo entidades oferentes ecuatorianas asignadas.
+    convocatorias = list(postulables().filter(institucion__isnull=False).order_by("id"))
     favoritos = dict(Favorito.objects.filter(usuario=usuario, convocatoria_id__in=[c.pk for c in convocatorias])
                      .values_list("convocatoria_id", "id"))
     for convocatoria in convocatorias:

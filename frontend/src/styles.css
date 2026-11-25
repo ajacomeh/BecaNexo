@@ -657,3 +657,10 @@ a > .ui-icon, .text-button > .ui-icon, .edit-name-link > .ui-icon { margin-right
   .card-head-status { margin-left: calc(44px + .85rem); justify-content: flex-start; }
 }
 .card-retirada { color: #53647e; font-style: italic; }
+
+/* Catálogo público: casilla para incluir becas sin entidad oferente ecuatoriana asignada. */
+.catalog-provider-toggle { gap: 4px; }
+.catalog-provider-toggle label { display: inline-flex; align-items: flex-start; gap: 10px; font-weight: 600; color: #17345c; cursor: pointer; line-height: 1.45; }
+.catalog-provider-toggle input[type="checkbox"] { flex: none; width: 20px; height: 20px; min-height: 0; margin: 1px 0 0; accent-color: #1d4ed8; cursor: pointer; }
+.catalog-provider-toggle input[type="checkbox"]:focus-visible { outline: 3px solid #167b88; outline-offset: 2px; }
+.catalog-provider-toggle .field-hint { margin: 0 0 0 30px; }
