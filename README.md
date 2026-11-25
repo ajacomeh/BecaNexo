@@ -104,7 +104,7 @@ Las pruebas backend usan una base de pruebas separada; las de frontend están en
 
 ## Integración continua
 
-Cada push, pull request o ejecución manual lanza el workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) en GitHub Actions:
+El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) de GitHub Actions se ejecuta en cada pull request sobre `main`, en cada push a `main` y a mano (`workflow_dispatch`). En los pull request, el job «Detectar cambios» decide según los archivos cambiados si hacen falta el backend, el frontend o ninguno; en `main` y a mano se ejecutan siempre ambos. El detalle está en [integración continua](docs/integracion-continua.md).
 
 - **Backend** en `windows-latest`, porque Windows es la plataforma del proyecto (el lanzador web del rastreo usa `msvcrt`). Instala PostgreSQL 16 en el runner, Python 3.13 y las dependencias, descarga el modelo ONNX fijado con `backend/scripts/download_semantic_model.py` (con caché) y ejecuta `manage.py check`, `makemigrations --check --dry-run` y `manage.py test --noinput`.
 - **Frontend** en `ubuntu-latest` con Node 24: `npm ci`, `npm run lint`, `npm test -- --maxWorkers=2` y `npm run build`.

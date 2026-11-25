@@ -10,12 +10,24 @@ El saludo usa el nombre actual del contexto de autenticación. Se eliminó la ta
 | Postulante | Mi perfil | `/perfil` |
 | Postulante | Idiomas y preferencias | `/preferencias` |
 | Postulante | Mis favoritas | `/favoritos` |
+| Postulante | Notificaciones | `/notificaciones` |
 | Administrador | Explorar becas | `/becas` |
 | Administrador | Convocatorias | `/gestion/convocatorias` |
 | Administrador | Entidades oferentes | `/gestion/instituciones` |
 | Administrador | Rastreo | `/gestion/rastreo` |
 
+Las tarjetas del administrador siguen el orden de su barra lateral: Explorar becas, Convocatorias, Entidades oferentes y Rastreo, en dos filas de dos. «Explorar becas» usa el mismo icono que la barra y la descripción «Consulta el catálogo público como lo ven los postulantes.» (25/11/2026). Las del postulante no cambian.
+
 Tarjetas semánticas con un enlace cada una, título como nombre accesible y descripción asociada. Reutilizan Icon/Lucide pendientes de la etapa anterior. Home.css limita todos sus selectores a home-dashboard: dos columnas en escritorio, una hasta 600 px, foco visible y texto adaptable. No añade estadísticas, indicadores ni operaciones. Los permisos del servidor y las rutas permanecen iguales.
+
+## Bloque de usuario de la barra lateral (25/11/2026)
+
+`ProfileLayout.jsx` muestra al pie de la barra, para todos los roles:
+
+- Una línea fina que lo separa del menú.
+- El nombre en negrita y, debajo, el rol como etiqueta con borde («Administrador» o «Postulante»). No hay avatar ni iniciales.
+- Para el administrador, el botón «Editar nombre» (lápiz, 44 px) con su diálogo.
+- El botón «Cerrar sesión», sin cambios de diseño, clases ni comportamiento.
 
 ## Verificación terminada
 
