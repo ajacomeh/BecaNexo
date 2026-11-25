@@ -5,6 +5,7 @@ import { stateLabel, closingText, providerLabel } from '../pages/offerDisplay'
 
 import { readable, benefitSummary, unique } from '../pages/catalogPresentation'
 import { ScholarshipHeader } from './ScholarshipIcon'
+import { CardFact, FinancingStrip } from './CardParts'
 import { singleArea } from './scholarshipFields'
 
 // Estado de requisitos de una recomendación: mismo texto de siempre, con color e ícono como en la comparación.
@@ -28,12 +29,12 @@ export default function CatalogCard({ offer, catalogs, recommendation }) {
       <ScholarshipHeader field={singleArea(offer.areas, catalogs?.areas)} title={offer.titulo}><p className="offer-provider card-provider">{providerLabel(offer)}</p></ScholarshipHeader>
       <div className="card-head-status">{statuses}</div>
     </div>
-    <dl className="offer-card-facts card-facts"><div><dt><Icon name="calendar" />Cierre</dt><dd>{closingText(offer, true)}</dd></div>
-      {options.length === 1 && <><div><dt><Icon name="layers" />Nivel y modalidad</dt><dd>{readable(options[0].nivel)} · {readable(options[0].modalidad)}</dd></div></>}
-      {options.length > 1 && <div><dt><Icon name="layers" />Opciones de estudio</dt><dd>{options.length} · {unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</dd></div>}
-      {countries.length > 0 && <div><dt><Icon name="location" />{countries.length === 1 ? 'Destino' : 'Destinos'}</dt><dd>{countries.join(', ')}</dd></div>}
+    <dl className="offer-card-facts card-facts"><CardFact icon="calendar" label="Cierre">{closingText(offer, true)}</CardFact>
+      {options.length === 1 && <CardFact icon="layers" label="Nivel y modalidad">{readable(options[0].nivel)} · {readable(options[0].modalidad)}</CardFact>}
+      {options.length > 1 && <CardFact icon="layers" label="Opciones de estudio">{options.length} · {unique(options.map(o => readable(o.nivel))).join(', ')} · {unique(options.map(o => readable(o.modalidad))).join(', ')}</CardFact>}
+      {countries.length > 0 && <CardFact icon="location" label={countries.length === 1 ? 'Destino' : 'Destinos'}>{countries.join(', ')}</CardFact>}
     </dl>
-    {financing.length > 0 && <div className="offer-card-financing"><h3>Financiamiento</h3>{financing.map((text, index) => <p key={index}>{text}</p>)}</div>}
+    {financing.length > 0 && <FinancingStrip items={financing} />}
     {recommendation && <div className="recommendation-explanation"><p className={`recommendation-requirements recommendation-requirements-${requirementState}`}><strong><Icon name={requirementIcon} />Requisitos</strong><span>{recommendation.requirements}</span></p><p><strong>Afinidad temática</strong><span>{recommendation.affinity}</span></p><p><strong>Preferencias</strong><span>{recommendation.preferences}</span></p></div>}
     {/* Pie al fondo: los botones de tarjetas de una misma fila quedan a la misma altura. */}
     <div className="card-foot">

@@ -33,16 +33,18 @@ it('tarjeta de administración: borrador del rastreo sin beneficios ni tipo se l
   renderList([card({ id: 1, titulo: 'Borrador del rastreo', origen_automatico: { publicacion_id: 17 } }), card({ id: 2, titulo: 'Convocatoria manual' })])
   const rastreo = (await screen.findByRole('heading', { name: 'Borrador del rastreo' })).closest('article')
   expect(within(rastreo).getByText('Beneficios: no publicados en la ficha')).toBeVisible()
-  expect(within(rastreo).getByText('Tipo: por definir')).toBeVisible()
+  // Sin tipo real, la tarjeta no ocupa una celda con «Tipo».
+  expect(within(rastreo).queryByText('Tipo', { selector: 'dt' })).not.toBeInTheDocument()
+  expect(within(rastreo).queryByText(/por definir|No especificado$/)).not.toBeInTheDocument()
   expect(within(rastreo).queryByText('Beneficios no especificados')).not.toBeInTheDocument()
   const manual = screen.getByRole('heading', { name: 'Convocatoria manual' }).closest('article')
   expect(within(manual).getByText('Beneficios no especificados')).toBeVisible()
-  expect(within(manual).getByText('Tipo: No especificado')).toBeVisible()
+  expect(within(manual).queryByText('Tipo', { selector: 'dt' })).not.toBeInTheDocument()
 })
 
 it('tarjeta del rastreo con tipo y beneficios muestra sus datos', async () => {
   renderList([card({ origen_automatico: { publicacion_id: 17 }, tipo_beca_nombre: 'Mérito académico', beneficios: [{ concepto: 'Matrícula', porcentaje: 50 }] })])
-  expect(await screen.findByText('Tipo: Mérito académico')).toBeVisible()
+  expect((await screen.findByText('Tipo', { selector: 'dt' })).nextElementSibling).toHaveTextContent('Mérito académico')
   expect(screen.getByText('Matrícula: 50 %')).toBeVisible()
   expect(screen.queryByText(/no publicados en la ficha/)).not.toBeInTheDocument()
 })
