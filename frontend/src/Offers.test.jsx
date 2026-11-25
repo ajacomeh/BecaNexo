@@ -11,6 +11,8 @@ import { requirementFields, generalFields, benefitFields } from './pages/offerFi
 
 vi.mock('./auth/context', () => ({ useAuth: () => ({ user: { nombre: 'Admin sintético', rol: 'administrador' }, logout: vi.fn() }) }))
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
+// Valor de un dato de la tarjeta: etiqueta (dt) con icono y valor (dd) debajo, como en el catálogo.
+const fact = (card, label) => within(card).getByText(label, { selector: 'dt' }).nextElementSibling
 const catalogs = { paises: [{ id: 1, codigo: 'EC', nombre: 'Ecuador' }], areas: [], idiomas: [], tipos_beca: [], tipos_requisito: [], niveles: [], modalidades: [] }
 const filterCatalogs = { ...catalogs, niveles: [{ valor: 'maestria', nombre: 'Maestría' }], modalidades: [{ valor: 'virtual', nombre: 'Virtual' }], tipos_beca: [{ id: 3, nombre: 'Mérito' }] }
 const adminListing = { count: 1, page: 1, page_size: 12, results: [{ id: 4, estado: 'borrador', titulo: 'Convocatoria sintética', institucion: { nombre: 'Entidad ficticia' }, beneficios: [], opciones: [], cierre: null }] }
@@ -53,23 +55,23 @@ describe('convocatorias', () => {
     render(<MemoryRouter><Offers admin /></MemoryRouter>)
     for (const id of [18, 19, 20]) {
       const card = (await screen.findByRole('heading', { name: `Convocatoria ${id}` })).closest('article')
-      expect(within(card).getByText('Opciones de estudio: 7')).toBeVisible()
-      expect(within(card).getByText('Nivel: Grado')).toBeVisible()
-      expect(within(card).getByText('Modalidades: Presencial, Híbrida')).toBeVisible()
-      expect(within(card).getByText(/Cierre: 22 nov 2026 · hora no informada/)).toBeVisible()
+      expect(fact(card, 'Opciones de estudio')).toHaveTextContent(/^7$/)
+      expect(fact(card, 'Nivel')).toHaveTextContent(/^Grado$/)
+      expect(fact(card, 'Modalidades')).toHaveTextContent(/^Presencial, Híbrida$/)
+      expect(fact(card, 'Cierre')).toHaveTextContent(/22 nov 2026 · hora no informada/)
       expect(within(card).getByRole('link', { name: 'Editar y revisar' })).toHaveAttribute('href', `/gestion/convocatorias/${id}`)
     }
     const historic = screen.getByRole('heading', { name: 'Convocatoria 14' }).closest('article')
-    expect(within(historic).getByText(/Cierre: 21 oct 2026/)).toBeVisible()
+    expect(fact(historic, 'Cierre')).toHaveTextContent(/21 oct 2026/)
     const draft = screen.getByRole('heading', { name: 'Convocatoria 16' }).closest('article')
-    expect(within(draft).getByText('Opciones de estudio: 0')).toBeVisible()
-    expect(within(draft).getByText('Modalidades: No especificadas')).toBeVisible()
-    expect(within(draft).getByText('Cierre: Fecha de cierre no informada')).toBeVisible()
+    expect(fact(draft, 'Opciones de estudio')).toHaveTextContent(/^0$/)
+    expect(fact(draft, 'Modalidades')).toHaveTextContent(/^No especificadas$/)
+    expect(fact(draft, 'Cierre')).toHaveTextContent(/^Fecha de cierre no informada$/)
     const mixed = screen.getByRole('heading', { name: 'Convocatoria 21' }).closest('article')
-    expect(within(mixed).getByText('Opciones de estudio: 2')).toBeVisible()
-    expect(within(mixed).getByText('Niveles: Grado, Maestría')).toBeVisible()
-    expect(within(mixed).getByText('Modalidades: Presencial, Virtual')).toBeVisible()
-    expect(within(mixed).getByText(/Cierre:.*10:30/)).toBeVisible()
+    expect(fact(mixed, 'Opciones de estudio')).toHaveTextContent(/^2$/)
+    expect(fact(mixed, 'Niveles')).toHaveTextContent(/^Grado, Maestría$/)
+    expect(fact(mixed, 'Modalidades')).toHaveTextContent(/^Presencial, Virtual$/)
+    expect(fact(mixed, 'Cierre')).toHaveTextContent(/10:30/)
   })
 
   it('identifica un borrador del rastreo sin oferente confirmado en administración', async () => {

@@ -74,17 +74,28 @@ describe('tarjeta de Convocatorias (administración)', () => {
     expect(origen).toHaveClass('small-note')
     expect(origen.parentElement).toBe(heading.parentElement)
     expect(within(card).getByText('Faltan 1 paso para publicar')).toHaveClass('card-readiness-pending')
-    const facts = card.querySelector('.card-facts-admin')
-    for (const text of ['Tipo: por definir', 'Beneficios: no publicados en la ficha', 'Opciones de estudio: 2', 'Niveles: Maestría, Doctorado', 'Modalidades: Virtual']) {
-      expect(within(facts).getByText(text)).toBeVisible()
+    // Datos con la misma presentación que el catálogo: icono decorativo, etiqueta (dt) y valor (dd); mismos textos.
+    const facts = card.querySelector('dl.offer-card-facts.card-facts')
+    const values = { 'Opciones de estudio': '2', Niveles: 'Maestría, Doctorado', Modalidades: 'Virtual' }
+    for (const [label, value] of Object.entries(values)) {
+      const term = within(facts).getByText(label, { selector: 'dt' })
+      expect(term.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+      expect(term.nextElementSibling).toHaveTextContent(new RegExp(`^${value}$`))
     }
-    expect(within(facts).getByText(/^Cierre: /)).toBeVisible()
+    expect(within(facts).getByText('Cierre', { selector: 'dt' }).nextElementSibling.tagName).toBe('DD')
+    expect(within(facts).queryByText('Tipo', { selector: 'dt' })).not.toBeInTheDocument()
+    const financing = card.querySelector('.offer-card-financing')
+    expect(within(financing).getByText('Financiamiento')).toBeVisible()
+    expect(within(financing).getByText('Beneficios: no publicados en la ficha')).toBeVisible()
     const foot = card.querySelector('.card-foot')
     expect(foot).toBe(card.lastElementChild)
-    expect(within(foot).getByRole('link', { name: 'Editar y revisar' })).toHaveAttribute('href', '/gestion/convocatorias/7')
+    const edit = within(foot).getByRole('link', { name: 'Editar y revisar' })
+    expect(edit).toHaveAttribute('href', '/gestion/convocatorias/7')
+    expect(edit).toHaveClass('catalog-detail-link')
+    expect(edit.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
     const listo = screen.getByRole('heading', { name: 'Convocatoria lista' }).closest('article')
     expect(within(listo).getByText('Sin pendientes: lista para revisar y publicar')).toHaveClass('card-readiness-ready')
-    expect(within(listo).getByText('Tipo: Mérito académico')).toBeVisible()
+    expect(within(listo).getByText('Tipo', { selector: 'dt' }).nextElementSibling).toHaveTextContent(/^Mérito académico$/)
   })
 })
 
