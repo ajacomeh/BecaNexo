@@ -216,3 +216,4 @@
   .crawl-group-detail { padding-left: .6rem; }
 }
 .crawl-incident-reason { flex-basis: 100%; min-width: 0; margin: .1rem 0 0; color: #526780; font-size: .9rem; line-height: 1.5; overflow-wrap: anywhere; }
+.situation-retirada { background: #eef1f5; color: #3d4b5f; border: 1px solid #cfd8e3; }

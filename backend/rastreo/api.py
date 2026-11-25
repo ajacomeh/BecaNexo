@@ -50,6 +50,8 @@ def publication_data(p):
             'titulo': title if isinstance(title, str) and title.strip() else urlsplit(p.url_original).path or p.url_original,
             'url_original': p.url_original, 'primera_deteccion': p.primera_deteccion, 'ultima_deteccion': p.ultima_deteccion,
             'version_observada_id': p.version_observada_id, 'convocatoria_id': p.convocatoria_id,
+            # Ficha retirada por la fuente (404/410 confirmado): solo informativo, no cambia la convocatoria.
+            'retirada_en': p.retirada_en,
             'situacion': publication_situation(p)}
 
 

@@ -414,6 +414,29 @@ def incident(execution, code, detail, access=None, severity='error', publication
                                     codigo=code, detalle=detail, gravedad=severity)
 
 
+# Ficha conocida que la fuente ya no sirve (SIAU retira las convocatorias vencidas): aviso, no fallo de la corrida.
+# Los 5xx, los tiempos de espera y los fallos de red siguen siendo errores.
+FICHA_RETIRADA_HTTP = (404, 410)
+
+
+def ficha_no_disponible(execution, publication, access, status):
+    """Registra el aviso FICHA_NO_DISPONIBLE y marca la publicación como retirada si el intento anterior
+    (de otra ejecución) también fue 404/410; la primera vez solo avisa, para evitar falsos positivos transitorios."""
+    prior = (Acceso.objects.filter(publicacion=publication, rol='ficha').exclude(ejecucion=execution)
+             .order_by('-id').values_list('http_status', flat=True).first())
+    confirmed = prior in FICHA_RETIRADA_HTTP
+    if confirmed:
+        Publicacion.objects.filter(pk=publication.pk, retirada_en__isnull=True).update(retirada_en=timezone.now())
+    incident(execution, 'FICHA_NO_DISPONIBLE',
+             f'HTTP {status}: la ficha ya no está disponible en la fuente; '
+             + ('retirada confirmada en dos ejecuciones consecutivas.' if confirmed else 'se confirmará si se repite en la próxima ejecución.'),
+             access, 'aviso')
+
+
+def ficha_retirada_en(execution, publication):
+    return bool(publication) and execution.incidencias.filter(codigo='FICHA_NO_DISPONIBLE', publicacion=publication).exists()
+
+
 class PersistentDownloader(Downloader):
     def __init__(self, execution, source):
         self.portal = portal_for_source(source) if source.adaptador.startswith('portal_ec:') else None
@@ -486,6 +509,9 @@ class PersistentDownloader(Downloader):
                         self.publication = identity(self.execution, self.page_url)
                     prior = Acceso.objects.filter(url_normalizada=url, documento__isnull=False).order_by('-id').first()
                     access = self.record(url, entry, status, 'descargado' if created else 'reutilizado', document, headers=headers)
+                    if self.publication is not None and url == self.page_url:
+                        # La ficha volvió a estar disponible: deja de estar retirada.
+                        Publicacion.objects.filter(pk=self.publication.pk, retirada_en__isnull=False).update(retirada_en=None)
                     if url in self.pdfs and prior and prior.documento_id != document.pk:
                         incident(self.execution, 'PDF_CAMBIADO', 'Nueva huella; no hereda revisión previa.', access, 'aviso')
                     # Aviso una sola vez por documento y URL: al obtenerlo por primera vez o cuando cambia su huella.
@@ -501,7 +527,10 @@ class PersistentDownloader(Downloader):
         else:
             result = 'redirigido' if status in (301, 302, 303, 307, 308) else 'error'
             access = self.record(url, entry, status, result, error=None if result == 'redirigido' else f'HTTP_{status}')
-            if result == 'error':
+            if (result == 'error' and status in FICHA_RETIRADA_HTTP and self.publication is not None
+                    and url == self.page_url and url in self.pages):
+                ficha_no_disponible(self.execution, self.publication, access, status)
+            elif result == 'error':
                 incident(self.execution, 'HTTP', f'HTTP {status}; no cancela convocatorias.', access)
             if status in (429, 503):
                 due = retry_after_at(headers)
@@ -622,7 +651,9 @@ def seleccionar_fichas(source, candidates, limit=MAX_FICHAS, known_limit=MAX_FIC
     candidatos nuevos en el orden del índice. Los cupos que sobran de un lado pasan al otro; nunca más de `limit`.
     Devuelve (fichas, hay_mas).
     """
-    known = [url for url in Publicacion.objects.filter(fuente=source).order_by('ultima_deteccion', 'id')
+    # Una retirada que reaparece en el índice vuelve al flujo normal; las demás retiradas no ocupan cupos.
+    Publicacion.objects.filter(fuente=source, retirada_en__isnull=False, url_normalizada__in=set(candidates)).update(retirada_en=None)
+    known = [url for url in Publicacion.objects.filter(fuente=source, retirada_en__isnull=True).order_by('ultima_deteccion', 'id')
              .values_list('url_normalizada', flat=True) if candidate_url(url, NATIONAL_FICHA) == url]
     known_set = set(known)
     new = [url for url in dict.fromkeys(candidates) if url not in known_set]
@@ -921,9 +952,13 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                     raise
                 except (AccessError, ValueError, ValidationError) as exc:
                     publication = downloader.publication
-                    incident(execution, 'FICHA_INCOMPLETA', type(exc).__name__, publication=publication)
-                    if publication:
-                        observe(execution, publication, detail='Fallo de ficha; no se fabricó versión.')
+                    if ficha_retirada_en(execution, publication):
+                        # 404/410 de una ficha conocida: ya consta el aviso FICHA_NO_DISPONIBLE; no es FICHA_INCOMPLETA.
+                        observe(execution, publication, detail='Ficha no disponible en la fuente (HTTP 404/410); no se fabricó versión.')
+                    else:
+                        incident(execution, 'FICHA_INCOMPLETA', type(exc).__name__, publication=publication)
+                        if publication:
+                            observe(execution, publication, detail='Fallo de ficha; no se fabricó versión.')
             downloader.publication = None
             downloader.page_url = None
             failures = execution.incidencias.filter(gravedad='error').exists()

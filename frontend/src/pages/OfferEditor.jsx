@@ -144,6 +144,7 @@ export default function OfferEditor() {
       }} /></section>
       {loaded.offer && <><OriginPanel offer={loaded.offer} /><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
         <section className="profile-card"><h2>Revisión y publicación</h2>
+          {loaded.offer.ficha_retirada && <p className="profile-note offer-ficha-retirada" role="note">La ficha oficial ya no está disponible en SIAU</p>}
           {loaded.offer.descartado && <p className="publish-warning" role="note">Borrador descartado: no se publica ni se vuelve a crear desde el rastreo. Puedes restaurarlo.</p>}
           {providerWarning && !loaded.offer.descartado ? <div className="publish-warning" role="note"><p><strong>{providerWarning}.</strong> Solo puedes publicarla bajo tu responsabilidad; en el catálogo se mostrará el oferente detectado o «Oferente por confirmar».</p>
             <label className="publish-confirm"><input type="checkbox" checked={confirmProvider} onChange={(event) => setConfirmProvider(event.target.checked)} disabled={busy} /> Publicar bajo mi responsabilidad</label></div>

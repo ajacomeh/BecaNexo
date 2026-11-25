@@ -166,6 +166,8 @@ class Publicacion(models.Model):
     normalizacion_version = models.CharField(max_length=60)
     primera_deteccion = models.DateTimeField(default=timezone.now)
     ultima_deteccion = models.DateTimeField(default=timezone.now)
+    # Ficha retirada por la fuente: 404/410 confirmado en dos ejecuciones consecutivas. Se limpia si reaparece.
+    retirada_en = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'TRA_PUBLICACION_FUENTE'

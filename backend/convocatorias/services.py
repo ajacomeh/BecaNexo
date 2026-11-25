@@ -75,6 +75,9 @@ def detalle(obj, publico=False, con_diagnostico=False):
     if not publico:
         data["descartado"] = descartado(obj)
         data["aviso_oferente"] = aviso_oferente(obj)
+        from rastreo.models import Publicacion
+        # Aviso informativo: la ficha oficial vinculada ya no está disponible en la fuente (no despublica nada).
+        data["ficha_retirada"] = Publicacion.objects.filter(convocatoria=obj, retirada_en__isnull=False).exists()
         origin = m.BorradorRastreo.objects.filter(convocatoria=obj).select_related("publicacion__fuente", "version").first()
         data["origen_automatico"] = {"publicacion_id": origin.publicacion_id, "version_id": origin.version_id} if origin else None
         if con_diagnostico:

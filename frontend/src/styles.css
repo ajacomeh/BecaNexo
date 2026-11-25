@@ -656,3 +656,4 @@ a > .ui-icon, .text-button > .ui-icon, .edit-name-link > .ui-icon { margin-right
   .card-facts, .card-facts-admin { grid-template-columns: minmax(0, 1fr); }
   .card-head-status { margin-left: calc(44px + .85rem); justify-content: flex-start; }
 }
+.card-retirada { color: #53647e; font-style: italic; }
