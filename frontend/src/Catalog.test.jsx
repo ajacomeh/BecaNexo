@@ -162,13 +162,16 @@ it.each([0, 1, 12])('oculta paginación según metadatos count=%i, no según tar
 it('distingue catálogo vacío de búsqueda sin coincidencias', async () => {
   const u = userEvent.setup()
   setup('/becas', 0)
-  expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
+  // Por defecto (solo entidades ecuatorianas) el vacío lo indica; sin filtros activos no ofrece restablecer.
+  expect(await screen.findByText('No hay becas de entidades ecuatorianas con estos filtros.')).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument()
   await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'inexistente')
   await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
-  expect(await screen.findByText('No encontramos becas que coincidan con los filtros seleccionados')).toBeVisible()
+  expect(await screen.findByRole('button', { name: 'Restablecer filtros' })).toBeVisible()
+  expect(screen.getByText('No hay becas de entidades ecuatorianas con estos filtros.')).toBeVisible()
   await u.click(screen.getByRole('button', { name: 'Restablecer filtros' }))
-  expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
+  expect(await screen.findByText('No hay becas de entidades ecuatorianas con estos filtros.')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument()
 })
 
 it('omite datos vacíos, muestra una sola ausencia de cierre y conserva retorno seguro de favoritos', () => {
@@ -212,7 +215,7 @@ it('conserva error y reintento sin mostrar resultados obsoletos', async () => {
   expect(await screen.findByText('Error de prueba')).toBeVisible()
   vi.mocked(offersApi.get).mockImplementation(async path => path === 'becas/catalogos' ? catalogs : { results: [], count: 0, page: 1, page_size: 12 })
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
-  expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
+  expect(await screen.findByText('No hay becas de entidades ecuatorianas con estos filtros.')).toBeVisible()
   // El estado solo se elige con las pestañas; «Más filtros» ya no lo repite.
   expect(screen.queryByLabelText('Estado')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Vigentes', pressed: true })).toBeVisible()

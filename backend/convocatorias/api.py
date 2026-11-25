@@ -116,11 +116,22 @@ class Instituciones(AuthView):
         return Response(resumen, status=200)
 
 
+INCLUIR_NO_ECUATORIANAS = {"1": True, "true": True, "0": False, "false": False}
+
+
 def filtrar(request, qs, admin=False):
     allowed = {"page", "page_size", "q", "nivel", "modalidad", "destino", "tipo_beca", "estado", "orden"}
-    if admin: allowed.add("revision")
+    allowed.add("revision" if admin else "incluir_no_ecuatorianas")
     parametros(request, allowed)
     p = request.query_params
+    if not admin:
+        # Catálogo público: por defecto solo convocatorias con entidad oferente ecuatoriana asignada (toda entidad
+        # del catálogo de instituciones es ecuatoriana). Las demás, solo si se piden de forma expresa.
+        incluir = p.get("incluir_no_ecuatorianas", "false").lower()
+        if incluir not in INCLUIR_NO_ECUATORIANAS:
+            raise serializers.ValidationError({"incluir_no_ecuatorianas": "Usa true o false."})
+        if not INCLUIR_NO_ECUATORIANAS[incluir]:
+            qs = qs.filter(institucion__isnull=False)
     query = p.get("q", "").strip()
     if len(query) > 200: raise serializers.ValidationError({"q": "Máximo 200 caracteres."})
     options = {"activa": True}

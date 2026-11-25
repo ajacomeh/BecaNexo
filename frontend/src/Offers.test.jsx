@@ -227,7 +227,7 @@ describe('convocatorias', () => {
   it('muestra catálogo vacío sin inventar ofertas', async () => {
     vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path === 'becas/catalogos' ? catalogs : { count: 0, page: 1, page_size: 12, results: [] })
     render(<MemoryRouter><Offers /></MemoryRouter>)
-    expect(await screen.findByText('No hay convocatorias disponibles actualmente')).toBeVisible()
+    expect(await screen.findByText('No hay becas de entidades ecuatorianas con estos filtros.')).toBeVisible()
     expect(screen.queryByText(/compatibilidad/i)).not.toBeInTheDocument()
   })
 
@@ -327,4 +327,11 @@ describe('convocatorias', () => {
     expect(screen.getByLabelText('Edad máxima')).toHaveAttribute('type', 'number')
     expect(screen.queryByLabelText(/JSON/)).not.toBeInTheDocument()
   })
+})
+
+it('la gestión de convocatorias del administrador no muestra la casilla de entidades no ecuatorianas', async () => {
+  vi.spyOn(offersApi, 'get').mockImplementation(async (path) => path === 'becas/catalogos' ? catalogs : adminListing)
+  render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)
+  await screen.findByRole('heading', { name: 'Filtros de búsqueda' })
+  expect(screen.queryByLabelText('Incluir becas de entidades no ecuatorianas o sin confirmar')).not.toBeInTheDocument()
 })

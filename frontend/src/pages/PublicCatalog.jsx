@@ -70,10 +70,12 @@ function CatalogBody({ user }) {
   const current = result?.query === query ? result : null
   const data = current?.data
   const currentRecommendations = recommendations?.userId === userId && recommendations?.retry === recommendationsRetry ? recommendations : null
+  // Por defecto el servidor muestra solo becas con entidad oferente ecuatoriana; la casilla del filtro incluye las demás.
+  const includesOthers = params.get('incluir_no_ecuatorianas') === '1'
   const hasActiveFilters = ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado'].some(key => Boolean(params.get(key)))
   const clear = () => { setParams({}) }
   const retryCatalogs = () => { setCatalogError(''); setCatalogRetry(value => value + 1) }
-  const apply = values => setParams(Object.fromEntries(Object.entries(values).filter(([k, v]) => ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado', 'orden', 'page_size'].includes(k) && v != null && v !== '')))
+  const apply = values => setParams(Object.fromEntries(Object.entries(values).filter(([k, v]) => ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado', 'orden', 'page_size', 'incluir_no_ecuatorianas'].includes(k) && v != null && v !== '')))
   return <OffersLayout><div className="public-catalog"><div className="page-heading"><div><p className="eyebrow">EXPLORA TU PRÓXIMO PASO</p><h1>Catálogo de becas</h1><p>Oportunidades pertinentes para Ecuador · Consulta la procedencia de cada beca</p></div></div>
     {userId != null && <div className="catalog-modes" role="group" aria-label="Modo de resultados">
       <Button type="button" className={activeMode === 'all' ? 'catalog-mode-active' : 'button-light'} aria-pressed={activeMode === 'all'} onClick={() => setMode('all')}>Todas las becas</Button>
@@ -84,13 +86,14 @@ function CatalogBody({ user }) {
     <div className="catalog-modes" role="group" aria-label="Vigencia de las becas">
       {[["vigentes", "Vigentes"], ["proxima", "Próximas"], ["cerrada", "Cerradas"], ["todas", "Todas las publicadas"]].map(([value, label]) => <Button key={value} type="button" className={activeView === value ? 'catalog-mode-active' : 'button-light'} aria-pressed={activeView === value} onClick={() => changeView(value)}>{label}</Button>)}
     </div>
-    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={apply} onClear={clear} showState={false} />}
+    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={apply} onClear={clear} showState={false} providerToggle />}
     {(!current || (!catalogs && !catalogError)) && !current?.error && <p role="status"><Icon name="loading" />Cargando catálogo…</p>}
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => { setResult(null); setRetry(retry + 1) }}>Reintentar</Button></>}
     {!catalogs && catalogError && <><Message>{catalogError}</Message><Button icon="refresh" onClick={retryCatalogs}>Reintentar datos del catálogo</Button></>}
     {data && catalogs && <><div className="catalog-results-heading"><p role="status">{data.count} {data.count === 1 ? 'convocatoria encontrada' : 'convocatorias encontradas'}</p><div className="field"><label htmlFor="catalog-order">Ordenar por</label><select id="catalog-order" aria-describedby="catalog-order-hint" value={params.get('orden') || 'recientes'} onChange={e => apply({ ...Object.fromEntries(params), orden: e.target.value })}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option></select><small id="catalog-order-hint">Se aplica al seleccionar.</small></div></div>
       <div className="offer-grid">{data.results.map(offer => <CatalogCard key={offer.id} offer={offer} catalogs={catalogs} />)}</div>
-      {data.count === 0 && <section className="profile-card"><h2>{hasActiveFilters ? 'No encontramos becas que coincidan con los filtros seleccionados' : 'No hay convocatorias disponibles actualmente'}</h2>{hasActiveFilters && <><p>Puedes cambiar la búsqueda o restablecer los filtros.</p><Button icon="clear" onClick={clear}>Restablecer filtros</Button></>}</section>}
+      {data.count === 0 && (includesOthers ? <section className="profile-card"><h2>{hasActiveFilters ? 'No encontramos becas que coincidan con los filtros seleccionados' : 'No hay convocatorias disponibles actualmente'}</h2>{hasActiveFilters && <><p>Puedes cambiar la búsqueda o restablecer los filtros.</p><Button icon="clear" onClick={clear}>Restablecer filtros</Button></>}</section>
+        : <section className="profile-card"><h2>No hay becas de entidades ecuatorianas con estos filtros.</h2><p>Puedes incluir becas de entidades no ecuatorianas o sin confirmar.</p>{hasActiveFilters && <Button icon="clear" onClick={clear}>Restablecer filtros</Button>}</section>)}
       {data.count > data.page_size && <nav className="pagination" aria-label="Paginación"><Button icon="previous" disabled={data.page <= 1} onClick={() => setParams({ ...Object.fromEntries(params), page: data.page - 1 })}>Anterior</Button><span>Página {data.page}</span><Button icon="next" disabled={data.page * data.page_size >= data.count} onClick={() => setParams({ ...Object.fromEntries(params), page: data.page + 1 })}>Siguiente</Button></nav>}
       {data.results.some(o => o.beneficios.some(b => b.porcentaje != null)) && <p className="profile-note catalog-coverage-note">Los porcentajes corresponden al concepto indicado, no al costo total. Revisa las condiciones de cada opción.</p>}
     </>}

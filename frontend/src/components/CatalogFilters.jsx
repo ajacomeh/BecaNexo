@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import Button from './Button'
 import { readable } from '../pages/catalogPresentation'
 
-export default function CatalogFilters({ params, catalogs, onApply, onClear, stateValues = ['abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'], activeCount = null, allStateLabel = 'Todos los estados', showState = true }) {
+export default function CatalogFilters({ params, catalogs, onApply, onClear, stateValues = ['abierta', 'cierre_hoy', 'cerrada', 'proxima', 'sin_fecha'], activeCount = null, allStateLabel = 'Todos los estados', showState = true, providerToggle = false }) {
   const [values, setValues] = useState(() => Object.fromEntries(params))
   const id = useId()
   // El catálogo público elige el estado con sus pestañas; aquí solo lo muestra la gestión de convocatorias.
@@ -16,6 +16,11 @@ export default function CatalogFilters({ params, catalogs, onApply, onClear, sta
       {select('modalidad', 'Modalidad', 'Todas las modalidades', catalogs.modalidades.map(r => [r.valor, r.nombre]))}
       {select('destino', 'Destino de estudio', 'Todos los destinos', catalogs.paises.map(r => [r.codigo, r.nombre]))}
     </div>
+    {/* Solo en el catálogo público: incluir becas sin entidad oferente ecuatoriana asignada. */}
+    {providerToggle && <div className="field catalog-provider-toggle"><label htmlFor={`${id}-incluir`}><input id={`${id}-incluir`} type="checkbox" name="incluir_no_ecuatorianas"
+      aria-describedby={`${id}-incluir-ayuda`} checked={values.incluir_no_ecuatorianas === '1'}
+      onChange={e => setValues({ ...values, incluir_no_ecuatorianas: e.target.checked ? '1' : '' })} />Incluir becas de entidades no ecuatorianas o sin confirmar</label>
+      <p id={`${id}-incluir-ayuda`} className="field-hint">Por defecto se muestran solo becas de entidades ecuatorianas.</p></div>}
     <details><summary>Más filtros{secondary > 0 && ` · ${secondary} aplicados`}</summary><div className="catalog-filter-grid">
       {select('tipo_beca', 'Tipo de beca', 'Todos los tipos', catalogs.tipos_beca.map(r => [r.id, r.nombre]))}
       {showState && select('estado', 'Estado', allStateLabel, stateValues.map(v => [v, v === 'todas' ? 'Todas las publicadas' : v === 'vigentes' ? 'Vigentes' : v === 'proxima' ? 'Próxima apertura' : v === 'cierre_hoy' ? 'Cierra hoy; hora no informada' : v === 'sin_fecha' ? 'Fecha de cierre no informada' : readable(v)]))}    </div></details>
