@@ -177,7 +177,7 @@ Para estudiar el frontend se distinguen **siete áreas funcionales**, no siete p
 
 `api/client.js` centraliza `request`, `prepareCsrf`, `authApi`, `profileApi` y `offersApi`. Envía cookies same-origin y no-store, prepara CSRF antes de escrituras y transforma errores HTTP/red en `ApiError`. Diferencia 403, 429 y errores del servidor; no presenta HTML de error como contenido de la aplicación. Cada formulario mantiene sus estados y errores, no asume que una petición tuvo éxito.
 
-`CatalogFilters`, `CatalogCard`, `FavoriteButton` y `Comparison` componen la consulta. Un visitante que intenta guardar una beca pasa al login con retorno seguro; no se guarda automáticamente. `auth/returnPath.js` admite únicamente `/becas` o `/becas/<entero positivo>` sin parámetros ni fragmentos; otros destinos vuelven a `/inicio`.
+`CompactFilters` (filtro compacto compartido con Convocatorias del administrador), `CatalogCard`, `FavoriteButton` y `Comparison` componen la consulta. Un visitante que intenta guardar una beca pasa al login con retorno seguro; no se guarda automáticamente. `auth/returnPath.js` admite únicamente `/becas` o `/becas/<entero positivo>` sin parámetros ni fragmentos; otros destinos vuelven a `/inicio`.
 
 `src/test/setup.js` configura Vitest y limpia montajes/mocks después de cada prueba. No lo importa `main.jsx` y no conecta la aplicación normal a una API simulada. Las interceptaciones de Playwright pertenecen a los archivos de prueba.
 

@@ -1,5 +1,42 @@
 # Avance de BecaNexo
 
+## Estado al 25/11/2026
+
+Las secciones posteriores son el historial. Donde describen la interfaz anterior (por ejemplo «Aplicar filtros» o «Más filtros»), las sustituye lo que se resume aquí.
+
+### Cambios del 24 y 25/11/2026
+
+| Commit | Cambio | Documento |
+|---|---|---|
+| `27599b0` | Integración continua con GitHub Actions | [integración continua](integracion-continua.md) |
+| `5a7f1ca` | Fichas que SIAU devuelve con 404 o 410 tratadas como retiradas | [comandos de rastreo](comandos-rastreo.md) |
+| `fcc53ae` | Catálogo público: por defecto solo entidades oferentes ecuatorianas | [catálogo público](catalogo-publico.md) |
+| `f208acf` | Extractor `siau-html/3`: variante «Requisitos para aplicar» | [fuentes iniciales](rastreo-fuentes-iniciales.md) |
+| `d72eb91` (#3) | Filtro compacto del catálogo público, `destino_ambito` y facetas | [catálogo público](catalogo-publico.md) |
+| `c677a8b` (#4) | Filtro compacto en Convocatorias del administrador | [catálogo público](catalogo-publico.md#convocatorias-del-administrador-25112026) |
+| `efbc32c` (#5) | CI: una ejecución por PR y jobs selectivos | [integración continua](integracion-continua.md) |
+| `3bea67e` (#6) | Tarjetas de Convocatorias con la presentación del catálogo | [catálogo público](catalogo-publico.md#convocatorias-del-administrador-25112026) |
+| `c7b5665` (#7) | «Explorar becas» en el Inicio del administrador y bloque de usuario | [inicio autenticado](inicio-autenticado.md) |
+
+### Rastreo
+
+El extractor vigente es `siau-html/3`. Su primera corrida real programada es la de las 18:46 del 25/11/2026, y su resultado se registra aparte.
+
+### Pruebas (cifras del último cierre)
+
+- **Backend:** 622 pruebas, todas aprobadas, en la última ejecución completa local del 25/11/2026 (`manage.py test --keepdb --noinput`). Después solo cambió el frontend.
+- **Frontend:** Vitest con 389 pruebas en 39 archivos (`--maxWorkers=2`), todas aprobadas, más lint y build sin errores, en el último cierre del 25/11/2026.
+- **CI:** las mismas verificaciones corren en GitHub Actions.
+
+### Pendientes de datos oficiales
+
+Son borradores privados que siguen sin publicarse hasta contar con los datos oficiales:
+
+- **#12** (PUCE Ambato, manual): faltan el cierre, el nivel y la modalidad. La apertura del 01/12/2026 no se puede almacenar sin hora: el modelo solo guarda la apertura como instante.
+- **#16** (ISTCGE 2026, manual): modalidades sin confirmar; no tiene opciones de estudio.
+- **#35** (UCSG, beca del 100 % B-2026, manual): fecha de cierre oficial sin confirmar. La registrada es el 10/07/2026, pero la descripción indica que no está confirmada.
+- **#84** (AICAD, del rastreo): requisitos pendientes de la corrida con `siau-html/3`; no tiene requisitos ni opciones. El país de destino está por confirmar entre España e Italia.
+
 ## Intervalo central configurable de doce horas (16/11/2026)
 
 El contrato técnico de fuentes nuevas y del conector genérico admite desde 720 minutos. El servicio auditado `set_frequency`, la CLI y `next_due` usan `CFG_FUENTE.frecuencia_min`; el panel administrativo muestra ese valor y el Programador conserva su comprobación horaria sin imponer otra frecuencia. La migración `rastreo.0015` cambia solo el valor predeterminado del modelo, sin transformar registros; se validó en `test_becanexo_fusion_db` y se aplicó en `becanexo_db` tras comprobar que era la única pendiente. SIAU ID 1 conserva 1440 minutos y la política `/3`: cambiar su intervalo operativo a 720 exige confirmar las condiciones de acceso de la fuente. No se activó ninguna fuente ni la tarea Windows, ni se ejecutó un rastreo.

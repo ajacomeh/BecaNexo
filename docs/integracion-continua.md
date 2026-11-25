@@ -29,3 +29,9 @@ Reglas de seguridad:
 - En `push` a `main` y en `workflow_dispatch` se ejecutan siempre los dos jobs.
 - También se ejecutan los dos si el diff no se puede calcular, si está vacío o si el propio job `cambios` falla.
 - Un job omitido aparece como «skipped», no como fallo.
+
+## Límites y cachés
+
+- **Tiempo máximo por job:** 5 minutos para «Detectar cambios», 40 para el backend y 20 para el frontend (`timeout-minutes`).
+- **Cachés:** pip (`backend/requirements.txt`), npm (`frontend/package-lock.json`) y el modelo semántico ONNX (`actions/cache`).
+- **Configuración del backend:** usa `config.settings_ci`, sin secretos reales.

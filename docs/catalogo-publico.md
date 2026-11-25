@@ -1,14 +1,62 @@
 # Presentación del catálogo público
 
-La ruta `/becas` comparte presentación para visitantes y postulantes. La gestión administrativa conserva sus formularios y tarjetas. No cambia el contrato de la API ni se realizan peticiones de detalle por tarjeta.
+La ruta `/becas` comparte presentación para visitantes y postulantes. BecaNexo está dirigido a ciudadanos ecuatorianos: por defecto el catálogo lista solo becas con entidad oferente ecuatoriana asignada. No se realizan peticiones de detalle por tarjeta.
 
-## Filtros, orden y página
+## Filtro compacto, orden y página (25/11/2026)
 
-- Búsqueda, nivel, modalidad y destino siempre visibles. Tipo de beca y estado se encuentran en el elemento nativo accesible «Más filtros». Cerrarlo conserva sus selecciones; el contador indica filtros secundarios **aplicados en la URL**, no borradores del formulario.
-- Los valores vacíos significan no filtrar («Todos…»), exclusivamente en este catálogo. Los estados públicos siguen siendo `abierta`, `cerrada`, `proxima` y `sin_fecha`.
-- «Aplicar filtros» actualiza la URL y elimina `page`. «Limpiar filtros» elimina búsqueda, filtros, orden y página; vuelve al orden predeterminado del servidor.
-- «Ordenar por» se aplica inmediatamente sobre los filtros de la URL, con vuelta a página uno. Las selecciones de filtros aún no aplicadas deben confirmarse con «Aplicar filtros» antes de cambiar el orden. `recientes` es el orden real predeterminado: `-actualizado_en, -id`; las alternativas existentes son `titulo` y `cierre` (fechas desconocidas al final). No se cambian estos criterios.
-- La paginación solo se muestra cuando `count > page_size`. No se deducen páginas del número de tarjetas. Se mantienen los parámetros aplicados al avanzar o retroceder.
+El filtro es el componente `frontend/src/components/CompactFilters.jsx`, compartido con Convocatorias del administrador. En el catálogo público:
+
+- **Búsqueda** a todo el ancho, con lupa y etiqueta accesible. Se aplica al dejar de escribir (400 ms) o al pulsar Enter.
+- **Una fila de controles** que se aplican al cambiar: Nivel, Modalidad y Destino de estudio, el destino rápido «Todos / Ecuador / Extranjero» y el interruptor «Incluir entidades no ecuatorianas» (desactivado por defecto, con ayuda accesible).
+- **Destino rápido:** elegir un país concreto limpia el destino rápido, y al revés.
+- **Opciones de los selectores:** solo muestran los valores presentes según las facetas del servidor, con su número de resultados entre paréntesis. El valor elegido se conserva aunque tenga 0.
+- **Fichas de filtros activos:** cada filtro aplicado aparece como una ficha con un botón «Quitar filtro …». «Limpiar todo» solo aparece con filtros activos, quita los filtros y conserva la pestaña de vigencia y el orden. Al quitar una ficha, el foco pasa al buscador.
+- **Tipo de beca** no tiene control en el catálogo público. El parámetro `tipo_beca` sigue admitido por la API y, si llega por URL, se muestra como ficha para poder quitarlo.
+- **Cambios y URL:** cada cambio vuelve a la página 1 y queda en la URL, incluido `incluir_no_ecuatorianas`. Se conserva al cambiar de pestaña, paginar y recargar. Solo la última consulta actualiza los resultados.
+- **Pestañas, contador y orden:** las pestañas de vigencia (Vigentes, Próximas, Cerradas, Todas las publicadas), el contador de resultados (`role="status"`) y «Ordenar por» van en la misma fila. El orden se aplica al seleccionar: `recientes` (`-actualizado_en, -id`, predeterminado), `titulo` o `cierre` (fechas desconocidas al final).
+- **Móvil:** por debajo de 640 px, los controles se pliegan tras el botón «Filtros (n)», con `aria-expanded` y el número de filtros activos. El buscador queda siempre visible.
+- **Paginación:** solo aparece cuando `count > page_size` y conserva los parámetros aplicados.
+
+### Parámetros de `GET /api/becas/`
+
+Definidos en `backend/convocatorias/api.py` (`filtrar` y `Consulta`). Un parámetro desconocido o repetido devuelve 400.
+
+| Parámetro | Valores |
+|---|---|
+| `q` | Texto de hasta 200 caracteres: título, entidad oferente, área, descripción o programa de una opción |
+| `nivel`, `modalidad` | Valores del catálogo de opciones de estudio |
+| `destino` | Código de país |
+| `destino_ambito` | `ecuador` (la opción tiene Ecuador como destino) o `exterior` (algún destino distinto de Ecuador). Devuelve 400 si el valor es inválido o se combina con `destino` |
+| `tipo_beca` | ID del tipo |
+| `estado` | `vigentes` (predeterminado sin parámetro), `abierta`, `cierre_hoy`, `proxima`, `cerrada`, `sin_fecha` o `todas` |
+| `orden` | `recientes`, `titulo` o `cierre` |
+| `page`, `page_size` | Página desde 1; 12 por defecto, máximo 50 |
+| `incluir_no_ecuatorianas` | `false` por defecto (solo entidades ecuatorianas). Admite `true`/`1` o `false`/`0`; otro valor devuelve 400 |
+
+`nivel`, `modalidad`, `destino` y `destino_ambito` se evalúan en una única subconsulta: todos deben cumplirse en la misma opción de estudio activa.
+
+La respuesta añade `facetas`, con estos campos:
+
+- `nivel`, `modalidad` y `destino`: listas de `{valor, total}`.
+- `destino_ambito`: `{ecuador, exterior}`.
+
+Siguen la pestaña, el interruptor, `tipo_beca` y la búsqueda. El conteo de cada dimensión se calcula sin su propio filtro (búsqueda facetada), y la faceta de destino ignora tanto `destino` como `destino_ambito`. Las pruebas están en `backend/convocatorias/test_catalogo_facetas.py` y `test_catalogo_ecuatorianas.py`.
+
+## Convocatorias del administrador (25/11/2026)
+
+`/gestion/convocatorias` usa el mismo `CompactFilters` con su propia configuración:
+
+- Buscador y una fila con Nivel, Modalidad, Destino de estudio, Tipo de beca y Estado (borrador, pausada, abierta, cerrada, próxima y sin fecha).
+- La misma aplicación al instante, fichas, «Limpiar todo» y «Filtros (n)» en móvil.
+- No tiene interruptor de entidades, destino rápido ni conteos: el listado `GET /api/gestion/convocatorias/` no admite `incluir_no_ecuatorianas` ni `destino_ambito` (400) y no devuelve facetas. Acepta además `revision`.
+
+Las tarjetas de esa pantalla usan la presentación del catálogo (piezas comunes de `frontend/src/components/CardParts.jsx`):
+
+- Bloques con icono, etiqueta y valor: Cierre, Opciones de estudio, Nivel o Niveles, Modalidades y Tipo. Tipo solo aparece si tiene un valor.
+- La franja «Financiamiento».
+- El pie con «Editar y revisar».
+
+Conservan el aviso de pasos pendientes para publicar, el origen del rastreo, la ficha retirada, el oferente y las etiquetas de estado.
 
 ## Resúmenes fieles al contrato actual
 
