@@ -39,7 +39,7 @@ describe('Navegación y sesión', () => {
     expect(screen.queryByRole('heading', { name: 'Inicia sesión' })).not.toBeInTheDocument()
     await act(async () => resolve(json(account)))
     expect(await screen.findByRole('heading', { name: `Hola, ${account.nombre}` })).toBeInTheDocument()
-    expect(screen.getByText('postulante')).toBeInTheDocument()
+    expect(screen.getByText('Postulante', { selector: '.sidebar-role' })).toBeInTheDocument()
   })
   it('redirige anónimos a login', async () => {
     mount('/inicio')

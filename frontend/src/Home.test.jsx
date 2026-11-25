@@ -10,7 +10,7 @@ afterEach(() => vi.restoreAllMocks())
 
 it.each([
   ['postulante', [['Explorar becas', '/becas'], ['Mi perfil', '/perfil'], ['Idiomas y preferencias', '/preferencias'], ['Mis favoritas', '/favoritos'], ['Notificaciones', '/notificaciones']]],
-  ['administrador', [['Convocatorias', '/gestion/convocatorias'], ['Entidades oferentes', '/gestion/instituciones'], ['Rastreo', '/gestion/rastreo']]],
+  ['administrador', [['Explorar becas', '/becas'], ['Convocatorias', '/gestion/convocatorias'], ['Entidades oferentes', '/gestion/instituciones'], ['Rastreo', '/gestion/rastreo']]],
 ])('integra Inicio de %s sin duplicar acciones de cuenta', async (rol, links) => {
   vi.spyOn(authApi, 'me').mockResolvedValue({ id: 99, nombre: 'María de prueba', rol })
   render(<MemoryRouter initialEntries={['/inicio']}><AuthProvider><App /></AuthProvider></MemoryRouter>)
@@ -19,6 +19,8 @@ it.each([
   expect(navigation.getByRole('link', { name: 'Inicio', exact: true })).toHaveAttribute('aria-current', 'page')
   const cards = within(screen.getByRole('navigation', { name: 'Accesos de Inicio' }))
   expect(cards.getAllByRole('link')).toHaveLength(links.length)
+  // Mismo orden que la tabla del rol (para el administrador, el de la barra lateral).
+  expect(cards.getAllByRole('heading', { level: 2 }).map(h => h.textContent)).toEqual(links.map(([name]) => name))
   for (const [name, route] of links) {
     const link = cards.getByRole('link', { name, exact: true })
     expect(link).toHaveAttribute('href', route)
