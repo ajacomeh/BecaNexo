@@ -10,6 +10,7 @@ El saludo usa el nombre actual del contexto de autenticación. Se eliminó la ta
 | Postulante | Mi perfil | `/perfil` |
 | Postulante | Idiomas y preferencias | `/preferencias` |
 | Postulante | Mis favoritas | `/favoritos` |
+| Administrador | Explorar becas | `/becas` |
 | Administrador | Convocatorias | `/gestion/convocatorias` |
 | Administrador | Entidades oferentes | `/gestion/instituciones` |
 | Administrador | Rastreo | `/gestion/rastreo` |

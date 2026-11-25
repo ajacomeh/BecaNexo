@@ -12,7 +12,9 @@ const modules = {
     { route: '/favoritos', icon: 'favorite', title: 'Mis favoritas', description: 'Consulta las becas que has guardado.' },
     { route: '/notificaciones', icon: 'notifications', title: 'Notificaciones', description: 'Consulta los avisos y las novedades sobre tus oportunidades de becas' },
   ],
+  // Mismo orden que la barra lateral del administrador.
   administrador: [
+    { route: '/becas', icon: 'explore', title: 'Explorar becas', description: 'Consulta el catálogo público como lo ven los postulantes.' },
     { route: '/gestion/convocatorias', icon: 'offers', title: 'Convocatorias', description: 'Gestiona las ofertas del catálogo.' },
     { route: '/gestion/instituciones', icon: 'institutions', title: 'Entidades oferentes', description: 'Consulta y gestiona entidades oferentes.' },
     { route: '/gestion/rastreo', icon: 'crawling', title: 'Rastreo', description: 'Consulta publicaciones detectadas, documentos y ejecuciones.' },

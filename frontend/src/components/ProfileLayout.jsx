@@ -7,6 +7,8 @@ import Button from './Button'
 import Message from './Message'
 import EditName from './EditName'
 
+const ROLE_LABELS = { administrador: 'Administrador', postulante: 'Postulante' }
+
 export default function ProfileLayout({ children }) {
   const { user, logout } = useAuth()
   const [busy, setBusy] = useState(false)
@@ -45,7 +47,9 @@ export default function ProfileLayout({ children }) {
         {user.rol === 'postulante' && <NavLink to="/notificaciones" aria-label={unread ? `Notificaciones, ${unread} sin leer` : undefined}><Icon name="notifications" /><span>Notificaciones</span>{unread > 0 && <span className="notification-nav-count" aria-hidden="true">{unread}</span>}</NavLink>}
         {user.rol === 'administrador' && <><NavLink to="/gestion/convocatorias"><Icon name="offers" /><span>Convocatorias</span></NavLink><NavLink to="/gestion/instituciones"><Icon name="institutions" /><span>Entidades oferentes</span></NavLink><NavLink to="/gestion/rastreo"><Icon name="crawling" /><span>Rastreo</span></NavLink></>}
       </nav>
-      <div className="sidebar-account"><div className="sidebar-name"><span>{user.nombre}</span>{user.rol === 'administrador' && <button type="button" className="edit-name-link" aria-label="Editar nombre" title="Editar nombre" disabled={busy} onClick={() => { setSaved(false); setEditing(true) }}><Icon name="edit" /></button>}</div><span className="capitalize">{user.rol}</span>
+      {/* Bloque de usuario: nombre (con edición para el administrador) y el rol como etiqueta; sin avatar. */}
+      <div className="sidebar-account"><div className="sidebar-user"><div className="sidebar-name"><span>{user.nombre}</span>{user.rol === 'administrador' && <button type="button" className="edit-name-link" aria-label="Editar nombre" title="Editar nombre" disabled={busy} onClick={() => { setSaved(false); setEditing(true) }}><Icon name="edit" /></button>}</div>
+        <span className="sidebar-role">{ROLE_LABELS[user.rol] || user.rol}</span></div>
         {saved && <span role="status">Nombre actualizado.</span>}
         <Button icon="logout" className="button-outline" busy={busy} onClick={leave}>{busy ? 'Cerrando sesión…' : 'Cerrar sesión'}</Button>
         <Message>{error}</Message>
