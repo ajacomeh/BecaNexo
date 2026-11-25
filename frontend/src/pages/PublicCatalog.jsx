@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { offersApi } from '../api/client'
 import OffersLayout from '../components/OffersLayout'
-import PublicCatalogFilters from '../components/PublicCatalogFilters'
-import { PUBLIC_FILTER_KEYS } from '../components/publicCatalogFilterState'
+import CompactFilters from '../components/CompactFilters'
+import { PUBLIC_FILTER_KEYS } from '../components/compactFilterState'
 import CatalogCard from '../components/CatalogCard'
 import Button from '../components/Button'
 import Message from '../components/Message'
@@ -92,7 +92,7 @@ function CatalogBody({ user }) {
     </div>}
     <div className="catalog-results">
     {activeMode === 'all' ? <>
-    {catalogs && <PublicCatalogFilters params={params} catalogs={catalogs} facets={facets} onChange={update} />}
+    {catalogs && <CompactFilters params={params} catalogs={catalogs} facets={facets} onChange={update} quickDestination providerToggle />}
     <div className="catalog-toolbar">
       <div className="catalog-modes" role="group" aria-label="Vigencia de las becas">
         {[["vigentes", "Vigentes"], ["proxima", "Próximas"], ["cerrada", "Cerradas"], ["todas", "Todas las publicadas"]].map(([value, label]) => <Button key={value} type="button" className={activeView === value ? 'catalog-mode-active' : 'button-light'} aria-pressed={activeView === value} onClick={() => changeView(value)}>{label}</Button>)}

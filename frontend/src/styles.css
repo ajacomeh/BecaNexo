@@ -16,11 +16,9 @@
 .public-catalog .catalog-recommendations-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin: 0 0 24px; }
 .public-catalog .catalog-recommendations-heading > div { flex: 1 1 320px; min-width: 0; }
 .public-catalog .catalog-recommendations-heading p { margin: 8px 0 0; line-height: 1.5; }
-.public-catalog .field > span { display: block; margin-bottom: 8px; font-size: .875rem; font-weight: 650; color: #53647e; }
-.public-catalog .form-actions .button { min-width: 0; width: auto; }
-/* Filtro compacto del catálogo público: buscador, una fila de controles y fichas de filtros activos. */
-.public-catalog .public-filters { display: grid; gap: 12px; margin-top: 0; padding: 16px; }
-.public-catalog .public-filters > * { min-width: 0; }
+/* Filtro compacto del catálogo público y de la gestión de convocatorias: buscador, una fila de controles y fichas. */
+.profile-card.compact-filters { display: grid; gap: 12px; margin-top: 0; padding: 16px; }
+.profile-card.compact-filters > * { min-width: 0; }
 .catalog-search { position: relative; margin: 0; }
 .catalog-search > .ui-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #53647e; pointer-events: none; }
 .catalog-search input { width: 100%; min-height: 46px; border: 1px solid #d7dfed; border-radius: 8px; padding: 10px 14px 10px 44px; background: #fff; color: #17243b; font-size: 1rem; }
@@ -28,7 +26,7 @@
 .catalog-search input:focus { border-color: #2563eb; }
 .catalog-filter-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .catalog-filter-field { display: grid; flex: none; gap: 4px; min-width: 0; }
-.catalog-filter-field:has(select) { flex: 1 1 180px; max-width: 240px; }
+.catalog-filter-field:has(select) { flex: 1 1 150px; max-width: 240px; }
 .catalog-filter-field > label, .catalog-filter-field > span { font-size: .78rem; font-weight: 650; color: #53647e; }
 .catalog-filter-field select { width: 100%; min-height: 40px; border: 1px solid #d7dfed; border-radius: 8px; padding: 8px; font-size: .9rem; background: #f5f7fb; color: #17243b; }
 .catalog-segmented { display: inline-flex; border: 1px solid #cad8ef; border-radius: 8px; overflow: hidden; }
@@ -90,19 +88,6 @@
 .public-catalog .catalog-card-actions > .catalog-detail-link:hover { background: #1d4ed8; }
 .public-catalog .catalog-card-actions .favorite-control { min-width: 0; }
 .public-catalog .catalog-coverage-note { margin-top: 24px; }
-.admin-offers .catalog-filters { padding: 22px; }
-.admin-offers .catalog-filters h2 { margin-bottom: 8px; }
-.admin-offers .catalog-filter-status { margin: 0 0 16px; color: #53647e; font-size: .875rem; }
-.admin-offers .catalog-filters form { display: grid; gap: 16px; }
-.admin-offers .catalog-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: end; }
-.admin-offers .field > span { display: block; margin-bottom: 8px; font-size: .875rem; font-weight: 650; color: #53647e; }
-.admin-offers .catalog-filters summary { cursor: pointer; padding: 10px 0; color: #1d4ed8; font-weight: 600; }
-.admin-offers .catalog-filters summary:focus-visible { outline: 3px solid #087f8c; outline-offset: 2px; }
-.admin-offers .catalog-filters details .catalog-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
-.admin-offers .form-actions .button { min-width: 0; width: auto; }
-.admin-offers .catalog-results-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin: 24px 0; color: #53647e; }
-.admin-offers .catalog-results-heading .field { display: grid; grid-template-columns: auto minmax(140px, 200px); align-items: center; gap: 6px 12px; }
-.admin-offers .catalog-results-heading .field label { margin: 0; }
 .offer-card-heading { display: grid; justify-items: start; gap: 8px; width: 100%; }
 .offer-card-heading h2 { line-height: 1.35; overflow-wrap: anywhere; }
 .offer-provider { color: #53647e; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
@@ -198,14 +183,10 @@
 .benefit-list li { padding-block: 12px; }
 .benefit-list h3, .benefit-list h4 { margin-bottom: 6px; font-weight: 700; }
 .benefit-list p { margin-bottom: 8px; }
-@media (max-width: 1200px) { .admin-offers .catalog-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .public-catalog .catalog-card { padding: 20px; }
   .public-catalog .catalog-card-actions > *, .public-catalog .catalog-card-actions .button { width: 100%; }
   .public-catalog .catalog-card-actions > .secondary-link { width: 100%; }
-  .admin-offers .catalog-filter-grid, .admin-offers .catalog-filters details .catalog-filter-grid { grid-template-columns: 1fr; }
-  .admin-offers .catalog-results-heading .field { grid-template-columns: 1fr; width: 100%; }
-  .admin-offers .catalog-filters .form-actions .button { width: 100%; }
 }
 
 .comparison-option { margin-top: 20px; padding: 20px; border: 1px solid #d7dfed; border-left: 5px solid #087f8c; border-radius: 10px; overflow-wrap: anywhere; }

@@ -1,9 +1,10 @@
 import Icon from '../components/Icon'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { offersApi } from '../api/client'
 import OffersLayout from '../components/OffersLayout'
-import CatalogFilters from '../components/CatalogFilters'
+import CompactFilters from '../components/CompactFilters'
+import { ADMIN_FILTER_KEYS, ADMIN_STATES } from '../components/compactFilterState'
 import Message from '../components/Message'
 import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
@@ -35,41 +36,41 @@ export default function Offers({ admin = false }) {
 
 function AdministrativeOffers({ admin }) {
   const [params, setParams] = useSearchParams()
-  const [data, setData] = useState(null)
+  const [result, setResult] = useState(null)
   const [catalogs, setCatalogs] = useState(null)
-  const [error, setError] = useState('')
   const [retry, setRetry] = useState(0)
   const query = params.toString()
+  // Solo la última consulta actualiza los resultados: los de una consulta anterior no se muestran.
+  const current = result?.query === query ? result : null
+  const data = current?.data
+  const error = current?.error || ''
   const totalPages = data ? Math.ceil(data.count / data.page_size) : 0
-  const filterKeys = ['q', 'nivel', 'modalidad', 'destino', 'tipo_beca', 'estado']
-  const activeFilterCount = filterKeys.filter(key => params.get(key)).length
-  const applyFilters = values => {
-    const next = Object.fromEntries(Object.entries(values).filter(([key, value]) => filterKeys.includes(key) && value != null && value !== ''))
-    if (params.get('orden')) next.orden = params.get('orden')
-    if (new URLSearchParams(next).toString() !== query) setData(null)
-    setParams(next)
-  }
-  const clearFilters = () => { if (query) setData(null); setParams({}) }
-  const orderResults = value => {
-    const next = Object.fromEntries(params)
-    delete next.page
-    next.orden = value
-    if (new URLSearchParams(next).toString() !== query) setData(null)
-    setParams(next)
-  }
+  // Cada cambio de filtro u orden vuelve a la primera página y se refleja en la URL; un valor vacío lo quita.
+  const update = useCallback(changes => setParams(previous => {
+    const next = new URLSearchParams(previous)
+    next.delete('page')
+    for (const [key, value] of Object.entries(changes)) {
+      if (value == null || value === '') next.delete(key)
+      else next.set(key, value)
+    }
+    return next
+  }), [setParams])
+  // «Limpiar todo» y «Restablecer filtros» quitan los filtros y conservan el orden.
+  const clearFilters = () => update(Object.fromEntries(ADMIN_FILTER_KEYS.map(key => [key, ''])))
   useEffect(() => {
     let live = true
     Promise.all([offersApi.get(admin ? 'gestion/convocatorias' : 'becas', Object.fromEntries(new URLSearchParams(query))), offersApi.get('becas/catalogos')])
-      .then(([d, c]) => { if (live) { setData(d); setCatalogs(c); setError('') } }).catch((e) => { if (live) setError(e.message) })
+      .then(([d, c]) => { if (live) { setResult({ query, data: d }); setCatalogs(c) } }).catch((e) => { if (live) setResult({ query, error: e.message }) })
     return () => { live = false }
   }, [query, admin, retry])
   return <OffersLayout><div className="admin-offers"><div className="page-heading"><div><p className="eyebrow">{admin ? 'ADMINISTRACIÓN' : 'EXPLORA TU PRÓXIMO PASO'}</p><h1>{admin ? 'Convocatorias' : 'Catálogo de becas'}</h1><p>Ofertas de entidades ecuatorianas · Destinos nacionales e internacionales</p></div>
     {admin && <div className="heading-actions"><Link className="secondary-link" to="/gestion/convocatorias/nueva"><Icon name="add" /><span>Crear convocatoria</span></Link><Link to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar oferentes</span></Link></div>}</div>
-    {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button></>}
+    {error && <><Message>{error}</Message><Button icon="refresh" onClick={() => { setResult(null); setRetry(retry + 1) }}>Reintentar</Button></>}
     {!catalogs && !error && <p role="status"><Icon name="loading" />Cargando catálogo…</p>}
-    {catalogs && <CatalogFilters key={query} params={params} catalogs={catalogs} onApply={applyFilters} onClear={clearFilters} stateValues={['borrador', 'pausada', 'abierta', 'cerrada', 'proxima', 'sin_fecha']} activeCount={activeFilterCount} />}
-    {catalogs && !data && !error && <p role="status"><Icon name="loading" />Cargando convocatorias…</p>}
-    {data && <><div className="catalog-results-heading"><p role="status">{data.count} convocatorias encontradas</p><div className="field"><label htmlFor="admin-offer-order">Ordenar por</label><select id="admin-offer-order" value={params.get('orden') || 'recientes'} onChange={e => orderResults(e.target.value)}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option></select></div></div><div className="offer-grid">{data.results.map((offer) => <article className="offer-card admin-offer-card" key={offer.id}>
+    {catalogs && <CompactFilters params={params} catalogs={catalogs} onChange={update} label="Filtros de convocatorias" keys={ADMIN_FILTER_KEYS} scholarshipType states={ADMIN_STATES} />}
+    {catalogs && <div className="catalog-toolbar"><p role="status" className="catalog-count">{data ? `${data.count} convocatorias encontradas` : error ? '' : <><Icon name="loading" />Cargando convocatorias…</>}</p>
+      <div className="catalog-order"><label htmlFor="admin-offer-order">Ordenar por</label><select id="admin-offer-order" value={params.get('orden') || 'recientes'} onChange={e => update({ orden: e.target.value })}><option value="recientes">Recientes</option><option value="titulo">Título</option><option value="cierre">Fecha de cierre</option></select></div></div>}
+    {data && <><div className="offer-grid">{data.results.map((offer) => <article className="offer-card admin-offer-card" key={offer.id}>
       <div className="card-head">
         <ScholarshipHeader field={singleArea(offer.areas, catalogs?.areas)} title={offer.titulo}>
           <p className="card-provider">{offer.institucion?.nombre || (offer.oferente_externo ? providerLabel(offer) : offer.revision === 'validada' ? 'Entidad oferente: No identificada' : 'Oferente pendiente de confirmar')}</p>{offer.origen_automatico && <p className="small-note card-origin">Borrador del rastreo · Publicación {offer.origen_automatico.publicacion_id}</p>}{offer.ficha_retirada && <p className="small-note card-origin card-retirada">La ficha oficial ya no está disponible en SIAU</p>}</ScholarshipHeader>
