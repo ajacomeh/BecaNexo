@@ -26,9 +26,8 @@ function catalog(path = '/becas', user = null) {
 
 async function stateControls() {
   const tabs = within(await screen.findByRole('group', { name: 'Vigencia de las becas' })).getAllByRole('button').map(b => b.textContent)
-  await userEvent.click(await screen.findByText('Más filtros'))
-  const more = screen.getByText('Más filtros').closest('details')
-  return { tabs, more: within(more).getAllByRole('combobox').map(select => select.labels[0].textContent), estado: screen.queryByLabelText('Estado') }
+  const filters = await screen.findByRole('search', { name: 'Filtros del catálogo' })
+  return { tabs, selects: within(filters).getAllByRole('combobox').map(select => select.labels[0].textContent), estado: screen.queryByLabelText('Estado') }
 }
 
 describe('control de estado del catálogo público', () => {
@@ -37,7 +36,10 @@ describe('control de estado del catálogo público', () => {
     const controls = await stateControls()
     expect(controls.tabs).toEqual(TABS)
     expect(controls.estado).toBeNull()
-    expect(controls.more).toEqual(['Tipo de beca'])
+    // Filtro de una fila, sin «Más filtros» y sin «Tipo de beca» en el catálogo público.
+    expect(controls.selects).toEqual(['Nivel', 'Modalidad', 'Destino de estudio'])
+    expect(screen.queryByText('Más filtros')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Tipo de beca')).not.toBeInTheDocument()
   })
 
   it('es idéntico para el postulante y el administrador, y no cambia la fila superior del postulante', async () => {
@@ -61,20 +63,19 @@ describe('control de estado del catálogo público', () => {
     expect(get).toHaveBeenCalledWith('becas', { estado })
   })
 
-  it('«Limpiar filtros» vuelve a Vigentes y quita el estado de la URL', async () => {
+  it('«Limpiar todo» quita los filtros y conserva la pestaña', async () => {
     catalog('/becas?estado=cerrada&tipo_beca=1&nivel=grado')
     const u = userEvent.setup()
     expect(await screen.findByRole('button', { name: 'Cerradas', pressed: true })).toBeVisible()
-    await u.click(await screen.findByRole('button', { name: 'Limpiar filtros' }))
-    expect(screen.getByTestId('url')).toBeEmptyDOMElement()
-    expect(screen.getByRole('button', { name: 'Vigentes', pressed: true })).toBeVisible()
+    await u.click(await screen.findByRole('button', { name: 'Limpiar todo' }))
+    expect(screen.getByTestId('url')).toHaveTextContent(/^\?estado=cerrada$/)
+    expect(screen.getByRole('button', { name: 'Cerradas', pressed: true })).toBeVisible()
   })
 
   it('aplicar otros filtros conserva la pestaña elegida', async () => {
     const get = catalog('/becas?estado=proxima')
     const u = userEvent.setup()
     await u.selectOptions(await screen.findByLabelText('Nivel'), 'grado')
-    await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
     expect(get).toHaveBeenCalledWith('becas', { estado: 'proxima', nivel: 'grado' })
     expect(screen.getByRole('button', { name: 'Próximas', pressed: true })).toBeVisible()
   })

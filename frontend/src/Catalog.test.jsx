@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { offersApi } from './api/client'
@@ -113,33 +113,28 @@ it('permite consultar vigentes, próximas, cerradas y todas las publicadas sin p
 it('filtra y muestra Híbrida como modalidad propia', async () => {
   const get = setup('/becas', 1)
   await userEvent.selectOptions(await screen.findByLabelText('Modalidad'), 'hibrida')
-  await userEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
-  expect(get).toHaveBeenCalledWith('becas', expect.objectContaining({ modalidad: 'hibrida' }))
+  await waitFor(() => expect(get).toHaveBeenCalledWith('becas', expect.objectContaining({ modalidad: 'hibrida' })))
   cleanup()
   render(<MemoryRouter><CatalogCard catalogs={catalogs} offer={{ ...offer, opciones: [{ nivel: 'grado', modalidad: 'hibrida', paises: [1] }] }} /></MemoryRouter>)
   expect(screen.getByText(/Grado · Híbrida/)).toBeVisible()
 })
 
-it('aplica filtros, conserva secundarios al cerrar y limpia filtros, orden y página', async () => {
-  setup('/becas?page=2&orden=titulo&estado=abierta')
+it('aplica al instante, conserva orden y pestaña, y «Limpiar todo» quita solo los filtros', async () => {
+  setup('/becas?page=2&orden=titulo&estado=abierta&tipo_beca=1')
   const u = userEvent.setup()
-  // El estado se elige con las pestañas: no cuenta como filtro secundario de «Más filtros».
-  await screen.findByText('Más filtros')
-  await u.click(screen.getByText('Más filtros'))
-  await u.selectOptions(screen.getByLabelText('Tipo de beca'), '1')
-  await u.click(screen.getByText('Más filtros'))
-  await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'ingeniería')
+  // «Tipo de beca» no tiene control en el catálogo público, pero un enlace con el parámetro se ve y se puede quitar.
+  expect(await screen.findByText('Tipo de beca: Mérito')).toBeVisible()
+  await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'ingeniería{Enter}')
   await u.selectOptions(screen.getByLabelText('Nivel'), 'grado')
-  await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
-  expect(screen.getByTestId('url').textContent).toContain('tipo_beca=1')
-  expect(screen.getByTestId('url').textContent).toContain('orden=titulo')
-  expect(screen.getByTestId('url').textContent).not.toContain('page=')
-  expect(screen.getByTestId('url').textContent).toContain('estado=abierta')
-  await screen.findByText('Más filtros · 1 aplicados')
-  await u.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
-  expect(screen.getByTestId('url')).toBeEmptyDOMElement()
+  const url = screen.getByTestId('url')
+  for (const part of ['q=ingenier%C3%ADa', 'nivel=grado', 'tipo_beca=1', 'orden=titulo', 'estado=abierta']) expect(url.textContent).toContain(part)
+  expect(url.textContent).not.toContain('page=')
+  await u.click(screen.getByRole('button', { name: 'Limpiar todo' }))
+  expect(url.textContent).toBe('?orden=titulo&estado=abierta')
   expect(screen.getByLabelText('Nivel')).toHaveValue('')
-  expect(await screen.findByLabelText(/Ordenar por/)).toHaveValue('recientes')
+  expect(screen.getByLabelText('Buscar título, institución, área, descripción o programa')).toHaveValue('')
+  expect(screen.getByLabelText(/Ordenar por/)).toHaveValue('titulo')
+  expect(screen.queryByRole('button', { name: 'Limpiar todo' })).not.toBeInTheDocument()
 })
 
 it('ordena inmediatamente, vuelve a página uno y conserva filtros aplicados', async () => {
@@ -165,8 +160,7 @@ it('distingue catálogo vacío de búsqueda sin coincidencias', async () => {
   // Por defecto (solo entidades ecuatorianas) el vacío lo indica; sin filtros activos no ofrece restablecer.
   expect(await screen.findByText('No hay becas de entidades ecuatorianas con estos filtros.')).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument()
-  await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'inexistente')
-  await u.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+  await u.type(screen.getByLabelText('Buscar título, institución, área, descripción o programa'), 'inexistente{Enter}')
   expect(await screen.findByRole('button', { name: 'Restablecer filtros' })).toBeVisible()
   expect(screen.getByText('No hay becas de entidades ecuatorianas con estos filtros.')).toBeVisible()
   await u.click(screen.getByRole('button', { name: 'Restablecer filtros' }))
