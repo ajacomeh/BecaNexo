@@ -157,14 +157,14 @@ it('en móvil el botón «Filtros (n)» indica los filtros activos y despliega l
   expect(controls).toHaveClass('is-open')
 })
 
-it('la gestión de convocatorias del administrador conserva su filtro con «Aplicar filtros» y «Tipo de beca»', async () => {
+it('la gestión de convocatorias usa su propia configuración del filtro compacto', async () => {
   auth.user = { id: 1, nombre: 'Admin', rol: 'administrador' }
   vi.spyOn(offersApi, 'get').mockImplementation(async route => route === 'becas/catalogos' ? catalogs : { count: 0, page: 1, page_size: 12, results: [] })
   render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)
-  expect(await screen.findByRole('heading', { name: 'Filtros de búsqueda' })).toBeVisible()
-  expect(screen.getByRole('button', { name: 'Aplicar filtros' })).toBeVisible()
-  await userEvent.click(screen.getByText('Más filtros'))
+  expect(await screen.findByRole('search', { name: 'Filtros de convocatorias' })).toBeVisible()
   expect(screen.getByLabelText('Tipo de beca')).toBeVisible()
+  expect(screen.getByLabelText('Estado')).toBeVisible()
   expect(screen.queryByRole('search', { name: 'Filtros del catálogo' })).not.toBeInTheDocument()
   expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+  expect(screen.queryByRole('radiogroup', { name: 'Destino rápido' })).not.toBeInTheDocument()
 })

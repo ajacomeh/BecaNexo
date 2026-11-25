@@ -87,7 +87,7 @@ describe('pantalla de Convocatorias del administrador', () => {
     vi.spyOn(offersApi, 'get').mockImplementation(async (route) => route === 'becas/catalogos' ? catalogs
       : { count: 0, page: 1, page_size: 12, results: [] })
     render(<MemoryRouter initialEntries={['/gestion/convocatorias']}><Offers admin /></MemoryRouter>)
-    await userEvent.click(await screen.findByText('Más filtros'))
+    await screen.findByRole('search', { name: 'Filtros de convocatorias' })
     const estado = screen.getByLabelText('Estado')
     expect(within(estado).getAllByRole('option').map(o => o.value)).toEqual(['', 'borrador', 'pausada', 'abierta', 'cerrada', 'proxima', 'sin_fecha'])
     expect(screen.queryByRole('group', { name: 'Vigencia de las becas' })).not.toBeInTheDocument()
