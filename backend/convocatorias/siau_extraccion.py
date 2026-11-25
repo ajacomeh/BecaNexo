@@ -5,15 +5,23 @@ from datetime import date
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 
-EXTRACTOR_VERSION = 'siau-html/2'
+# siau-html/3: admite la variante «Requisitos para aplicar» sin «REQUISITOS GENERALES» (cambia lo extraído de esas fichas).
+EXTRACTOR_VERSION = 'siau-html/3'
+
+
+# Marcas del bloque de requisitos que cierran la sección de la ficha. La alternativa solo vale para la variante
+# de plantilla que no trae ninguna de las principales (p. ej. AICAD-BS: «Requisitos para aplicar» sin «REQUISITOS GENERALES»).
+MARCAS_REQUISITOS = ('Requisitos generales para aplicar', 'REQUISITOS GENERALES')
+MARCA_REQUISITOS_ALTERNATIVA = 'Requisitos para aplicar'
 
 
 class FichaHTML(HTMLParser):
     """Lee solo la sección que contiene entry-title; no ejecuta HTML/JS."""
     blocks = {'p', 'li', 'div', 'br', 'h1', 'h2', 'h3', 'h4', 'td', 'tr'}
 
-    def __init__(self):
+    def __init__(self, marca_alternativa=False):
         super().__init__(convert_charrefs=True)
+        self.marcas = MARCAS_REQUISITOS + ((MARCA_REQUISITOS_ALTERNATIVA,) if marca_alternativa else ())
         self.lines, self.links, self.buffer = [], [], []
         self.section_depth = 0
         self.active = False
@@ -26,7 +34,7 @@ class FichaHTML(HTMLParser):
         text = ' '.join(''.join(self.buffer).split())
         if text:
             self.lines.append(text)
-            if 'Requisitos generales para aplicar' in text or 'REQUISITOS GENERALES' in text:
+            if any(marca in text for marca in self.marcas):
                 self.requirements_seen = True
         self.buffer = []
 
@@ -123,9 +131,13 @@ def menciones_academicas(description, requirements, url):
 
 def extract_html(download):
     raw, url = download['contenido'], download['url']
-    parser = FichaHTML()
     # Las dos fichas declaran UTF-8; un cambio de codificación no se disimula.
-    parser.feed(raw.decode('utf-8', errors='strict'))
+    html = raw.decode('utf-8', errors='strict')
+    # La marca alternativa solo se admite si la ficha no contiene ninguna de las principales:
+    # las fichas que ya cumplen el contrato se leen exactamente igual que antes.
+    alternativa = not any(marca in html for marca in MARCAS_REQUISITOS) and MARCA_REQUISITOS_ALTERNATIVA in html
+    parser = FichaHTML(marca_alternativa=alternativa)
+    parser.feed(html)
     parser.flush()
     lines = parser.lines
     def section(start, end=None):
@@ -155,8 +167,10 @@ def extract_html(download):
                    or section('dirigida esta convocatoria', 'Requisitos para aplicar'))
     coverage = section('¿Cuál es la cobertura', '¿Cómo postular')
     requirements = (section('Requisitos generales para aplicar')
-                    or section('REQUISITOS GENERALES', 'Preguntas frecuentes'))
-    instructions = (section('¿Cómo postular?', 'Requisitos generales para aplicar')
+                    or section('REQUISITOS GENERALES', 'Preguntas frecuentes')
+                    # Variante sin marcas principales: texto literal del bloque «Requisitos para aplicar».
+                    or (section(MARCA_REQUISITOS_ALTERNATIVA, 'Preguntas frecuentes') if alternativa else ''))
+    instructions = (section('¿Cómo postular?', MARCA_REQUISITOS_ALTERNATIVA if alternativa else 'Requisitos generales para aplicar')
                     or section('Lugar de presentación de postulaciones'))
     # No confundir un nombre de portal ni una mención de pie de página con oferente.
     entity = re.search(r'Ministerio de Educación, Deporte y Cultura\s*[–-]\s*MINEDEC', description)
