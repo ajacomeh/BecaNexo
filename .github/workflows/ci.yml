@@ -1,23 +1,77 @@
 name: CI
 
+# Un PR se valida una sola vez (evento pull_request); main se verifica completo tras cada merge; también a mano.
 on:
-  push:
   pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# En un PR, una subida nueva cancela la ejecución anterior del mismo PR. Fuera de los PR (main y ejecución manual)
+# cada ejecución tiene su propio grupo: nunca se cancela ni se descarta mientras espera.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}', github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decide qué jobs necesita un PR según los archivos cambiados. En push a main y en ejecución manual, o si el diff
+  # no se puede calcular, se ejecutan ambos. Un job no necesario aparece como «skipped», no como fallo.
+  cambios:
+    name: Detectar cambios
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.rutas.outputs.backend }}
+      frontend: ${{ steps.rutas.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Clasificar los archivos cambiados
+        id: rutas
+        shell: bash
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          CABEZA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          emitir() {
+            echo "backend=$1" >> "$GITHUB_OUTPUT"
+            echo "frontend=$2" >> "$GITHUB_OUTPUT"
+            echo "Backend: $1 · Frontend: $2 · Motivo: $3" | tee -a "$GITHUB_STEP_SUMMARY"
+          }
+          if [ "$EVENTO" != "pull_request" ]; then emitir true true "evento $EVENTO: verificación completa"; exit 0; fi
+          if [ -z "$BASE" ] || [ -z "$CABEZA" ] || ! archivos=$(git diff --name-only "$BASE...$CABEZA"); then
+            emitir true true "no se pudo calcular el diff del PR"; exit 0
+          fi
+          if [ -z "$archivos" ]; then emitir true true "diff vacío"; exit 0; fi
+          backend=false
+          frontend=false
+          while IFS= read -r archivo; do
+            case "$archivo" in
+              .github/workflows/*) backend=true; frontend=true ;;
+              backend/*|requirements*|*/requirements*|.python-version|pyproject.toml|setup.cfg|*.sql) backend=true ;;
+              frontend/*) frontend=true ;;
+              docs/*|*.md) ;;  # solo documentación
+              *) backend=true; frontend=true ;;  # ruta no reconocida: verificación completa por seguridad
+            esac
+          done <<< "$archivos"
+          printf '%s\n' "$archivos" | sed 's/^/  - /'
+          emitir "$backend" "$frontend" "$(printf '%s\n' "$archivos" | wc -l) archivo(s) cambiado(s)"
+
   backend:
     # Windows: es la plataforma del proyecto (el lanzador web del rastreo usa msvcrt).
     name: Backend (Django + PostgreSQL 16, Windows)
+    needs: cambios
+    # Se ejecuta si lo pide «cambios» o si «cambios» no terminó bien (por seguridad, nunca se omite sin decisión).
+    if: ${{ !cancelled() && (needs.cambios.result != 'success' || needs.cambios.outputs.backend == 'true') }}
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 40
     defaults:
       run:
         shell: pwsh
@@ -100,6 +154,8 @@ jobs:
 
   frontend:
     name: Frontend (lint, Vitest y build)
+    needs: cambios
+    if: ${{ !cancelled() && (needs.cambios.result != 'success' || needs.cambios.outputs.frontend == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
