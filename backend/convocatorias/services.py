@@ -224,6 +224,9 @@ def publicar(obj, actor=None, confirmar_oferente=False):
     obj.version += 1
     obj.actualizado_en = timezone.now()
     obj.save()
+    # Vector para «Becas similares»: tras confirmar la publicación, solo si cambió el texto; un fallo no la revierte.
+    from .vectores import actualizar_sin_bloquear
+    transaction.on_commit(lambda pk=obj.pk: actualizar_sin_bloquear(pk))
     if not era_publica:
         from notificaciones.services import avisar_publicacion
         avisar_publicacion(obj)

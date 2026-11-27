@@ -7,6 +7,7 @@ import Message from '../components/Message'
 import Button from '../components/Button'
 import FavoriteButton from '../components/FavoriteButton'
 import Comparison from '../components/Comparison'
+import SimilarOffers from '../components/SimilarOffers'
 import { display, date, dayDate, stateLabel, closingText, publishedPeriod, providerLabel } from './offerDisplay'
 import { readable, unique, benefitSummary } from './catalogPresentation'
 
@@ -200,6 +201,7 @@ export default function OfferDetail() {
       <section className="profile-card offer-source offer-detail-section"><h2>{demonstration ? 'Datos de demostración' : 'Bases y documentos oficiales'}</h2>{demonstration ? <p>Esta convocatoria es ficticia. No existen bases ni postulación reales.</p> : <><p>La postulación se realiza fuera de BecaNexo. La entidad oferente confirma los documentos y adjudica la beca.</p>
         {documents.length ? <ul className="official-document-list">{documents.map(document => <li key={document.url}><Icon name="document" /><div><strong className="preserve-text">{document.name}</strong><span>{document.type} · Fuente: {offer.institucion?.nombre || 'publicación oficial'}</span></div><a className="secondary-link" href={document.url} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Ver documento</span></a></li>)}</ul> : <p className="small-note">No hay archivos oficiales enlazados en este registro. Consulta la información publicada por la entidad.</p>}
         {officialUrl && !documents.length && <a className="secondary-link" href={officialUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" /><span>Consultar información oficial</span></a>}</>}
-        {offer.actualizado_en && <p className="small-note">Última actualización: {date(offer.actualizado_en)}</p>}</section></>}
+        {offer.actualizado_en && <p className="small-note">Última actualización: {date(offer.actualizado_en)}</p>}</section>
+      <SimilarOffers key={offer.id} offerId={offer.id} /></>}
   </OffersLayout>
 }
