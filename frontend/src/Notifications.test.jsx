@@ -182,7 +182,7 @@ describe('franja de avisos por correo', () => {
     mount()
     const strip = await screen.findByRole('region', { name: 'Avisos por correo' })
     expect(within(strip).getByRole('heading', { name: 'Avisos por correo' })).toBeVisible()
-    expect(within(strip).getByText('Recibe avisos de becas reales, abiertas y compatibles. Tus notificaciones internas seguirán disponibles.')).toBeVisible()
+    expect(within(strip).getByText('Recibes un aviso cuando se publica una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil. Si activas el correo, también te enviamos cada aviso nuevo al correo con el que inicias sesión; los avisos anteriores a la activación no se envían. Puedes desactivarlo cuando quieras y tus avisos seguirán aquí.')).toBeVisible()
     expect(strip.querySelector('svg.ui-icon')).not.toBeNull()
     const toggle = within(strip).getByRole('switch', { name: 'Recibir avisos por correo' })
     expect(toggle).not.toBeChecked()
