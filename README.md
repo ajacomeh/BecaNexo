@@ -106,6 +106,8 @@ Las pruebas backend usan una base de pruebas separada; las de frontend están en
 
 El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) de GitHub Actions se ejecuta en cada pull request sobre `main`, en cada push a `main` y a mano (`workflow_dispatch`). En los pull request, el job «Detectar cambios» decide según los archivos cambiados si hacen falta el backend, el frontend o ninguno; en `main` y a mano se ejecutan siempre ambos. El detalle está en [integración continua](docs/integracion-continua.md).
 
+> **CI pausado temporalmente (27/11/2026, versión 1.1).** El workflow se desactivó con `gh workflow disable CI` para no esperar el job de Windows en cada cambio. Mientras dure, cada cambio se valida con las pruebas locales de los módulos tocados y se fusiona sin esperar el CI. Antes de crear la etiqueta `v1.1-entrega` hay que reactivarlo con `gh workflow enable CI`, ejecutarlo completo sobre `main` con `gh workflow run CI --ref main` y comprobar que termina en verde (`gh run watch`).
+
 - **Backend** en `windows-latest`, porque Windows es la plataforma del proyecto (el lanzador web del rastreo usa `msvcrt`). Instala PostgreSQL 16 en el runner, Python 3.13 y las dependencias, descarga el modelo ONNX fijado con `backend/scripts/download_semantic_model.py` (con caché) y ejecuta `manage.py check`, `makemigrations --check --dry-run` y `manage.py test --noinput`.
 - **Frontend** en `ubuntu-latest` con Node 24: `npm ci`, `npm run lint`, `npm test -- --maxWorkers=2` y `npm run build`.
 
