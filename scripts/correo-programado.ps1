@@ -12,12 +12,14 @@ $adquirido = $false
 $codigo = 2
 $estado = 'error_operativo'
 $resumen = $null
+$cierre = $null
 
-function Registrar-Resultado([string]$Estado, [int]$Codigo, [object]$Resumen) {
+function Registrar-Resultado([string]$Estado, [int]$Codigo, [object]$Resumen, [object]$Cierre) {
     $carpeta = Join-Path $env:LOCALAPPDATA 'BecaNexo\correo'
     New-Item -ItemType Directory -Path $carpeta -Force | Out-Null
     $registro = [ordered]@{ instante_utc = [DateTime]::UtcNow.ToString('o'); estado = $Estado; codigo_salida = $Codigo }
     if ($null -ne $Resumen) { $registro.resumen = $Resumen }
+    if ($null -ne $Cierre) { $registro.avisos_cierre = $Cierre }
     Add-Content -LiteralPath (Join-Path $carpeta 'programador.jsonl') -Value ($registro | ConvertTo-Json -Compress -Depth 3) -Encoding UTF8
 }
 
@@ -55,13 +57,33 @@ print(json.dumps({'base_correcta': db_ok, 'avisos': settings.AVISOS_CORREO_HABIL
         if ($salidaCodigo -ne 0) { $estado = 'base_no_disponible' }
         else {
             $config = ($salida -join "`n") | ConvertFrom-Json -ErrorAction Stop
+            $pendientes = [int]$config.pendientes
+            # Avisos de «cierre próximo» de becas favoritas: como máximo una vez por hora (marca en disco, sin consultar
+            # la base cada cinco minutos). Un fallo aquí no detiene el correo; queda en el registro.
+            if ($Ejecutar -and $config.base_correcta) {
+                $marca = Join-Path $env:LOCALAPPDATA 'BecaNexo\correo\avisos_cierre_ultima.txt'
+                $toca = -not (Test-Path -LiteralPath $marca) -or ((Get-Date) - (Get-Item -LiteralPath $marca).LastWriteTime).TotalMinutes -ge 60
+                if ($toca) {
+                    Push-Location (Join-Path $raiz 'backend')
+                    try { $salidaCierre = & $python $manage generar_avisos_cierre 2>$null; $codigoCierre = $LASTEXITCODE }
+                    catch { $codigoCierre = 1 }
+                    finally { Pop-Location }
+                    try {
+                        if ($codigoCierre -ne 0) { throw 'generacion_fallida' }
+                        $cierre = (@($salidaCierre)[-1]) | ConvertFrom-Json -ErrorAction Stop
+                        New-Item -ItemType Directory -Path (Split-Path -Parent $marca) -Force | Out-Null
+                        Set-Content -LiteralPath $marca -Value ([DateTime]::UtcNow.ToString('o')) -Encoding UTF8
+                        $pendientes += [int]$cierre.encolados
+                    } catch { $cierre = 'fallido' }
+                }
+            }
             if (-not $config.base_correcta) { $estado = 'base_inesperada' }
             elseif (-not $config.avisos) { $estado = 'avisos_deshabilitados'; $codigo = 0 }
             elseif (-not $config.smtp) { $estado = 'smtp_no_configurado' }
             elseif ($Comprobar) {
                 $estado = 'diagnostico_aprobado'; $codigo = 0
                 $resumen = [ordered]@{ pendientes = $config.pendientes; inciertos = $config.inciertos }
-            } elseif ($config.pendientes -eq 0 -and $config.inciertos -eq 0) {
+            } elseif ($pendientes -eq 0 -and $config.inciertos -eq 0) {
                 $estado = 'cola_vacia'; $codigo = 0
             } else {
                 $salida = & $python $manage enviar_correos_becas --confirmar-envios --limite 5 2>$null
@@ -87,7 +109,7 @@ print(json.dumps({'base_correcta': db_ok, 'avisos': settings.AVISOS_CORREO_HABIL
 }
 
 if ($Ejecutar) {
-    try { Registrar-Resultado $estado $codigo $resumen }
+    try { Registrar-Resultado $estado $codigo $resumen $cierre }
     catch { $estado = 'registro_fallido'; $codigo = 2 }
 }
 @{ estado = $estado; codigo_salida = $codigo; resumen = $resumen } | ConvertTo-Json -Compress -Depth 3

@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from usuarios.api import AuthView
 from convocatorias.services import campos_conocimiento, publicas
 from .models import Notificacion, PreferenciaCorreo
+from .services import texto_cierre
 
 
 class PostulanteActivo(permissions.BasePermission):
@@ -20,7 +21,10 @@ def representar(aviso, publicas_ids, campos=None):
             "motivos": aviso.motivos,
             "creada_en": aviso.creada_en, "leida_en": aviso.leida_en, "disponible": disponible,
             # Área única de la convocatoria (icono de la tarjeta); None si no está disponible, tiene varias o ninguna.
-            "campo_conocimiento": (campos or {}).get(aviso.convocatoria_id) if disponible else None}
+            "campo_conocimiento": (campos or {}).get(aviso.convocatoria_id) if disponible else None,
+            # «publicacion» o «cierre_proximo»; para este último, la fecha de cierre en el mismo texto que el correo.
+            "tipo": aviso.tipo,
+            "cierre_texto": texto_cierre(aviso.convocatoria) if disponible and aviso.tipo == "cierre_proximo" else None}
 
 
 class Bandeja(AuthView):

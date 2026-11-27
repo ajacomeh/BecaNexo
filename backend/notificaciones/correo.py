@@ -43,11 +43,26 @@ def motivo_omision(aviso):
     if not publicas().filter(pk=aviso.convocatoria_id).exists():
         # Igual que la bandeja: un aviso de una convocatoria que dejó de ser pública no se ofrece.
         return "oferta_no_publica"
+    if aviso.tipo == "cierre_proximo" and aviso.convocatoria.estado not in ("abierta", "cierre_hoy"):
+        # Avisar de un cierre ya ocurrido confundiría; el aviso interno sigue en la bandeja.
+        return "oferta_ya_cerrada"
     return ""
 
 
 def mensaje(aviso):
     offer = aviso.convocatoria
+    if aviso.tipo == "cierre_proximo":
+        from .services import texto_cierre
+        body = render_to_string("notificaciones/cierre_proximo.txt", {
+            "nombre": aviso.usuario.nombre,
+            "titulo": offer.titulo,
+            "institucion": offer.institucion.nombre if offer.institucion_id else None,
+            "cierre": texto_cierre(offer),
+            "enlace": enlace_detalle(offer.pk),
+            "enlace_avisos": _enlace("/notificaciones"),
+        })
+        return EmailMessage(f"BecaNexo · Cierre próximo: {offer.titulo}", body,
+                            settings.DEFAULT_FROM_EMAIL, [aviso.usuario.email])
     cierre = offer.cierre_dia or (timezone.localtime(offer.cierre).date() if offer.cierre else None)
     body = render_to_string("notificaciones/nueva_beca.txt", {
         "nombre": aviso.usuario.nombre,
