@@ -37,6 +37,8 @@ RASTREO_CANDIDATO_PDF_HABILITADO = env.bool("RASTREO_CANDIDATO_PDF_HABILITADO", 
 
 # La cola de correo permanece inactiva hasta migrar y habilitarla expresamente.
 AVISOS_CORREO_HABILITADOS = env.bool("AVISOS_CORREO_HABILITADOS", default=False)
+# Tope de correos por destinatario en cada ejecución de la cola; el exceso queda pendiente para la siguiente.
+AVISOS_CORREO_MAX_POR_USUARIO = env.int("AVISOS_CORREO_MAX_POR_USUARIO", default=3)
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
