@@ -229,3 +229,18 @@ class BorradorRastreo(models.Model):
 
     class Meta:
         db_table = 'TRA_BORRADOR_RASTREO'
+
+
+class VectorConvocatoria(models.Model):
+    """Vector semántico de la convocatoria (texto público, nunca datos del perfil) para «Becas similares».
+
+    Dato técnico derivado: se recalcula al publicar si cambia el texto (`hash_texto`) o el modelo (`version_modelo`).
+    """
+    convocatoria = models.OneToOneField(Convocatoria, on_delete=models.CASCADE, related_name="vector_semantico")
+    vector = models.BinaryField()  # float32 normalizado, 384 dimensiones (1536 bytes)
+    version_modelo = models.CharField(max_length=120)
+    hash_texto = models.CharField(max_length=64)
+    actualizado_en = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "TEC_VECTOR_CONVOCATORIA"

@@ -250,6 +250,27 @@ class Consulta(AuthView):
         return respuesta
 
 
+class Similares(AuthView):
+    """Becas parecidas por su contenido público (vectores guardados); no depende del perfil ni de la sesión."""
+    permission_classes = [permissions.AllowAny]
+    http_method_names = ["get", "options"]
+
+    def get(self, request, pk):
+        parametros(request, set())
+        from .services import campos_conocimiento, oferente_sin_entidad
+        from .vectores import similares
+        convocatoria = get_object_or_404(publicas(), pk=pk)  # misma visibilidad que el detalle público
+        encontradas = [c for c, _ in similares(convocatoria, publicas())]
+        campos = campos_conocimiento([c.pk for c in encontradas])
+        return Response({"results": [{
+            "id": c.pk, "titulo": c.titulo, "estado": c.estado,
+            "institucion": {"id": c.institucion_id, "nombre": c.institucion.nombre} if c.institucion_id else None,
+            "oferente_externo": oferente_sin_entidad(c),
+            "niveles": sorted(set(c.opciones.filter(activa=True).values_list("nivel", flat=True))),
+            "campo_conocimiento": campos.get(c.pk),
+        } for c in encontradas]})
+
+
 class Comparacion(AuthView):
     permission_classes = [EsPostulante]
     http_method_names = ["get", "options"]
