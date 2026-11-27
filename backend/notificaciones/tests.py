@@ -48,33 +48,26 @@ class NotificacionesTests(TestCase):
         offer = self.oferta()
         self.assertEqual(self.publicar(offer).status_code, 200)
         self.assertEqual(Notificacion.objects.count(), 2)  # La bandeja conserva también compatibilidad desconocida.
-        self.assertEqual(EntregaCorreo.objects.count(), 1)  # Correo solo para quien cumple y consintió.
-        self.assertEqual(EntregaCorreo.objects.get().notificacion.usuario_id, self.area_user.pk)
+        # v1.1: el correo refleja cada aviso interno de quien consintió, también con compatibilidad desconocida.
+        self.assertEqual(set(EntregaCorreo.objects.values_list("notificacion__usuario_id", flat=True)),
+                         {self.area_user.pk, self.pref_user.pk})
         self.assertEqual(mail.outbox, [])
         self.assertEqual(procesar_pendientes(limite=1)["enviados"], 1)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Beca sintética", mail.outbox[0].body)
         self.assertIn("/becas/", mail.outbox[0].body)
         self.assertIn("no garantiza", mail.outbox[0].body)
+        self.assertEqual(procesar_pendientes(limite=1)["enviados"], 1)
         self.assertEqual(procesar_pendientes(limite=1)["enviados"], 0)
-        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(len(mail.outbox), 2)
         self.assertEqual(self.publicar(offer).status_code, 200)
-        self.assertEqual(EntregaCorreo.objects.count(), 1)
+        self.assertEqual(EntregaCorreo.objects.count(), 2)
 
     @override_settings(AVISOS_CORREO_HABILITADOS=True,
                        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
-    def test_bloqueos_de_correo_y_reintento_acotado(self):
+    def test_reintento_acotado(self):
         PreferenciaCorreo.objects.create(usuario=self.area_user, habilitada=True)
-        offer = self.oferta()
-        offer.titulo = "Beca sintética (Ficticia)"
-        offer.save(update_fields=["titulo"])
-        self.assertEqual(self.publicar(offer).status_code, 200)
-        self.assertEqual(EntregaCorreo.objects.count(), 0)
-        Notificacion.objects.all().delete()  # Solo fixture aislado: simula un evento nuevo.
-        offer.titulo = "Beca sintética"
-        offer.revision = "pendiente"
-        offer.save(update_fields=["titulo", "revision"])
-        self.assertEqual(self.publicar(offer).status_code, 200)
+        self.assertEqual(self.publicar(self.oferta()).status_code, 200)
         item = EntregaCorreo.objects.get()
         with patch("notificaciones.correo.get_connection", side_effect=ConnectionRefusedError):
             self.assertEqual(procesar_pendientes(limite=1)["reintentos"], 1)

@@ -78,7 +78,10 @@ class PreferenciaEmail(AuthView):
         if not settings.AVISOS_CORREO_HABILITADOS:
             return Response({"detail": "El correo aún no está habilitado."}, status=503)
         pref, _ = PreferenciaCorreo.objects.get_or_create(usuario=request.user)
-        pref.habilitada = request.data["habilitado"]
-        pref.actualizada_en = timezone.now()
-        pref.save(update_fields=["habilitada", "actualizada_en"])
+        # actualizada_en marca el último cambio real: con el correo activado es la fecha de activación, y solo los
+        # avisos posteriores se envían. Repetir el mismo valor no la mueve.
+        if pref.habilitada != request.data["habilitado"]:
+            pref.habilitada = request.data["habilitado"]
+            pref.actualizada_en = timezone.now()
+            pref.save(update_fields=["habilitada", "actualizada_en"])
         return Response({"habilitado": pref.habilitada, "disponible": True})

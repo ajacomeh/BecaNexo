@@ -39,7 +39,7 @@ En el detalle de una beca, el postulante ve sus requisitos agrupados en «No cum
 
 ### Avisos
 
-Al publicar, los postulantes compatibles reciben un aviso interno. El correo es opcional: requiere el consentimiento del postulante, `AVISOS_CORREO_HABILITADOS` y la configuración Gmail; la tarea de Windows `BecaNexo-Notificaciones-Gmail` (`scripts/correo-programado.ps1`) procesa la cola cada cinco minutos. Ver [correo](docs/correo-gmail.md).
+Al publicar, los postulantes compatibles reciben un aviso interno. El correo es opcional y refleja cada aviso interno creado después de que el postulante lo activa; requiere ese consentimiento, `AVISOS_CORREO_HABILITADOS` y la configuración Gmail; la tarea de Windows `BecaNexo-Notificaciones-Gmail` (`scripts/correo-programado.ps1`) procesa la cola cada cinco minutos. Ver [correo](docs/correo-gmail.md).
 
 ## Tecnologías y estructura
 

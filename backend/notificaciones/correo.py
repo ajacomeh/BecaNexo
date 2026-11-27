@@ -1,6 +1,7 @@
 """Entrega diferida de avisos, sin bloquear la publicación ni inferir elegibilidad."""
 import smtplib
 import socket
+from collections import Counter
 from datetime import timedelta
 from urllib.parse import urlsplit
 
@@ -10,37 +11,38 @@ from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
 
-from convocatorias.comparacion import evaluar_convocatoria
-from convocatorias.services import postulables
+from convocatorias.services import publicas
 from .models import EntregaCorreo, PreferenciaCorreo
 
 MAX_INTENTOS = 3
 
 
-def enlace_detalle(pk):
+def _enlace(ruta):
     base = settings.BECANEXO_PUBLIC_BASE_URL
     parsed = urlsplit(base)
     if parsed.scheme not in ("http", "https") or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("La URL pública de BecaNexo no es válida.")
-    return f"{base}/becas/{pk}"
+    return f"{base}{ruta}"
+
+
+def enlace_detalle(pk):
+    return _enlace(f"/becas/{pk}")
 
 
 def motivo_omision(aviso):
-    user, offer = aviso.usuario, aviso.convocatoria
+    """Condiciones de entrega, no de generación: el aviso interno ya decidió el evento y la coincidencia."""
+    user = aviso.usuario
     if not user.is_active or user.rol != "postulante":
         return "cuenta_no_activa"
-    if not PreferenciaCorreo.objects.filter(usuario=user, habilitada=True).exists():
+    preferencia = PreferenciaCorreo.objects.filter(usuario=user, habilitada=True).first()
+    if preferencia is None:
         return "sin_consentimiento"
-    if (offer.titulo.rstrip().endswith("(Ficticia)") or not offer.institucion_id
-            or offer.institucion.pais.codigo != "EC"):
-        return "oferta_no_real_confirmada"
-    if not postulables().filter(pk=offer.pk).exists():
-        return "oferta_no_postulable"
-    if not aviso.motivos:
-        return "sin_coincidencia_declarada"
-    comparison = evaluar_convocatoria(user, offer)
-    if not any(option["resultado"] == "cumple" for option in comparison["opciones"]):
-        return "compatibilidad_no_confirmada"
+    if aviso.creada_en < preferencia.actualizada_en:
+        # Desactivó y volvió a activar el correo: lo anterior a la nueva activación no se envía.
+        return "anterior_a_la_activacion"
+    if not publicas().filter(pk=aviso.convocatoria_id).exists():
+        # Igual que la bandeja: un aviso de una convocatoria que dejó de ser pública no se ofrece.
+        return "oferta_no_publica"
     return ""
 
 
@@ -50,18 +52,25 @@ def mensaje(aviso):
     body = render_to_string("notificaciones/nueva_beca.txt", {
         "nombre": aviso.usuario.nombre,
         "titulo": offer.titulo,
-        "institucion": offer.institucion.nombre,
+        "institucion": offer.institucion.nombre if offer.institucion_id else None,
         "cierre": cierre.strftime("%d/%m/%Y") if cierre else None,
         "motivos": aviso.motivos,
         "enlace": enlace_detalle(offer.pk),
+        "enlace_avisos": _enlace("/notificaciones"),
     })
     return EmailMessage(f"BecaNexo · Nueva beca: {offer.titulo}", body,
                         settings.DEFAULT_FROM_EMAIL, [aviso.usuario.email])
 
 
 def procesar_pendientes(limite=10, solo_id=None):
-    """Los resultados SMTP indeterminados quedan retenidos; nunca se reenvían solos."""
+    """Los resultados SMTP indeterminados quedan retenidos; nunca se reenvían solos.
+
+    Como máximo `AVISOS_CORREO_MAX_POR_USUARIO` intentos por destinatario en cada ejecución; el exceso sigue
+    pendiente, en orden, para la siguiente.
+    """
     resumen = {"enviados": 0, "reintentos": 0, "fallidos": 0, "omitidos": 0}
+    tope = settings.AVISOS_CORREO_MAX_POR_USUARIO
+    intentos_por_usuario = Counter()
     # Una caída del proceso puede dejar el resultado SMTP incierto. Se registra
     # como fallido tras el plazo de seguridad, sin devolverlo a la cola.
     resumen["fallidos"] += EntregaCorreo.objects.filter(
@@ -69,8 +78,10 @@ def procesar_pendientes(limite=10, solo_id=None):
     ).update(estado="fallido", codigo_error="resultado_indeterminado", actualizado_en=timezone.now())
     for _ in range(limite):
         with transaction.atomic():
-            qs = EntregaCorreo.objects.select_for_update(skip_locked=True).filter(
-                estado="pendiente", proximo_intento_en__lte=timezone.now()).order_by("proximo_intento_en", "id")
+            qs = EntregaCorreo.objects.select_for_update(skip_locked=True, of=("self",)).filter(
+                estado="pendiente", proximo_intento_en__lte=timezone.now()).exclude(
+                notificacion__usuario_id__in=[u for u, n in intentos_por_usuario.items() if n >= tope]
+            ).order_by("proximo_intento_en", "id")
             if solo_id is not None:
                 qs = qs.filter(pk=solo_id)
             item = qs.select_related("notificacion__usuario", "notificacion__convocatoria").first()
@@ -83,6 +94,7 @@ def procesar_pendientes(limite=10, solo_id=None):
                 item.save(update_fields=["estado", "codigo_error", "actualizado_en"])
                 resumen["omitidos"] += 1
                 continue
+            intentos_por_usuario[item.notificacion.usuario_id] += 1
             item.estado = "enviando"
             item.intentos += 1
             item.actualizado_en = timezone.now()
