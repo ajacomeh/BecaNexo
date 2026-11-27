@@ -39,6 +39,8 @@ RASTREO_CANDIDATO_PDF_HABILITADO = env.bool("RASTREO_CANDIDATO_PDF_HABILITADO", 
 AVISOS_CORREO_HABILITADOS = env.bool("AVISOS_CORREO_HABILITADOS", default=False)
 # Tope de correos por destinatario en cada ejecución de la cola; el exceso queda pendiente para la siguiente.
 AVISOS_CORREO_MAX_POR_USUARIO = env.int("AVISOS_CORREO_MAX_POR_USUARIO", default=3)
+# Aviso de «cierre próximo»: becas favoritas vigentes que cierran dentro de estos días (incluido «cierra hoy»).
+AVISOS_CIERRE_DIAS = env.int("AVISOS_CIERRE_DIAS", default=3)
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True

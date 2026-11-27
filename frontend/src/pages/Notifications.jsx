@@ -66,7 +66,9 @@ export default function Notifications() {
       <div className="notification-content">
         <ScholarshipTitle as="h3" field={item.campo_conocimiento}>{item.titulo}</ScholarshipTitle>
         <div className="notification-meta"><span className={`notification-state${item.leida_en ? ' notification-state-read' : ''}`}>{item.leida_en ? 'Leída' : 'Sin leer'}</span><span className="notification-date">Recibida: {fecha}</span></div>
-        <div className="notification-reason"><span className="notification-reason-label">Coincidencia:</span><ul className="notification-chips" aria-label="Motivos de la coincidencia">{item.motivos.map((motivo) => <li key={motivo}>{motivo}</li>)}</ul></div>
+        {item.tipo === 'cierre_proximo'
+          ? <div className="notification-reason"><span className="notification-reason-label">Cierre próximo:</span><span>{item.cierre_texto ? `Esta beca de tus favoritas ${item.cierre_texto}.` : 'Esta beca de tus favoritas está por cerrar.'}</span></div>
+          : <div className="notification-reason"><span className="notification-reason-label">Coincidencia:</span><ul className="notification-chips" aria-label="Motivos de la coincidencia">{item.motivos.map((motivo) => <li key={motivo}>{motivo}</li>)}</ul></div>}
         <div className="notification-actions">{item.disponible
           ? <Link className="button notification-primary" to={`/becas/${item.convocatoria_id}`} aria-label={`Ver beca: ${item.titulo}`}><Icon name="detail" /><span>Ver beca</span></Link>
           : <span className="small-note">La convocatoria ya no está disponible públicamente.</span>}
@@ -80,7 +82,7 @@ export default function Notifications() {
 
   return <OffersLayout><div className="page-heading"><div><p className="eyebrow">TUS AVISOS</p><h1>Notificaciones</h1><p>Convocatorias publicadas relacionadas con información que declaraste. Revisa siempre sus requisitos y bases oficiales.</p>
     <p className="small-note notification-disclaimer"><Icon name="info" /><span>La coincidencia no confirma todos los requisitos ni la adjudicación.</span></p></div></div>
-    <section className="mail-settings" aria-label="Avisos por correo"><div className="mail-settings-row"><div className="mail-settings-copy"><Icon name="mail" /><div><h2>Avisos por correo</h2><p className="small-note">Recibes un aviso cuando se publica una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil. Si activas el correo, también te enviamos cada aviso nuevo al correo con el que inicias sesión; los avisos anteriores a la activación no se envían. Puedes desactivarlo cuando quieras y tus avisos seguirán aquí.</p></div></div>
+    <section className="mail-settings" aria-label="Avisos por correo"><div className="mail-settings-row"><div className="mail-settings-copy"><Icon name="mail" /><div><h2>Avisos por correo</h2><p className="small-note">Recibes un aviso cuando se publica una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil, y cuando una de tus becas favoritas abiertas cierra en los próximos días. Si activas el correo, también te enviamos cada aviso nuevo al correo con el que inicias sesión; los avisos anteriores a la activación no se envían. Puedes desactivarlo cuando quieras y tus avisos seguirán aquí.</p></div></div>
       {mailPreference ? <label className="mail-switch"><input type="checkbox" role="switch" aria-label="Recibir avisos por correo" checked={Boolean(mailPreference.habilitado)} disabled={!mailPreference.disponible || mailBusy} onChange={(event) => changeMail(event.target.checked)} /><span className="mail-switch-track" aria-hidden="true"><span className="mail-switch-thumb" /></span><span className="mail-switch-state">{mailPreference.habilitado ? 'Activados' : 'Desactivados'}</span></label> : !mailError && <p className="small-note mail-settings-status">Consultando preferencia de correo…</p>}</div>
       {mailPreference && !mailPreference.disponible && <p className="small-note mail-settings-status">El envío por correo aún no está habilitado.</p>}
       <Message>{mailError}</Message></section>
@@ -88,7 +90,7 @@ export default function Notifications() {
     {current?.error && <><Message>{current.error}</Message><Button icon="refresh" onClick={() => setRevision((value) => value + 1)}>Reintentar</Button></>}
     <Message>{error}</Message>
     {current?.data && <><p className="results-count notification-count">{current.data.no_leidas} sin leer · {current.data.count} en total</p>
-      {!current.data.count ? <section className="profile-card"><h2>Aún no tienes notificaciones</h2><p>Cuando se publique una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil, aparecerá aquí.</p></section> :
+      {!current.data.count ? <section className="profile-card"><h2>Aún no tienes notificaciones</h2><p>Cuando se publique una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil, o cuando una de tus becas favoritas esté por cerrar, aparecerá aquí.</p></section> :
         groups.map(([id, title, items]) => items.length > 0 && <section className="notification-group" key={id} aria-labelledby={`notificaciones-${id}`}>
           <h2 id={`notificaciones-${id}`}>{title} <span className="notification-group-count">({items.length})</span></h2>
           <ul className="notification-list">{items.map(card)}</ul>

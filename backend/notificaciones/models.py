@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+# «publicacion»: beca publicada que coincide con el perfil. «cierre_proximo»: una beca favorita está por cerrar.
+TIPOS_AVISO = [("publicacion", "Beca publicada que coincide con el perfil"), ("cierre_proximo", "Cierre próximo de una favorita")]
 ESTADOS_CORREO = [("pendiente", "Pendiente"), ("enviando", "Envío iniciado"),
                   ("enviado", "Enviado"), ("fallido", "Fallido"), ("omitido", "Omitido")]
 
@@ -9,6 +11,7 @@ ESTADOS_CORREO = [("pendiente", "Pendiente"), ("enviando", "Envío iniciado"),
 class Notificacion(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notificaciones")
     convocatoria = models.ForeignKey("convocatorias.Convocatoria", on_delete=models.PROTECT, related_name="notificaciones")
+    tipo = models.CharField(max_length=20, choices=TIPOS_AVISO, default="publicacion")
     motivos = models.JSONField(default=list)
     creada_en = models.DateTimeField(default=timezone.now, editable=False)
     leida_en = models.DateTimeField(null=True, blank=True)
@@ -16,7 +19,9 @@ class Notificacion(models.Model):
     class Meta:
         db_table = "TRA_NOTIFICACION"
         ordering = ["-creada_en", "-id"]
-        constraints = [models.UniqueConstraint(fields=["usuario", "convocatoria"], name="notif_usuario_convocatoria_unica")]
+        # Un aviso de cada tipo por persona y convocatoria: es el evento (y lo que hace idempotente su correo).
+        constraints = [models.UniqueConstraint(fields=["usuario", "convocatoria", "tipo"], name="notif_usuario_conv_tipo_unica"),
+                       models.CheckConstraint(condition=models.Q(tipo__in=[item[0] for item in TIPOS_AVISO]), name="notif_tipo_valido")]
         indexes = [models.Index(fields=["usuario", "leida_en", "-creada_en"], name="notif_bandeja_idx")]
 
 

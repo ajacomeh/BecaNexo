@@ -182,7 +182,7 @@ describe('franja de avisos por correo', () => {
     mount()
     const strip = await screen.findByRole('region', { name: 'Avisos por correo' })
     expect(within(strip).getByRole('heading', { name: 'Avisos por correo' })).toBeVisible()
-    expect(within(strip).getByText('Recibes un aviso cuando se publica una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil. Si activas el correo, también te enviamos cada aviso nuevo al correo con el que inicias sesión; los avisos anteriores a la activación no se envían. Puedes desactivarlo cuando quieras y tus avisos seguirán aquí.')).toBeVisible()
+    expect(within(strip).getByText('Recibes un aviso cuando se publica una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil, y cuando una de tus becas favoritas abiertas cierra en los próximos días. Si activas el correo, también te enviamos cada aviso nuevo al correo con el que inicias sesión; los avisos anteriores a la activación no se envían. Puedes desactivarlo cuando quieras y tus avisos seguirán aquí.')).toBeVisible()
     expect(strip.querySelector('svg.ui-icon')).not.toBeNull()
     const toggle = within(strip).getByRole('switch', { name: 'Recibir avisos por correo' })
     expect(toggle).not.toBeChecked()
@@ -227,5 +227,38 @@ describe('franja de avisos por correo', () => {
     expect(screen.getByText('El envío por correo aún no está habilitado.')).toBeVisible()
     expect(screen.getByText('1 sin leer · 1 en total')).toBeVisible()
     expect(screen.getByRole('region', { name: 'Sin leer (1)' })).toBeVisible()
+  })
+})
+
+describe('aviso de cierre próximo de una favorita', () => {
+  it('muestra «Cierre próximo» con la fecha en lugar de la coincidencia y conserva las acciones', async () => {
+    const cierre = { ...item, id: 8, titulo: 'Beca favorita por cerrar', tipo: 'cierre_proximo', motivos: ['cierre próximo de una beca favorita'],
+      cierre_texto: 'cierra el 30/11/2026 a las 17:00 (hora de Ecuador)' }
+    const hoy = { ...item, id: 9, titulo: 'Beca que cierra hoy', tipo: 'cierre_proximo', motivos: ['cierre próximo de una beca favorita'],
+      cierre_texto: 'cierra hoy · hora no informada' }
+    offersApi.get.mockImplementation((path) => Promise.resolve(path === 'notificaciones/correo'
+      ? { disponible: true, habilitado: false } : data([cierre, hoy, { ...item, tipo: 'publicacion' }])))
+    mount()
+    const card = (await screen.findByRole('heading', { name: 'Beca favorita por cerrar' })).closest('li')
+    expect(within(card).getByText('Cierre próximo:')).toBeVisible()
+    expect(within(card).getByText('Esta beca de tus favoritas cierra el 30/11/2026 a las 17:00 (hora de Ecuador).')).toBeVisible()
+    expect(within(card).queryByText('Coincidencia:')).not.toBeInTheDocument()
+    expect(within(card).queryByText('cierre próximo de una beca favorita')).not.toBeInTheDocument()
+    expect(within(card).getByText('Sin leer')).toBeVisible()
+    expect(within(card).getByRole('link', { name: 'Ver beca: Beca favorita por cerrar' })).toHaveAttribute('href', '/becas/42')
+    expect(within(card).getByRole('button', { name: 'Marcar como leída: Beca favorita por cerrar' })).toBeVisible()
+    const today = screen.getByRole('heading', { name: 'Beca que cierra hoy' }).closest('li')
+    expect(within(today).getByText('Esta beca de tus favoritas cierra hoy · hora no informada.')).toBeVisible()
+    // El aviso de publicación sigue mostrando su coincidencia.
+    const publicacion = screen.getByRole('heading', { name: 'Beca sintética' }).closest('li')
+    expect(within(publicacion).getByText('Coincidencia:')).toBeVisible()
+    expect(within(publicacion).queryByText('Cierre próximo:')).not.toBeInTheDocument()
+  })
+
+  it('el estado vacío menciona también el cierre de las becas favoritas', async () => {
+    offersApi.get.mockImplementation((path) => Promise.resolve(path === 'notificaciones/correo'
+      ? { disponible: true, habilitado: false } : data([])))
+    mount()
+    expect(await screen.findByText('Cuando se publique una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil, o cuando una de tus becas favoritas esté por cerrar, aparecerá aquí.')).toBeVisible()
   })
 })

@@ -1,0 +1,15 @@
+{% autoescape off %}Hola {{ nombre }}:
+
+Una beca de tus favoritas está por cerrar. Es el mismo aviso que aparece en tu sección «Avisos».
+
+Beca: {{ titulo }}
+{% if institucion %}Entidad oferente: {{ institucion }}
+{% endif %}Esta beca de tus favoritas {{ cierre }}. Confirma la fecha y la hora en las bases oficiales.
+
+Detalle de la beca: {{ enlace }}
+Tus avisos: {{ enlace_avisos }}
+
+Verifica siempre los requisitos, fechas y bases en la fuente oficial antes de postular. La postulación se realiza fuera de BecaNexo.
+
+Recibes este correo porque activaste «Avisos por correo» en BecaNexo. Para dejar de recibirlos, desactiva esa opción en tu sección de avisos: {{ enlace_avisos }}
+{% endautoescape %}
