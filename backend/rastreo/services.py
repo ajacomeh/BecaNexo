@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import connection, transaction, DatabaseError
+from django.db.models import F, OuterRef, Subquery
 from django.utils import timezone
 
 from convocatorias.siau_red import Downloader, AccessError, SourceBackoff, retry_after_at, INDEX, NATIONAL_INDEX, ROBOTS, PAGES, PDFS, ALLOWED, AGENT, HOST
@@ -641,22 +642,38 @@ INTERRUMPIDA_MINUTOS = 10
 ROTACION = 'Más fichas o páginas de las que caben en esta corrida; se cubren por rotación en las siguientes.'
 # Cupo de MAX_FICHAS reservado para volver a observar publicaciones ya conocidas (la más antigua primero).
 MAX_FICHAS_CONOCIDAS = 6
+# Una ficha retirada (404/410 confirmado) se vuelve a pedir como máximo una vez por semana, por si la fuente la reactiva.
+REVISION_RETIRADAS = timedelta(days=7)
 
 
-def seleccionar_fichas(source, candidates, limit=MAX_FICHAS, known_limit=MAX_FICHAS_CONOCIDAS):
+def seleccionar_fichas(source, candidates, limit=MAX_FICHAS, known_limit=MAX_FICHAS_CONOCIDAS, *, indexed=None, now=None):
     """Reparte el cupo entre publicaciones conocidas y candidatos nuevos.
 
     Hasta `known_limit` conocidas de la fuente, por última detección más antigua, aunque no aparezcan en el
     índice de esta corrida (se piden por su URL guardada si cumple el contrato de ficha de SIAU); el resto,
     candidatos nuevos en el orden del índice. Los cupos que sobran de un lado pasan al otro; nunca más de `limit`.
+    Las retiradas solo vuelven a la cola, al final, si su último acceso de ficha tiene más de `REVISION_RETIRADAS`.
+    `indexed` son las URL descubiertas en el índice de esta corrida (por omisión, los candidatos).
     Devuelve (fichas, hay_mas).
     """
-    # Una retirada que reaparece en el índice vuelve al flujo normal; las demás retiradas no ocupan cupos.
-    Publicacion.objects.filter(fuente=source, retirada_en__isnull=False, url_normalizada__in=set(candidates)).update(retirada_en=None)
+    now = now or timezone.now()
+    indexed = set(candidates if indexed is None else indexed)
+    # Una retirada que reaparece en el índice descubierto vuelve al flujo normal. Figurar solo en la lista fija PAGES no
+    # basta: una ficha muerta de PAGES se desmarcaba y se volvía a marcar en cada corrida.
+    Publicacion.objects.filter(fuente=source, retirada_en__isnull=False, url_normalizada__in=indexed).update(retirada_en=None)
+    contrato = lambda url: candidate_url(url, NATIONAL_FICHA) == url
     known = [url for url in Publicacion.objects.filter(fuente=source, retirada_en__isnull=True).order_by('ultima_deteccion', 'id')
-             .values_list('url_normalizada', flat=True) if candidate_url(url, NATIONAL_FICHA) == url]
+             .values_list('url_normalizada', flat=True) if contrato(url)]
+    # Retiradas: revisión semanal al final de la cola (la de último intento más antiguo primero); las demás no ocupan cupo
+    # ni cuentan como candidatos nuevos aunque su URL esté en PAGES.
+    ultimo_intento = Acceso.objects.filter(publicacion=OuterRef('pk'), rol='ficha').order_by('-fin').values('fin')[:1]
+    retiradas = (Publicacion.objects.filter(fuente=source, retirada_en__isnull=False).annotate(ultimo_intento=Subquery(ultimo_intento))
+                 .order_by(F('ultimo_intento').asc(nulls_first=True), 'id').values_list('url_normalizada', 'ultimo_intento'))
+    revisar = [url for url, intento in retiradas if (intento is None or intento <= now - REVISION_RETIRADAS) and contrato(url)]
+    en_espera = {url for url, _ in retiradas} - set(revisar)
+    known += revisar
     known_set = set(known)
-    new = [url for url in dict.fromkeys(candidates) if url not in known_set]
+    new = [url for url in dict.fromkeys(candidates) if url not in known_set and url not in en_espera]
     take_known = known[:max(known_limit, limit - len(new))]
     take_new = new[:limit - len(take_known)]
     take_known = known[:limit - len(take_new)]
@@ -816,10 +833,12 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                     raise AccessError('robots bloquea la ruta.')
                 return downloader.fetch(url, can_fetch=allowed)
             pages = list(PAGES)
+            indexed = set()  # URL descubiertas en el índice de esta corrida (no la lista fija PAGES)
             try:
                 index = download(INDEX)
                 if source.politica_version in ('siau-indice/2', 'siau-nacionales/3', 'siau-nacionales/4'):
                     discovered, truncated = index_pages(index['contenido'])
+                    indexed.update(discovered)
                     if truncated:
                         if source.politica_version == 'siau-nacionales/4':
                             incident(execution, 'INDICE_LIMITE', ROTACION, severity='aviso')
@@ -843,6 +862,7 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                         first_parser = NationalIndexLinks(include_all_becas=True)
                         first_parser.feed(national['contenido'].decode('utf-8-sig'))
                         discovered = first_parser.urls
+                        indexed.update(discovered)
                         truncated = truncated or len(discovered) > MAX_FICHAS
                         pages = list(dict.fromkeys([*pages, *discovered]))[:MAX_FICHAS]
                         downloader.pages.update(pages)
@@ -873,8 +893,9 @@ def _run(source_id, actor_id, key, origin, manual_context=None):
                                     raise
                                 except AccessError:
                                     pass  # Se conserva la posición anterior para el próximo ciclo.
+                        indexed.update(extra)
                         candidates = list(dict.fromkeys([*discovered, *extra, *pages]))
-                        pages, more = seleccionar_fichas(source, candidates)
+                        pages, more = seleccionar_fichas(source, candidates, indexed=indexed)
                         truncated = truncated or config['max_num_pages'] > 2 or more
                     else:
                         truncated = truncated or len(pages) + len([url for url in discovered if url not in pages]) > MAX_FICHAS
