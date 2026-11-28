@@ -12,7 +12,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from perfiles.models import Area, Formacion, Pais, Perfil, PerfilArea
-from .comparacion import ETIQUETA_SUGERENCIA, UMBRAL_SUGERENCIA_TITULO, evaluar_convocatoria, nivel_deducido
+from .comparacion import ETIQUETA_SUGERENCIA, UMBRAL_SUGERENCIA_TITULO, evaluar_convocatoria, nivel_deducido, nivel_titulo_deducido
 from .models import Convocatoria, Institucion, OpcionEstudio, Requisito, TipoRequisito
 from .recomendaciones import recomendar
 from .reglas import CONTRATOS
@@ -181,3 +181,85 @@ class NivelDeducidoFormacionTests(TestCase):
                        {"nivel_minimo": "grado", "estado_exigido": "concluidos", "titulo_obtenido": True})
         self.formacion("grado")
         self.assertEqual(self.evaluacion(r)["resultado"], "desconocido")
+
+
+class NivelTituloDeducidoTests(TestCase):
+    """TITULO_AREA que solo pide un nivel de título: deducción por reglas, nunca «no_cumple»."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.ec = Pais.objects.create(codigo="EC", nombre="Ecuador")
+        call_command("cargar_catalogos_convocatorias", verbosity=0)
+        cls.user = get_user_model().objects.create_user(email="nivel-titulo@example.com", nombre="DEMO", password=None)
+        cls.perfil = Perfil.objects.create(usuario=cls.user, nacionalidad=cls.ec)
+        institucion = Institucion.objects.create(nombre="DEMO entidad", sector="publico", pais=cls.ec)
+        cls.conv = Convocatoria.objects.create(institucion=institucion, titulo="DEMO nivel de título", revision="validada", clave_deduplicacion="nivel-titulo")
+        OpcionEstudio.objects.create(convocatoria=cls.conv, nivel="maestria", modalidad="virtual").paises.add(cls.ec)
+
+    def regla(self, titulo, texto, codigo="TITULO_AREA", **kwargs):
+        valor = {"titulos_admitidos": [titulo]} if codigo == "TITULO_AREA" else kwargs.pop("valor")
+        return Requisito.objects.create(convocatoria=self.conv, tipo_requisito=TipoRequisito.objects.get(codigo=codigo),
+            texto_original=texto, valor_estructurado=valor, operador=CONTRATOS[codigo][1],
+            modo_comprobacion="entidad_oferente" if codigo in ("DOCUMENTO", "ACREDITACION", "OTRO") else "dato_declarado",
+            validado=True, **kwargs)
+
+    def formacion(self, nivel, estado="concluidos", titulo=True):
+        return Formacion.objects.create(perfil=self.perfil, nivel=nivel, carrera="DEMO", titulo_obtenido=titulo, estado_estudios=estado)
+
+    def evaluacion(self, r):
+        return {e["id"]: e for e in evaluar_convocatoria(self.user, self.conv)["opciones"][0]["requisitos"]}[r.pk]
+
+    def test_textos_inequivocos_y_con_condiciones_adicionales(self):
+        def n(titulo, texto=None):
+            return nivel_titulo_deducido({"titulos_admitidos": [titulo], "areas_admitidas": []}, texto or f"Contar con un {titulo}")
+        self.assertEqual(n("título de tercer nivel de grado (licenciatura o ingeniería)"), "grado")
+        self.assertEqual(n("título de bachiller."), "bachillerato")
+        self.assertEqual(n("título de maestría"), "maestria")
+        self.assertEqual(n("título de doctorado"), "doctorado")
+        for titulo, texto in (
+            ("título de cuarto nivel de grado, es decir maestría oficial.", None),  # cuarto nivel: no distingue
+            ("título de tercer nivel de grado (licenciatura y/o ingeniería) que le habilite el acceso al master", None),
+            ("título de tercer nivel de grado (licenciatura o ingeniería).", "Para el programa de maestría contar con un título de tercer nivel"),
+            ("título de maestría", "Para el programa de doctorado contar con un título de maestría"),
+            ("Título de tercer nivel hasta el 31 de julio de 2026 para aplicar a una maestría", None),
+            ("título de tercer nivel de grado (licenciatura o equivalente).", None),
+            ("título de maestría o ser profesor asociado", None),
+            ("título de posgrado", None),
+        ):
+            with self.subTest(titulo=titulo):
+                self.assertIsNone(n(titulo, texto))
+        self.assertIsNone(nivel_titulo_deducido({"titulos_admitidos": ["título de bachiller", "título de grado"]}, "Bachiller o grado"))
+        self.assertIsNone(nivel_titulo_deducido({"titulos_admitidos": ["título de bachiller"], "areas_admitidas": [1]}, "Título de bachiller"))
+        self.assertIsNone(nivel_titulo_deducido({"titulos_admitidos": ["título de bachiller"]}, ""))
+
+    def test_nivel_exacto_concluido_y_titulado_cumple(self):
+        r = self.regla("título de tercer nivel de grado (licenciatura o ingeniería)", "Contar con un título de tercer nivel de grado (licenciatura o ingeniería)")
+        self.formacion("grado")
+        e = self.evaluacion(r)
+        self.assertEqual(e["resultado"], "cumple")
+        self.assertIn("se dedujo del texto de la convocatoria", e["explicacion"])
+        self.assertNotIn("sugerencia", e)
+
+    def test_nunca_no_cumple_ni_jerarquia(self):
+        r = self.regla("título de tercer nivel de grado (licenciatura o ingeniería)", "Contar con un título de tercer nivel de grado (licenciatura o ingeniería)")
+        # Una maestría no cuenta como «tercer nivel»; un grado en curso o sin título tampoco. Todo queda pendiente.
+        for nivel, estado, titulo in (("maestria", "concluidos", True), ("grado", "en_curso", False), ("bachillerato", "concluidos", True)):
+            with self.subTest(nivel=nivel, estado=estado):
+                Formacion.objects.filter(perfil=self.perfil).delete()
+                self.formacion(nivel, estado, titulo)
+                e = self.evaluacion(r)
+                self.assertEqual(e["resultado"], "desconocido")
+                self.assertIn("Falta título/área o una equivalencia", e["explicacion"])
+
+    def test_condicion_adicional_sigue_pendiente(self):
+        r = self.regla("título de maestría o ser profesor asociado", "Contar con un título de maestría o ser profesor asociado")
+        self.formacion("maestria")
+        self.assertEqual(self.evaluacion(r)["resultado"], "desconocido")
+
+    def test_tipos_externos_no_cambian(self):
+        r = self.regla(None, "Título de tercer nivel registrado", codigo="DOCUMENTO",
+                       valor={"descripcion": "Título de tercer nivel", "documento_exigido": "Copia del título"})
+        self.formacion("grado")
+        e = self.evaluacion(r)
+        self.assertEqual(e["resultado"], "desconocido")
+        self.assertTrue(e["comprobacion_externa"])

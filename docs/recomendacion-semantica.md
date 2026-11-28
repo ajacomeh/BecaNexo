@@ -31,6 +31,14 @@ El detalle de cada beca muestra «Becas similares»: hasta cuatro becas parecida
   - Las vigentes (abiertas, próximas, sin fecha o que cierran hoy) van antes que las cerradas, que se muestran con su estado.
   - Si falta el vector de la beca consultada, se calcula y se guarda una sola vez; si el modelo no está disponible, la lista queda vacía. Sin resultados, la interfaz no muestra la sección.
 
+## Sugerencia en la comparación de requisitos (v1.1)
+
+En el detalle de una beca, la comparación puede añadir a un requisito `TITULO_AREA` pendiente una «Posible coincidencia (sugerida por IA local)», con umbral 0,70 y el mismo modelo.
+
+- Es solo información: no cambia el resultado del requisito, la elegibilidad ni el orden de «Para ti», y no acredita nada.
+- El texto del requisito usa la caché de textos públicos. El de la formación declarada se calcula en cada consulta y no se guarda.
+- Detalle en [api-comparacion.md](api-comparacion.md).
+
 ## Interpretación y límites
 
 La interfaz muestra por separado el resultado de requisitos y si la afinidad temática fue calculada. Si faltan datos temáticos del perfil, indica qué completar; si falta o falla el modelo, conserva el orden basado en reglas y muestra afinidad pendiente. No se envían datos a servicios externos ni se predice adjudicación. El modelo multilingüe es genérico: puede ordenar mal términos especializados, depende del texto disponible y trunca entradas largas. Sus similitudes no son probabilidades. Las ponderaciones futuras 70/10/10/10 de la documentación de decisiones no se aplican en este bloque porque faltan validación y un contrato de afinidad completa.

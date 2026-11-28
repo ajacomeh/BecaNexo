@@ -26,6 +26,21 @@ El diccionario/JSON de TRA_EVALUACION_REQUISITO y la instrucción de esta etapa 
 | EXPERIENCIA | Filtra área, une intervalos superpuestos y recorta a `fecha_referencia` publicada. Devuelve los periodos utilizados, pero meses siguen desconocidos sin una convención ejecutable concreta aprobada; no interpreta texto ni convierte jornadas. |
 | ACREDITACION, DOCUMENTO, OTRO | Desconocido con verificación por entidad oferente. No se solicitan archivos. |
 
+### Nivel deducido por reglas y sugerencia de IA local (v1.1, 28/11/2026)
+
+- **Nivel deducido (sin IA, en memoria, sin persistir ni modificar requisitos).** Solo puede producir «cumple» ante una coincidencia exacta; en cualquier otro caso se mantiene «desconocido». Nunca produce «no_cumple» ni infiere jerarquías: por ejemplo, una maestría no cuenta como «tercer nivel». La explicación indica que el nivel se dedujo del texto de la convocatoria.
+  - `FORMACION` sin `niveles_admitidos`: se deduce si el texto publicado nombra únicamente la familia de su `nivel_minimo` (bachillerato o grado), como en «Ser Bachiller».
+  - `TITULO_AREA` que solo pide un nivel de título: un único título admitido, sin áreas, y tanto el título como el texto publicado nombran la misma y única familia (bachillerato, tercer nivel/grado, maestría o doctorado).
+    - No se deduce si hay cualquier condición adicional: fechas, «hasta», «o equivalente», «o ser profesor…», «que le habilite el acceso…», el programa al que aplica, «oficial»…
+    - Tampoco con «cuarto nivel» o «posgrado», que no distinguen el nivel.
+    - Basta una formación declarada de ese nivel exacto, concluida y con título obtenido.
+- **Sugerencia de IA local (`sugerencia`).** Solo en `GET /api/becas/<id>/comparacion/` (no en «Para ti» ni en los avisos).
+  - Se aplica a requisitos `TITULO_AREA` revisados que quedaron «desconocido».
+  - El modelo local compara el título o área exigidos con cada formación declarada. Sobre el umbral 0,70 se añade `sugerencia` (`etiqueta` «Posible coincidencia (sugerida por IA local)», `formacion`, `explicacion`).
+  - **Nunca cambia `resultado` ni la elegibilidad**. Sin modelo no hay sugerencia ni error.
+  - El umbral se calibró el 27/11/2026: las carreras distintas llegaron como máximo a 0,48, los requisitos que solo piden un nivel a 0,66 y las carreras equivalentes van de 0,51 a 0,83. Es conservador: puede omitir equivalencias reales (por ejemplo, «Sistemas» y «Software»).
+  - Con los datos de esa fecha no aparece ninguna sugerencia, porque los 18 `TITULO_AREA` públicos piden un nivel, no una carrera.
+
 Solo se ejecutan reglas revisadas cuyo esquema versionado, operador, campos y modo coinciden con el contrato. Reglas inválidas o desconocidas quedan pendientes sin provocar cumplimiento automático.
 
 Para formación/título/promedio, el administrador configura `relacion_formacion`: pendiente, independiente o misma_formacion. El último exige `grupo_formacion`, clave local a convocatoria, con igual obligatoriedad de miembros. Una formación debe satisfacer todos los miembros aplicables al destino. Si ninguna coincide pero existe candidata viable con datos desconocidos, queda pendiente; si todas se descartan por datos conocidos, incumple el grupo. Cada miembro devuelve el resultado y explicación conjunta; al coincidir, los datos utilizados son de la misma formación. En incumplimiento grupal no se expone un historial de todas las formaciones. Un grupo no invalida condiciones opcionales como si fueran obligatorias. Las relaciones antiguas pendientes no se convierten automáticamente a independientes.

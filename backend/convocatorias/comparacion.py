@@ -34,24 +34,63 @@ def pendiente(motivo, dato=None, actualizable=False):
     return "desconocido", motivo, dato, actualizable
 
 
-# FORMACION sin `niveles_admitidos`: el nivel solo se deduce (en memoria, sin persistir) si el texto del requisito
-# nombra únicamente la familia de su `nivel_minimo`. Así, «Ser Bachiller» admite bachillerato; «Título de tercer nivel
-# (solo maestría)» nombra dos niveles y no se deduce.
+# Nivel deducido por reglas (en memoria, sin persistir ni tocar el requisito): solo cuando el texto nombra una única
+# familia de nivel. Solo confirma una coincidencia exacta («cumple»); nunca produce «no_cumple» ni infiere jerarquías.
+# «Cuarto nivel» y «posgrado» no distinguen especialización, maestría o doctorado: forman su propia familia y no se deducen.
 FAMILIAS_NIVEL = {
     "bachillerato": r"\bbachiller",
     "grado": r"tercer\s+nivel|\bgrado\b|licenciatur|ingenier",
-    "posgrado": r"cuarto\s+nivel|especializ|maestr|m[aá]ster|mag[ií]ster|doctor|posgrado|postgrado",
+    "especializacion": r"especializ",
+    "maestria": r"maestr|m[aá]ster|mag[ií]ster",
+    "doctorado": r"doctor|\bph\.?\s?d",
+    "cuarto_nivel": r"cuarto\s+nivel|posgrado|postgrado",
     "tecnico": r"t[eé]cnic|tecnol[oó]g",
 }
-NOMBRE_NIVEL = {"bachillerato": "Bachillerato", "grado": "Tercer nivel / grado"}
+NOMBRE_NIVEL = {"bachillerato": "Bachillerato", "grado": "Tercer nivel / grado", "maestria": "Maestría", "doctorado": "Doctorado"}
+FORMACION_DEDUCIBLE = {"bachillerato", "grado"}
+# TITULO_AREA: cualquier condición además del nivel (fecha límite, alternativa, equivalencia, programa al que aplica,
+# habilitación, carácter oficial…) impide deducir.
+CONDICIONES_ADICIONALES = (r"\d|\bhasta\b|\bantes\b|\bdesde\b|equivalent|\baf[ií]n|habilit|acceso|aplicar|\bprograma|profesor"
+                           r"|oficial|\bsolo\b|\bexcepto\b|reconocid|registrad|apostill")
+
+
+def familias_nivel(texto):
+    return {f for f, patron in FAMILIAS_NIVEL.items() if re.search(patron, (texto or "").lower())}
 
 
 def nivel_deducido(valor, texto):
+    """FORMACION sin `niveles_admitidos`: «Ser Bachiller» admite bachillerato; «tercer nivel (solo maestría)» no se deduce."""
     nivel = (valor or {}).get("nivel_minimo")
-    if (valor or {}).get("niveles_admitidos") or nivel not in NOMBRE_NIVEL:
+    if (valor or {}).get("niveles_admitidos") or nivel not in FORMACION_DEDUCIBLE:
         return None
-    familias = {f for f, patron in FAMILIAS_NIVEL.items() if re.search(patron, (texto or "").lower())}
-    return nivel if familias == {nivel} else None
+    return nivel if familias_nivel(texto) == {nivel} else None
+
+
+def nivel_titulo_deducido(valor, texto):
+    """TITULO_AREA que solo pide un nivel de título: un único título admitido, sin áreas, y tanto ese título como el texto
+    publicado nombran la misma y única familia de nivel, sin condiciones adicionales."""
+    v = valor or {}
+    titulos = v.get("titulos_admitidos") or []
+    if v.get("areas_admitidas") or len(titulos) != 1 or not (texto or "").strip():
+        return None
+    encontradas = []
+    for t in (titulos[0], texto):
+        if re.search(CONDICIONES_ADICIONALES, t.lower()):
+            return None
+        encontradas.append(familias_nivel(t))
+    if encontradas[0] != encontradas[1] or len(encontradas[0]) != 1:
+        return None
+    nivel = next(iter(encontradas[0]))
+    return nivel if nivel in NOMBRE_NIVEL else None
+
+
+def coincide_nivel_deducido(nivel, f):
+    return f.nivel == nivel and f.titulo_obtenido and f.estado_estudios == "concluidos"
+
+
+def cumple_por_nivel_deducido(nivel, dato):
+    return ("cumple", f"Coincide según tus datos declarados; el nivel ({NOMBRE_NIVEL[nivel]}) se dedujo del texto de la "
+                      "convocatoria. No acredita la condición.", dato, False)
 
 
 def academico(codigo, valor, formaciones, equivalencias, texto=None):
@@ -67,8 +106,7 @@ def academico(codigo, valor, formaciones, equivalencias, texto=None):
                 # El nivel deducido solo confirma una coincidencia exacta; nunca produce «no_cumple».
                 if deducido and f.nivel == deducido and f.estado_estudios == valor.get("estado_exigido") and (
                         not valor.get("titulo_obtenido") or f.titulo_obtenido):
-                    intentos.append(("cumple", f"Coincide según tus datos declarados; el nivel admitido ({NOMBRE_NIVEL[deducido]}) "
-                                               "se dedujo del texto de la convocatoria. No acredita la condición.", dato, False))
+                    intentos.append(cumple_por_nivel_deducido(deducido, dato))
                 else:
                     intentos.append(pendiente("Las bases indican un mínimo, pero falta determinar los niveles admitidos. No se infiere una jerarquía.", dato))
             else:
@@ -90,6 +128,9 @@ def academico(codigo, valor, formaciones, equivalencias, texto=None):
                 intentos.append(conclusion(False, dato))
             elif estados and all(e is True for e in estados):
                 intentos.append(conclusion(True, dato))
+            elif (deducido := nivel_titulo_deducido(valor, texto)) and coincide_nivel_deducido(deducido, f):
+                # El requisito solo pide un nivel de título: basta una formación de ese nivel exacto, concluida y titulada.
+                intentos.append(cumple_por_nivel_deducido(deducido, {**dato, "nivel": f.nivel, "titulo_obtenido": f.titulo_obtenido}))
             else:
                 falta_dato = (bool(valor.get("areas_admitidas")) and f.area_id is None) or (bool(valor.get("titulos_admitidos")) and not f.nombre_titulo)
                 intentos.append(pendiente("Falta título/área o una equivalencia de títulos revisada. No se infiere equivalencia legal.", dato, falta_dato))

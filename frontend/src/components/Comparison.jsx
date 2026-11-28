@@ -48,6 +48,9 @@ function Evaluation({ item, catalogs }) {
     <h5>{type?.nombre || item.tipo} · {item.obligatorio ? 'Obligatorio' : 'No obligatorio'}</h5>
     <p className="small-note">{item.ambito === 'comun' ? 'Requisito común' : item.ambito === 'destino' ? 'Requisito de este destino' : 'Requisito de esta opción'}{item.grupo_formacion && ' · Debe cumplirse junto con las otras condiciones del grupo en una misma formación'}</p>
     <p className="preserve-text">{item.descripcion}</p><p>{explanationText(item)}</p>
+    {/* Sugerencia de la IA local: información aparte; el resultado sigue pendiente y no lleva estilo de «Cumple». */}
+    {item.sugerencia && <div className="comparison-external" role="note" aria-label={item.sugerencia.etiqueta}><strong>{item.sugerencia.etiqueta}</strong>
+      <p>{item.sugerencia.explicacion}</p><p>Su resultado sigue «Pendiente de comprobar».</p></div>}
     <dl className="detail-data">
       <div><dt>Dato declarado utilizado</dt><dd>{item.dato_declarado ? Object.entries(item.dato_declarado).map(([k, v]) => <p key={k}>{labels[k] || k}: {valueText(v, k, catalogs)}</p>) : missingEvidenceText(item)}</dd></div>
       <div><dt>Condición exigida</dt><dd>{Object.entries(condition.valores || {}).map(([k, v]) => <p key={k}>{type?.esquema_valor?.campos[k]?.label || labels[k] || k}: {valueText(v, k, catalogs, type?.esquema_valor?.campos[k])}</p>)}{condition.fecha_referencia && <p>Fecha de referencia: {condition.fecha_referencia}</p>}</dd></div>

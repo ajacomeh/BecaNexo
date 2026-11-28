@@ -249,3 +249,23 @@ it.each([
   await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
   expect(await screen.findByRole('link', { name: label })).toHaveAttribute('href', href)
 })
+
+it('muestra la sugerencia de la IA local como nota aparte, sin estilo de «Cumple», y nada si no la hay', async () => {
+  const sugerencia = { etiqueta: 'Posible coincidencia (sugerida por IA local)', formacion: 'Ingeniería de Software',
+    explicacion: 'El modelo de IA local encuentra parecido entre tu formación «Ingeniería de Software» y el título o área exigidos. No acredita el requisito: confirma la equivalencia en las bases o con la entidad oferente.' }
+  const titulo = { ...item, id: 3, tipo: 'TITULO_AREA', resultado: 'desconocido', descripcion: 'Título en Ingeniería en Sistemas',
+    explicacion: 'Falta título/área o una equivalencia de títulos revisada. No se infiere equivalencia legal.', dato_declarado: null, sugerencia }
+  const sinSugerencia = { ...titulo, id: 4, descripcion: 'Título en Medicina', sugerencia: undefined }
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'desconocido', resumen: 'Pendiente de comprobar', requisitos: [titulo, sinSugerencia] }] })
+  mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  const note = await screen.findByRole('note', { name: 'Posible coincidencia (sugerida por IA local)' })
+  expect(within(note).getByText(/encuentra parecido entre tu formación «Ingeniería de Software»/)).toBeVisible()
+  expect(within(note).getByText('Su resultado sigue «Pendiente de comprobar».')).toBeVisible()
+  expect(within(note).getByText(/No acredita el requisito/)).toBeVisible()
+  expect(note).toHaveClass('comparison-external')
+  expect(note.querySelector('svg')).toBeNull()  // sin icono de «Cumple»
+  expect(screen.getAllByRole('note')).toHaveLength(1)  // el requisito sin sugerencia no muestra nada extra
+  expect(screen.getByText('Título en Medicina').closest('li')).not.toHaveTextContent('Posible coincidencia')
+  expect(screen.getAllByText('Por confirmar (2)')[0]).toBeVisible()  // la sugerencia no cambia el grupo del requisito
+})
