@@ -122,6 +122,8 @@ Si el usuario local no tiene permiso para crear bases, usa una base de pruebas y
 
 ## Seguridad y alcance operativo
 
+**Linux y producción:** el backend arranca en Linux, y HTTPS detrás de un proxy, HSTS, redirección, `STATIC_ROOT`, límites de intentos con proxies y desactivación del rastreo desde la web se activan solo por variables de entorno. Sin ellas, Windows y el entorno local se comportan igual. Detalle en [despliegue en Linux](docs/despliegue-linux.md).
+
 `backend/.env`, `.venv/`, `.local-models/`, `outputs/rastreo/`, `frontend/node_modules/`, `frontend/dist/`, registros y respaldos locales están excluidos por `.gitignore`. El repositorio no contiene las cuentas, convocatorias ni documentos de la base local. La configuración Gmail y las tareas Windows son opcionales y requieren habilitación explícita; publicar una convocatoria puede generar avisos internos y, con consentimiento y compatibilidad confirmada, entregas de correo.
 
 El rastreo respeta la política y frecuencia de cada fuente, robots, límites HTTP, bloqueos 429/503 y `Retry-After`. El acceso público a una página o un `robots.txt` permisivo no equivalen por sí solos a autorización para capturar y conservar sus contenidos. La documentación técnica está en `docs/`, en particular [rastreo](docs/comandos-rastreo.md), [recomendación](docs/recomendacion-semantica.md) y [correo](docs/correo-gmail.md).

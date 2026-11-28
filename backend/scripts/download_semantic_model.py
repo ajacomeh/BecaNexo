@@ -4,6 +4,7 @@ import ctypes
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
 
 from huggingface_hub import snapshot_download
@@ -26,9 +27,31 @@ EXPECTED_SHA256 = {
 ROOT = Path(__file__).resolve().parents[2] / ".local-models" / "miniLM-multilingual"
 
 
+def tiene_avx2(plataforma=None, cpuinfo=Path("/proc/cpuinfo")):
+    """True o False si se puede determinar; None si no (otra plataforma o /proc/cpuinfo ilegible)."""
+    plataforma = sys.platform if plataforma is None else plataforma
+    if plataforma == "win32":
+        return bool(ctypes.windll.kernel32.IsProcessorFeaturePresent(40))  # PF_AVX2_INSTRUCTIONS_AVAILABLE
+    if plataforma.startswith("linux"):
+        try:
+            texto = Path(cpuinfo).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        indicadores = [linea.split(":", 1)[1].split() for linea in texto.splitlines()
+                       if linea.split(":", 1)[0].strip() in ("flags", "Features") and ":" in linea]
+        if not indicadores:
+            return None
+        return all("avx2" in grupo for grupo in indicadores)
+    return None
+
+
 def main():
-    if not ctypes.windll.kernel32.IsProcessorFeaturePresent(40):
-        raise SystemExit("AVX2 no está disponible; no se descargó otro modelo.")
+    avx2 = tiene_avx2()
+    if avx2 is False:
+        raise SystemExit("AVX2 no está disponible en este procesador; el modelo aprobado (model_quint8_avx2.onnx) lo necesita. "
+                         "No se descargó ningún modelo.")
+    if avx2 is None:
+        print("Aviso: no se pudo comprobar si el procesador tiene AVX2; se descarga igualmente el modelo aprobado.", file=sys.stderr)
     if shutil.disk_usage(ROOT.parents[1]).free < 500_000_000:
         raise SystemExit("Falta espacio libre para descargar el modelo.")
     ROOT.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.cache import caches
 from django.utils.crypto import salted_hmac
+from rest_framework.settings import api_settings
 from rest_framework.throttling import SimpleRateThrottle
 
 
@@ -12,10 +13,16 @@ class AuthThrottle(SimpleRateThrottle):
     def get_rate(self):
         return settings.AUTH_THROTTLE_RATES[self.scope]
 
+    def client_address(self, request):
+        # Sin proxies de confianza (por defecto) no se usa X-Forwarded-For: el cliente podría falsificarlo. Con
+        # DJANGO_NUM_PROXIES, DRF toma la IP real de X-Forwarded-For contando esos proxies desde el final.
+        if api_settings.NUM_PROXIES:
+            return self.get_ident(request)
+        return request.META.get("REMOTE_ADDR", "unknown")
+
     def get_cache_key(self, request, view):
-        # No confiar en X-Forwarded-For suministrado por el cliente.
-        address = request.META.get("REMOTE_ADDR", "unknown")
-        ident = salted_hmac("auth-throttle", address).hexdigest()
+        # La caché es local a cada proceso: con 2 procesos el límite efectivo se duplica (aceptable para el demo).
+        ident = salted_hmac("auth-throttle", self.client_address(request)).hexdigest()
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 

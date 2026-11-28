@@ -1,6 +1,10 @@
-"""Despacho local del rastreo web; el navegador no controla el proceso trabajador."""
+"""Despacho local del rastreo web; el navegador no controla el proceso trabajador.
+
+En Windows usa `msvcrt` (bloqueo de archivo) y un proceso separado sin consola, como siempre. En Linux usa los
+equivalentes estándar (`fcntl.flock` y una sesión nueva), de modo que importar este módulo, y con él las URL, no
+depende de un módulo exclusivo de Windows.
+"""
 import json
-import msvcrt
 import os
 import subprocess
 import sys
@@ -10,6 +14,31 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from django.conf import settings
+
+try:  # Windows
+    import msvcrt
+except ImportError:  # Linux y otros POSIX
+    msvcrt = None
+    import fcntl
+
+
+def lanzamiento_web_habilitado():
+    """Interruptor del demo: RASTREO_WEB_LANZAMIENTO_HABILITADO=False desactiva «Iniciar rastreo» desde la web."""
+    return bool(getattr(settings, 'RASTREO_WEB_LANZAMIENTO_HABILITADO', True))
+
+
+def _bloquear(handle):
+    if msvcrt is not None:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # BlockingIOError es un OSError
+
+
+def _liberar(handle):
+    if msvcrt is not None:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def launch_root():
@@ -34,14 +63,14 @@ def launch_lock():
             handle.flush()
         handle.seek(0)
         try:
-            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            _bloquear(handle)
         except OSError as exc:
             raise LaunchBusy('Otra solicitud de inicio está en curso.') from exc
         try:
             yield
         finally:
             handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            _liberar(handle)
 
 
 class LaunchBusy(Exception):
@@ -57,12 +86,14 @@ def spawn_detached(module, *arguments, cwd, environment=None):
     child_env = {name: os.environ[name] for name in inherited if name in os.environ}
     if environment is not None:
         child_env.update(environment)
+    # Windows: proceso separado y sin consola (igual que siempre). POSIX: sesión nueva, desligada del servidor web.
+    separado = ({'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS} if os.name == 'nt'
+                else {'start_new_session': True})
     return subprocess.Popen(
         [sys.executable, '-m', module, *(str(value) for value in arguments)],
         cwd=cwd,
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-        close_fds=True, env=child_env,
+        close_fds=True, env=child_env, **separado,
     )
 
 
