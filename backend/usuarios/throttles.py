@@ -25,3 +25,23 @@ class RegistroThrottle(AuthThrottle):
 
 class LoginThrottle(AuthThrottle):
     scope = "login"
+
+
+class RecuperacionIPThrottle(AuthThrottle):
+    scope = "recuperacion_ip"
+
+
+class RecuperacionCorreoThrottle(AuthThrottle):
+    """Por correo solicitado (normalizado y con HMAC: la caché no guarda direcciones). Cuenta también correos inexistentes."""
+    scope = "recuperacion_correo"
+
+    def get_cache_key(self, request, view):
+        email = request.data.get("email") if isinstance(request.data, dict) else None
+        if not isinstance(email, str) or not email.strip():
+            return None  # sin correo no hay envío; el límite por IP sigue aplicando
+        ident = salted_hmac("recuperacion-correo", email.strip().lower()).hexdigest()
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class RestablecerThrottle(AuthThrottle):
+    scope = "restablecer"
