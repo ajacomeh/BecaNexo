@@ -269,3 +269,16 @@ it('muestra la sugerencia de la IA local como nota aparte, sin estilo de «Cumpl
   expect(screen.getByText('Título en Medicina').closest('li')).not.toHaveTextContent('Posible coincidencia')
   expect(screen.getAllByText('Por confirmar (2)')[0]).toBeVisible()  // la sugerencia no cambia el grupo del requisito
 })
+
+it('muestra una etiqueta propia para el nivel mínimo de FORMACION, sin depender de la del contrato', async () => {
+  const conCatalogo = { ...catalogs, tipos_requisito: [...catalogs.tipos_requisito, { codigo: 'FORMACION', nombre: 'Estudios mínimos',
+    esquema_valor: { campos: { nivel_minimo: { label: 'Mínimo original (sin lista admitida queda pendiente)' }, estado_exigido: { label: 'Estado exigido' } } } }] }
+  const formacion = { ...item, id: 5, tipo: 'FORMACION', resultado: 'desconocido', descripcion: 'Ser Bachiller', explicacion: 'Pendiente.',
+    dato_declarado: null, condicion_exigida: { valores: { nivel_minimo: 'bachillerato', estado_exigido: 'concluidos' } } }
+  offersApi.get.mockResolvedValue({ ...response, opciones: [{ ...option, resultado: 'desconocido', resumen: 'Pendiente de comprobar', requisitos: [formacion] }] })
+  render(<MemoryRouter><AuthContext.Provider value={{ user: { id: 1, rol: 'postulante' } }}><Comparison offerId={12} catalogs={conCatalogo} /></AuthContext.Provider></MemoryRouter>)
+  await userEvent.click(screen.getByRole('button', { name: 'Comparar requisitos' }))
+  expect(await screen.findByText(/^Nivel mínimo según las bases \(sin lista de niveles admitidos, puede deducirse del texto\):/)).toBeVisible()
+  expect(screen.queryByText(/Mínimo original/)).not.toBeInTheDocument()
+  expect(screen.getByText(/^Estado exigido:/)).toBeVisible()  // las demás etiquetas siguen viniendo del contrato
+})

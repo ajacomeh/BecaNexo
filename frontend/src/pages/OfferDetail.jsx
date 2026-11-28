@@ -10,6 +10,7 @@ import Comparison from '../components/Comparison'
 import SimilarOffers from '../components/SimilarOffers'
 import { display, date, dayDate, stateLabel, closingText, publishedPeriod, providerLabel } from './offerDisplay'
 import { readable, unique, benefitSummary } from './catalogPresentation'
+import { fieldLabel } from './offerFields'
 
 export function BenefitList({ records, nested = false }) {
   const Heading = nested ? 'h4' : 'h3'
@@ -49,7 +50,7 @@ export function RequirementList({ records, catalogs, nested = false }) {
       ? 'Condición socioeconómica' : type?.codigo === 'OTRO' && /bachiller|t[ií]tulo de tercer nivel/iu.test(original)
         ? 'Condición de formación previa' : type?.nombre || 'Requisito'
     return <li key={r.id} className="requirement-item"><Heading>{externalLabel} <span className="requirement-kind">{r.obligatorio ? 'Obligatorio' : 'Preferencia'}</span>{r.grupo_formacion && <span className="requirement-group-label">Grupo académico {groupNumbers.get(r.grupo_formacion)}</span>}</Heading><p className="preserve-text">{r.texto_original}</p>
-      {values.length > 0 && <dl className="detail-data requirement-values">{values.map(([key, value]) => <div key={key}><dt>{type?.esquema_valor?.campos?.[key]?.label || key}</dt><dd>{ruleText(value, type?.esquema_valor?.campos?.[key], catalogs)}</dd></div>)}</dl>}
+      {values.length > 0 && <dl className="detail-data requirement-values">{values.map(([key, value]) => <div key={key}><dt>{fieldLabel(type, key) || key}</dt><dd>{ruleText(value, type?.esquema_valor?.campos?.[key], catalogs)}</dd></div>)}</dl>}
       {r.fecha_referencia && <p>Fecha de referencia: {r.fecha_referencia}</p>}
       {r.destino && <p>Condición del destino: {catalogs.paises.find(p => p.id === r.destino)?.nombre || 'No especificado'}</p>}
       {r.documento_exigido && <p>Documento exigido: {r.documento_exigido}</p>}{r.detalle_acreditacion && <p>Condiciones documentales: {r.detalle_acreditacion}</p>}
@@ -95,7 +96,7 @@ export function Documentation({ offer, catalogs, scopeId, showWarning = true }) 
         const extra = Object.entries(v).filter(([key]) => !['documento', 'certificados_admitidos', 'condiciones', 'vigencia', 'url_documento'].includes(key))
         return <li key={r.id} className="document-item"><h4 className="preserve-text">{title}</h4><p className="requirement-kind">{r.obligatorio ? 'Documento exigido según las bases' : 'No obligatorio según lo registrado'}</p>
           {facts.length > 0 && <dl className="document-facts">{facts.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd className="preserve-text">{value}</dd></div>)}</dl>}
-          {extra.length > 0 && <dl className="document-facts">{extra.map(([key, value]) => <div key={key}><dt>{type?.esquema_valor?.campos?.[key]?.label || key}</dt><dd className="preserve-text">{value !== null && typeof value === 'object' ? JSON.stringify(value) : ruleText(value, type?.esquema_valor?.campos?.[key], catalogs)}</dd></div>)}</dl>}
+          {extra.length > 0 && <dl className="document-facts">{extra.map(([key, value]) => <div key={key}><dt>{fieldLabel(type, key) || key}</dt><dd className="preserve-text">{value !== null && typeof value === 'object' ? JSON.stringify(value) : ruleText(value, type?.esquema_valor?.campos?.[key], catalogs)}</dd></div>)}</dl>}
           {r.fecha_referencia && <p>Fecha de referencia: {r.fecha_referencia}</p>}
           {r.destino && <p>Aplicable al destino: {catalogs.paises.find(p => p.id === r.destino)?.nombre || 'Consultar las bases'}</p>}
           {r.modo_comprobacion && r.modo_comprobacion !== 'entidad_oferente' && <p>Modo de comprobación registrado: {r.modo_comprobacion}</p>}

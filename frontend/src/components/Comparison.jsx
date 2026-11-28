@@ -1,4 +1,5 @@
 import Icon from './Icon'
+import { fieldLabel } from '../pages/offerFields'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/context'
@@ -53,7 +54,7 @@ function Evaluation({ item, catalogs }) {
       <p>{item.sugerencia.explicacion}</p><p>Su resultado sigue «Pendiente de comprobar».</p></div>}
     <dl className="detail-data">
       <div><dt>Dato declarado utilizado</dt><dd>{item.dato_declarado ? Object.entries(item.dato_declarado).map(([k, v]) => <p key={k}>{labels[k] || k}: {valueText(v, k, catalogs)}</p>) : missingEvidenceText(item)}</dd></div>
-      <div><dt>Condición exigida</dt><dd>{Object.entries(condition.valores || {}).map(([k, v]) => <p key={k}>{type?.esquema_valor?.campos[k]?.label || labels[k] || k}: {valueText(v, k, catalogs, type?.esquema_valor?.campos[k])}</p>)}{condition.fecha_referencia && <p>Fecha de referencia: {condition.fecha_referencia}</p>}</dd></div>
+      <div><dt>Condición exigida</dt><dd>{Object.entries(condition.valores || {}).map(([k, v]) => <p key={k}>{fieldLabel(type, k) || labels[k] || k}: {valueText(v, k, catalogs, type?.esquema_valor?.campos[k])}</p>)}{condition.fecha_referencia && <p>Fecha de referencia: {condition.fecha_referencia}</p>}</dd></div>
     </dl>
     {item.comprobacion_externa && <div className="comparison-external"><strong>Verificación externa pendiente</strong>{item.tipo === 'CONDICION_ADMINISTRATIVA'
       ? <p>La entidad oferente comprueba esta condición en sus registros administrativos. BecaNexo no la da por cumplida.</p>
