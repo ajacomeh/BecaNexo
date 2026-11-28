@@ -10,9 +10,13 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+from . import recuperacion
 from .models import Usuario
-from .serializers import LoginSerializer, RegistroSerializer, UsuarioSerializer, NombreSerializer
-from .throttles import LoginThrottle, RegistroThrottle
+from .serializers import LoginSerializer, RegistroSerializer, UsuarioSerializer, NombreSerializer, RecuperarSerializer, RestablecerSerializer
+from .throttles import LoginThrottle, RegistroThrottle, RecuperacionCorreoThrottle, RecuperacionIPThrottle, RestablecerThrottle
 
 
 class CSRFSesionAuthentication(SessionAuthentication):
@@ -94,3 +98,37 @@ class LogoutView(AuthView):
     def post(self, request):
         logout(request)
         return Response(status=204)
+
+
+class RecuperarContrasenaView(AuthView):
+    """Siempre la misma respuesta (exista o no la cuenta, sea o no postulante): no revela qué correos existen."""
+    http_method_names = ["post", "options"]
+    throttle_classes = [RecuperacionIPThrottle, RecuperacionCorreoThrottle]
+
+    def post(self, request):
+        serializer = RecuperarSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        recuperacion.solicitar(serializer.validated_data["email"])
+        return Response({"detail": recuperacion.MENSAJE_SOLICITUD})
+
+
+class RestablecerContrasenaView(AuthView):
+    """Cambia la contraseña con un enlace válido. No inicia sesión; las sesiones abiertas dejan de valer."""
+    http_method_names = ["post", "options"]
+    throttle_classes = [RestablecerThrottle]
+
+    def post(self, request):
+        serializer = RestablecerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+        user = recuperacion.usuario_del_enlace(datos["uid"], datos["token"])
+        if user is None:
+            return Response({"detail": recuperacion.MENSAJE_ENLACE_INVALIDO, "codigo": "enlace_invalido"}, status=400)
+        try:
+            validate_password(datos["password"], user)
+        except DjangoValidationError as exc:
+            return Response({"password": exc.messages}, status=400)
+        # set_password cambia el hash: invalida el token y las sesiones previas (HASH_SESSION_KEY de Django).
+        user.set_password(datos["password"])
+        user.save(update_fields=["password"])
+        return Response({"detail": "Tu contraseña se actualizó. Ya puedes iniciar sesión."})

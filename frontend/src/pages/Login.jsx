@@ -49,12 +49,14 @@ export default function Login() {
     <h1>Inicia sesión</h1>
     <p className="subtitle">Usa tu correo para acceder a tu espacio.</p>
     {location.state?.registered && <Message kind="success">Tu cuenta fue creada. Ya puedes iniciar sesión.</Message>}
+    {location.state?.passwordReset && <Message kind="success">Tu contraseña se actualizó. Ya puedes iniciar sesión.</Message>}
     <Message>{error}</Message>
     <form noValidate onSubmit={submit} aria-label="Iniciar sesión" aria-busy={busy}>
       <Field label="Correo electrónico" name="email" type="email" autoComplete="username" placeholder="tu@correo.com" required maxLength={254} error={fields.email} disabled={busy} />
       <Field label="Contraseña" name="password" type="password" autoComplete="current-password" required error={fields.password} disabled={busy} />
       <Button icon="login" type="submit" busy={busy}>{busy ? 'Iniciando sesión…' : 'Iniciar sesión'}</Button>
     </form>
+    <Link className="secondary-link" to="/recuperar-contrasena"><Icon name="mail" /><span>¿Olvidaste tu contraseña?</span></Link>
     <Link className="secondary-link" to="/registro"><Icon name="register" /><span>Crear una cuenta</span></Link>
   </AuthLayout>
 }

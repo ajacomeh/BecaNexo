@@ -35,6 +35,22 @@ class LoginSerializer(StrictSerializer):
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
 
+class RecuperarSerializer(StrictSerializer):
+    email = serializers.EmailField(max_length=254)
+
+
+class RestablecerSerializer(StrictSerializer):
+    uid = serializers.CharField(max_length=64)
+    token = serializers.CharField(max_length=128)
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError({"password_confirm": "Las contraseñas no coinciden."})
+        return attrs
+
+
 class NombreSerializer(StrictSerializer):
     nombre = serializers.CharField(max_length=Usuario._meta.get_field("nombre").max_length)
 

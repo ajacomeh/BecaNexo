@@ -92,7 +92,13 @@ CACHES = {
 AUTH_THROTTLE_RATES = {
     "registro": env("AUTH_REGISTRO_RATE", default="5/hour"),
     "login": env("AUTH_LOGIN_RATE", default="10/minute"),
+    # Recuperación de contraseña: por IP y por correo solicitado (exista o no la cuenta); confirmación por IP.
+    "recuperacion_ip": env("AUTH_RECUPERACION_IP_RATE", default="20/hour"),
+    "recuperacion_correo": env("AUTH_RECUPERACION_CORREO_RATE", default="5/hour"),
+    "restablecer": env("AUTH_RESTABLECER_RATE", default="20/hour"),
 }
+# Vigencia del enlace de restablecimiento (Django lo mide en segundos).
+PASSWORD_RESET_TIMEOUT = env.int("PASSWORD_RESET_TIMEOUT_MINUTOS", default=60) * 60
 # ModelBackend usa UsuarioManager.get_by_natural_key para normalizar el correo.
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 

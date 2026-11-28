@@ -64,6 +64,8 @@ export const authApi = {
     return request('me', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: JSON.stringify({ nombre }) })
   },
   register: (data) => post('registro', data, true),
+  requestPasswordReset: (email) => post('recuperar-contrasena', { email }, true),
+  resetPassword: (data) => post('restablecer-contrasena', data, true),
   async login(data) {
     const result = await post('login', data, true)
     csrfToken = result.csrfToken

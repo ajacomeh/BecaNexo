@@ -6,6 +6,8 @@ import Button from './components/Button'
 import Message from './components/Message'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import Home from './pages/Home'
 import Profile from './pages/Profile'
 import Offers from './pages/Offers'
@@ -45,6 +47,8 @@ export default function App() {
       <Route path="/gestion/rastreo/*" element={admin(<Crawling />)} />
       <Route path="/login" element={authenticated ? <Navigate to={loginReturnPath(location.search)} replace /> : <Login />} />
       <Route path="/registro" element={authenticated ? <Navigate to="/inicio" replace /> : <Register />} />
+      <Route path="/recuperar-contrasena" element={authenticated ? <Navigate to="/inicio" replace /> : <ForgotPassword />} />
+      <Route path="/restablecer-contrasena" element={<ResetPassword />} />
       <Route path="/inicio" element={authenticated ? <Home /> : <Navigate to="/login" replace />} />
       <Route path="/perfil" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Profile key="perfil" /> : <Navigate to="/inicio" replace />} />
       <Route path="/preferencias" element={!authenticated ? <Navigate to="/login" replace /> : user.rol === 'postulante' ? <Profile key="preferencias" preferences /> : <Navigate to="/inicio" replace />} />
