@@ -182,7 +182,7 @@ describe('franja de avisos por correo', () => {
     mount()
     const strip = await screen.findByRole('region', { name: 'Avisos por correo' })
     expect(within(strip).getByRole('heading', { name: 'Avisos por correo' })).toBeVisible()
-    expect(within(strip).getByText('Recibes un aviso cuando se publica una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil, y cuando una de tus becas favoritas abiertas cierra en los próximos días. Si activas el correo, también te enviamos cada aviso nuevo al correo con el que inicias sesión; los avisos anteriores a la activación no se envían. Puedes desactivarlo cuando quieras y tus avisos seguirán aquí.')).toBeVisible()
+    expect(within(strip).getByText('Si lo activas, te enviamos al correo de tu cuenta cada aviso nuevo: becas publicadas relacionadas con tu perfil y cierres próximos de tus favoritas. Los avisos anteriores a la activación no se envían. Puedes desactivarlo cuando quieras; tus avisos seguirán aquí.')).toBeVisible()
     expect(strip.querySelector('svg.ui-icon')).not.toBeNull()
     const toggle = within(strip).getByRole('switch', { name: 'Recibir avisos por correo' })
     expect(toggle).not.toBeChecked()
@@ -261,4 +261,11 @@ describe('aviso de cierre próximo de una favorita', () => {
     mount()
     expect(await screen.findByText('Cuando se publique una beca abierta relacionada con tus datos declarados que no sea claramente incompatible con tu perfil, o cuando una de tus becas favoritas esté por cerrar, aparecerá aquí.')).toBeVisible()
   })
+})
+
+it('la frase bajo el título menciona los avisos de cierre de las favoritas', async () => {
+  offersApi.get.mockImplementation((path) => Promise.resolve(path === 'notificaciones/correo'
+    ? { disponible: true, habilitado: false } : data([])))
+  mount()
+  expect(await screen.findByText('Becas relacionadas con tu perfil y avisos de cierre de tus favoritas. Revisa siempre los requisitos y las bases oficiales.')).toBeVisible()
 })

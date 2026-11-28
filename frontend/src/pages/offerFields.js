@@ -43,6 +43,9 @@ export const benefitFields = (options, countries = []) => [scope(options, countr
   text('tope_monto', 'Valor máximo del tope, si está claro', { type: 'number', kind: 'number' }), text('tope_moneda', 'Moneda confirmada del tope (opcional)', { maxLength: 3, hint: 'Deja vacío si la fuente no confirma el código monetario.' }),
   select('periodicidad', 'Periodicidad', enumOptions(['unico', 'mensual', 'anual', 'otra'])), text('detalle', 'Detalle de cobertura', { type: 'textarea' })]
 // Tipos que verifica la entidad oferente (operador «externo» del contrato): incluye la condición administrativa.
+// Etiquetas de pantalla que sustituyen a la del contrato sin tocar el esquema guardado (el comparador exige que coincida).
+const FIELD_LABELS = { FORMACION: { nivel_minimo: 'Nivel mínimo según las bases (sin lista de niveles admitidos, puede deducirse del texto)' } }
+export const fieldLabel = (type, name) => FIELD_LABELS[type?.codigo]?.[name] || type?.esquema_valor?.campos?.[name]?.label
 export const isExternal = (type) => Boolean(type?.esquema_valor?.operadores?.includes('externo'))
 export const requirementFields = (type, c, options) => {
   const documental = ['DOCUMENTO', 'ACREDITACION'].includes(type.codigo)
@@ -56,7 +59,7 @@ export const requirementFields = (type, c, options) => {
     text('grupo_formacion', 'Clave del grupo de misma formación', { maxLength: 64 }))
   if (['TITULO_AREA', 'RESIDENCIA'].includes(type.codigo)) fields.push({ name: 'equivalencias', label: 'Equivalencias revisadas en las bases', kind: 'equivalencias', codigo: type.codigo, paises: c.paises, wide: true })
   for (const [name, spec] of Object.entries(type.esquema_valor.campos)) {
-    const f = { name: `regla_${name}`, label: spec.label, required: spec.required, kind: spec.kind }
+    const f = { name: `regla_${name}`, label: fieldLabel(type, name) || spec.label, required: spec.required, kind: spec.kind }
     if (['paises', 'pais'].includes(spec.kind)) f.options = choices(c.paises, 'codigo')
     else if (['areas', 'area'].includes(spec.kind)) { f.options = choices(c.areas); f.kind = spec.kind === 'areas' ? 'ids' : 'id' }
     else if (spec.kind === 'idioma') f.options = choices(c.idiomas, 'codigo')
