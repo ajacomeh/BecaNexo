@@ -1,4 +1,8 @@
-"""Comparación orientativa, sin IA, persistencia ni acreditación documental."""
+"""Comparación orientativa por reglas, sin persistencia ni acreditación documental.
+
+La IA local solo añade sugerencias aparte (`sugerencia`) y nunca cambia `resultado` ni la elegibilidad.
+"""
+import re
 from decimal import Decimal
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -30,7 +34,66 @@ def pendiente(motivo, dato=None, actualizable=False):
     return "desconocido", motivo, dato, actualizable
 
 
-def academico(codigo, valor, formaciones, equivalencias):
+# Nivel deducido por reglas (en memoria, sin persistir ni tocar el requisito): solo cuando el texto nombra una única
+# familia de nivel. Solo confirma una coincidencia exacta («cumple»); nunca produce «no_cumple» ni infiere jerarquías.
+# «Cuarto nivel» y «posgrado» no distinguen especialización, maestría o doctorado: forman su propia familia y no se deducen.
+FAMILIAS_NIVEL = {
+    "bachillerato": r"\bbachiller",
+    "grado": r"tercer\s+nivel|\bgrado\b|licenciatur|ingenier",
+    "especializacion": r"especializ",
+    "maestria": r"maestr|m[aá]ster|mag[ií]ster",
+    "doctorado": r"doctor|\bph\.?\s?d",
+    "cuarto_nivel": r"cuarto\s+nivel|posgrado|postgrado",
+    "tecnico": r"t[eé]cnic|tecnol[oó]g",
+}
+NOMBRE_NIVEL = {"bachillerato": "Bachillerato", "grado": "Tercer nivel / grado", "maestria": "Maestría", "doctorado": "Doctorado"}
+FORMACION_DEDUCIBLE = {"bachillerato", "grado"}
+# TITULO_AREA: cualquier condición además del nivel (fecha límite, alternativa, equivalencia, programa al que aplica,
+# habilitación, carácter oficial…) impide deducir.
+CONDICIONES_ADICIONALES = (r"\d|\bhasta\b|\bantes\b|\bdesde\b|equivalent|\baf[ií]n|habilit|acceso|aplicar|\bprograma|profesor"
+                           r"|oficial|\bsolo\b|\bexcepto\b|reconocid|registrad|apostill")
+
+
+def familias_nivel(texto):
+    return {f for f, patron in FAMILIAS_NIVEL.items() if re.search(patron, (texto or "").lower())}
+
+
+def nivel_deducido(valor, texto):
+    """FORMACION sin `niveles_admitidos`: «Ser Bachiller» admite bachillerato; «tercer nivel (solo maestría)» no se deduce."""
+    nivel = (valor or {}).get("nivel_minimo")
+    if (valor or {}).get("niveles_admitidos") or nivel not in FORMACION_DEDUCIBLE:
+        return None
+    return nivel if familias_nivel(texto) == {nivel} else None
+
+
+def nivel_titulo_deducido(valor, texto):
+    """TITULO_AREA que solo pide un nivel de título: un único título admitido, sin áreas, y tanto ese título como el texto
+    publicado nombran la misma y única familia de nivel, sin condiciones adicionales."""
+    v = valor or {}
+    titulos = v.get("titulos_admitidos") or []
+    if v.get("areas_admitidas") or len(titulos) != 1 or not (texto or "").strip():
+        return None
+    encontradas = []
+    for t in (titulos[0], texto):
+        if re.search(CONDICIONES_ADICIONALES, t.lower()):
+            return None
+        encontradas.append(familias_nivel(t))
+    if encontradas[0] != encontradas[1] or len(encontradas[0]) != 1:
+        return None
+    nivel = next(iter(encontradas[0]))
+    return nivel if nivel in NOMBRE_NIVEL else None
+
+
+def coincide_nivel_deducido(nivel, f):
+    return f.nivel == nivel and f.titulo_obtenido and f.estado_estudios == "concluidos"
+
+
+def cumple_por_nivel_deducido(nivel, dato):
+    return ("cumple", f"Coincide según tus datos declarados; el nivel ({NOMBRE_NIVEL[nivel]}) se dedujo del texto de la "
+                      "convocatoria. No acredita la condición.", dato, False)
+
+
+def academico(codigo, valor, formaciones, equivalencias, texto=None):
     """Nunca toma título de una fila y área/promedio de otra."""
     if not formaciones:
         return pendiente("No has declarado formaciones; no se interpreta como ausencia de estudios.", actualizable=True)
@@ -39,7 +102,13 @@ def academico(codigo, valor, formaciones, equivalencias):
         if codigo == "FORMACION":
             dato = {"nivel": f.nivel, "estado_estudios": f.estado_estudios, "titulo_obtenido": f.titulo_obtenido}
             if not valor.get("niveles_admitidos"):
-                intentos.append(pendiente("Las bases indican un mínimo, pero falta determinar los niveles admitidos. No se infiere una jerarquía.", dato))
+                deducido = nivel_deducido(valor, texto)
+                # El nivel deducido solo confirma una coincidencia exacta; nunca produce «no_cumple».
+                if deducido and f.nivel == deducido and f.estado_estudios == valor.get("estado_exigido") and (
+                        not valor.get("titulo_obtenido") or f.titulo_obtenido):
+                    intentos.append(cumple_por_nivel_deducido(deducido, dato))
+                else:
+                    intentos.append(pendiente("Las bases indican un mínimo, pero falta determinar los niveles admitidos. No se infiere una jerarquía.", dato))
             else:
                 intentos.append(conclusion(f.nivel in valor["niveles_admitidos"] and f.estado_estudios == valor["estado_exigido"] and
                                           (not valor["titulo_obtenido"] or f.titulo_obtenido), dato))
@@ -59,6 +128,9 @@ def academico(codigo, valor, formaciones, equivalencias):
                 intentos.append(conclusion(False, dato))
             elif estados and all(e is True for e in estados):
                 intentos.append(conclusion(True, dato))
+            elif (deducido := nivel_titulo_deducido(valor, texto)) and coincide_nivel_deducido(deducido, f):
+                # El requisito solo pide un nivel de título: basta una formación de ese nivel exacto, concluida y titulada.
+                intentos.append(cumple_por_nivel_deducido(deducido, {**dato, "nivel": f.nivel, "titulo_obtenido": f.titulo_obtenido}))
             else:
                 falta_dato = (bool(valor.get("areas_admitidas")) and f.area_id is None) or (bool(valor.get("titulos_admitidos")) and not f.nombre_titulo)
                 intentos.append(pendiente("Falta título/área o una equivalencia de títulos revisada. No se infiere equivalencia legal.", dato, falta_dato))
@@ -88,7 +160,7 @@ def comparar_dato(r, perfil, formaciones, idiomas, destino=None):
     if perfil is None:
         return pendiente("Aún no has declarado tu perfil. Completa los datos necesarios para comparar.", actualizable=codigo in SECCIONES_PERFIL)
     if codigo in ACADEMICOS:
-        return academico(codigo, v, formaciones, r.equivalencias)
+        return academico(codigo, v, formaciones, r.equivalencias, r.texto_original)
     if codigo == "NACIONALIDAD":
         if perfil.nacionalidad_id is None:
             return pendiente("Falta declarar la nacionalidad.", actualizable=True)
@@ -183,20 +255,27 @@ def experiencia(r, perfil):
                      {"periodos_sin_superposicion": [[a.isoformat(), b.isoformat()] for a, b in unidos], "fecha_corte": r.fecha_referencia.isoformat()})
 
 
+def regla_comparable(r):
+    """Revisada, con contrato soportado y valor válido: solo entonces se compara con el perfil."""
+    codigo = r.tipo_requisito.codigo
+    if not (r.validado and codigo in CONTRATOS and r.tipo_requisito.esquema_valor == esquema(codigo)):
+        return False
+    try:
+        validar(codigo, r.valor_estructurado, r.fecha_referencia, r.modo_comprobacion, r.operador)
+        validar_equivalencias(codigo, r.valor_estructurado, r.equivalencias)
+    except ValidationError:
+        return False
+    return True
+
+
 def evaluar_requisito(r, perfil, formaciones, idiomas, relacion_academica_pendiente=False, destino=None):
     codigo = r.tipo_requisito.codigo
     externa = codigo in EXTERNOS or r.modo_comprobacion == "entidad_oferente" or bool(r.documento_exigido or r.detalle_acreditacion)
     resultado = pendiente("La regla no está revisada o su contrato no está soportado; requiere revisión administrativa.")
-    if r.validado and codigo in CONTRATOS and r.tipo_requisito.esquema_valor == esquema(codigo):
-        try:
-            validar(codigo, r.valor_estructurado, r.fecha_referencia, r.modo_comprobacion, r.operador)
-            validar_equivalencias(codigo, r.valor_estructurado, r.equivalencias)
-        except ValidationError:
-            pass
-        else:
-            resultado = comparar_dato(r, perfil, formaciones, idiomas, destino)
-            if relacion_academica_pendiente and r.relacion_formacion == "pendiente" and r.obligatorio and codigo in ACADEMICOS and resultado[0] == "cumple":
-                resultado = pendiente("Hay varias condiciones académicas obligatorias sin vínculo de misma formación. Falta definir esa relación; no se mezclan datos de títulos distintos.")
+    if regla_comparable(r):
+        resultado = comparar_dato(r, perfil, formaciones, idiomas, destino)
+        if relacion_academica_pendiente and r.relacion_formacion == "pendiente" and r.obligatorio and codigo in ACADEMICOS and resultado[0] == "cumple":
+            resultado = pendiente("Hay varias condiciones académicas obligatorias sin vínculo de misma formación. Falta definir esa relación; no se mezclan datos de títulos distintos.")
     estado, explicacion, dato, actualizable = resultado
     return {"id": r.pk, "tipo": codigo, "descripcion": r.texto_original, "obligatorio": r.obligatorio,
             "ambito": "destino" if r.destino_id else "opcion" if r.opcion_estudio_id else "comun", "resultado": estado, "grupo_formacion": r.grupo_formacion,
@@ -244,7 +323,65 @@ def evaluar_alternativa(reglas, perfil, formaciones, idiomas, destino):
     return [evaluaciones[r.pk] for r in reglas]
 
 
-def evaluar_convocatoria(usuario, convocatoria):
+# Sugerencia semántica de TITULO_AREA. Umbral calibrado el 27/11/2026: carreras distintas ≤ 0,48; requisitos que solo
+# piden un nivel («título de maestría…») ≤ 0,66; carreras equivalentes 0,51–0,83. Con 0,70 no aparece ninguna falsa.
+UMBRAL_SUGERENCIA_TITULO = 0.70
+ETIQUETA_SUGERENCIA = "Posible coincidencia (sugerida por IA local)"
+
+
+def texto_formacion(f):
+    return " ".join(filter(None, [f.carrera, f.nombre_titulo, f.area.nombre if f.area_id else None]))
+
+
+def sugerir_titulos(opciones, requisitos, formaciones):
+    """Añade `sugerencia` a los TITULO_AREA revisados que quedaron «desconocido». No toca `resultado` ni la elegibilidad.
+
+    El texto del requisito es público y usa la caché de convocatorias; el de la formación se calcula una vez por
+    consulta y no se guarda. Sin modelo, no hay sugerencia.
+    """
+    from perfiles.models import Area
+    from .semantica import ModeloNoDisponible, similitud, vector, vector_convocatoria
+    por_id = {r.pk: r for r in requisitos}
+    textos = [(f, texto_formacion(f)) for f in formaciones]
+    textos = [(f, t) for f, t in textos if t.strip()]
+    if not textos:
+        return
+    vistos, vectores, cache = set(), {}, {}
+    try:
+        for opcion in opciones:
+            for alternativa in opcion["resultados_destino"]:
+                for e in alternativa["requisitos"]:
+                    r = por_id.get(e["id"])
+                    if id(e) in vistos or e["tipo"] != "TITULO_AREA" or e["resultado"] != "desconocido" or r is None or not regla_comparable(r):
+                        continue
+                    vistos.add(id(e))
+                    if r.pk not in cache:
+                        v = r.valor_estructurado or {}
+                        nombres = list(Area.objects.filter(pk__in=v.get("areas_admitidas") or []).values_list("nombre", flat=True))
+                        exigido = "; ".join([*(v.get("titulos_admitidos") or []), *nombres])
+                        mejor = None
+                        if exigido:
+                            requisito = vector_convocatoria(exigido)
+                            for f, texto in textos:
+                                if f.pk not in vectores:
+                                    vectores[f.pk] = vector("Formación: " + texto)
+                                puntaje = similitud(requisito, vectores[f.pk])
+                                if puntaje >= UMBRAL_SUGERENCIA_TITULO and (mejor is None or puntaje > mejor[0]):
+                                    mejor = (puntaje, f)
+                        cache[r.pk] = None if mejor is None else {
+                            "etiqueta": ETIQUETA_SUGERENCIA, "formacion": mejor[1].carrera,
+                            "explicacion": f"El modelo de IA local encuentra parecido entre tu formación «{mejor[1].carrera}» y el título o área "
+                                           "exigidos. No acredita el requisito: confirma la equivalencia en las bases o con la entidad oferente."}
+                    if cache[r.pk]:
+                        e["sugerencia"] = cache[r.pk]
+    except ModeloNoDisponible:
+        for opcion in opciones:
+            for alternativa in opcion["resultados_destino"]:
+                for e in alternativa["requisitos"]:
+                    e.pop("sugerencia", None)
+
+
+def evaluar_convocatoria(usuario, convocatoria, sugerencias=False):
     from .models import BorradorRastreo
     origin = BorradorRastreo.objects.filter(convocatoria=convocatoria).first()
     unstructured = bool(origin and origin.datos_iniciales.get('requisitos_originales')
@@ -280,6 +417,8 @@ def evaluar_convocatoria(usuario, convocatoria):
                          "resultados_destino": alternativas,
                          "verificaciones_externas_pendientes": len({e["id"] for a in alternativas for e in a["requisitos"] if e["comprobacion_externa"]}),
                          "aviso": "No hay requisitos identificados. No significa que no se exijan condiciones." if not aplicables else None})
+    if sugerencias:
+        sugerir_titulos(opciones, requisitos, formaciones)
     destacada = next((o for estado in ("cumple", "desconocido") for o in opciones if o["resultado"] == estado), None)
     texto = "Se destaca una opción con coincidencias según tus datos declarados; revisa sus destinos y comprobaciones pendientes." if destacada and destacada["resultado"] == "cumple" else "Se destaca una opción pendiente de comprobar; completa o revisa la información indicada." if destacada else "Las opciones presentan incumplimientos obligatorios. Puedes consultar sus condiciones."
     return {"convocatoria_id": convocatoria.pk, "calculado_en": timezone.now(), "opcion_destacada_id": destacada["id"] if destacada else None,

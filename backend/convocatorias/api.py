@@ -280,7 +280,8 @@ class Comparacion(AuthView):
         if request.data:
             raise serializers.ValidationError({"detail": "Esta consulta no acepta campos ni un usuario objetivo."})
         convocatoria = get_object_or_404(publicas(), pk=pk)
-        return Response(evaluar_convocatoria(request.user, convocatoria))
+        # Solo aquí se añaden las sugerencias de la IA local; «Para ti» y los avisos usan la comparación sin ellas.
+        return Response(evaluar_convocatoria(request.user, convocatoria, sugerencias=True))
 
 
 class Recomendaciones(AuthView):
