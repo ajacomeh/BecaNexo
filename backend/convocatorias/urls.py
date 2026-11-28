@@ -12,6 +12,7 @@ urlpatterns = [
     path("gestion/convocatorias/", api.Convocatorias.as_view()),
     path("gestion/convocatorias/<int:pk>/", api.Convocatorias.as_view()),
     path("gestion/convocatorias/<int:pk>/auditoria/", api.Auditoria.as_view()),
+    path("gestion/convocatorias/<int:pk>/sugerencias/", api.Sugerencias.as_view()),
 ]
 for accion in ("publicar", "pausar", "descartar", "restaurar"):
     urlpatterns.append(path(f"gestion/convocatorias/<int:pk>/{accion}/", api.Accion.as_view(), {"accion": accion}))

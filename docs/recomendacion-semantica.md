@@ -39,6 +39,47 @@ En el detalle de una beca, la comparación puede añadir a un requisito `TITULO_
 - El texto del requisito usa la caché de textos públicos. El de la formación declarada se calcula en cada consulta y no se guarda.
 - Detalle en [api-comparacion.md](api-comparacion.md).
 
+## Sugerencias para borradores (v1.1, 27/11/2026)
+
+`GET /api/gestion/convocatorias/<id>/sugerencias/` es una consulta solo para administradores y de solo lectura. Ayuda a completar y revisar un borrador. **Solo sugiere**: no guarda, no publica y no cambia borradores, requisitos ni elegibilidad. No hay tablas ni migraciones nuevas: el vector de un borrador se calcula en memoria con el mismo modelo y el mismo texto de convocatoria, y no se guarda. Sin modelo, la respuesta es `{"nivel": null, "tipo_beca": null, "duplicados": []}`.
+
+En el editor, el bloque «Sugerencias automáticas» («Sugerencia automática: confírmala tú») solo aparece en borradores con algo que sugerir.
+
+- «Usar sugerencia» rellena el tipo de beca en el formulario, o abre una opción de estudio nueva con el nivel sugerido.
+- Nada se guarda hasta pulsar «Guardar».
+- No se muestran porcentajes; cada sugerencia dice de dónde viene.
+
+**Nivel de estudio** (solo si el borrador no tiene opciones activas):
+
+1. Primero, **reglas**: el título y la descripción nombran una sola familia de nivel (`familias_nivel` de la comparación).
+   - Se sugieren grado, especialización, maestría o doctorado. «Bachiller» no se sugiere, porque casi siempre es un requisito de ingreso.
+   - Con las 55 publicadas: 23 aciertos, 2 errores y 30 sin sugerencia (**92 %**).
+2. Si las reglas no deciden, **vecinos**: los 3 más cercanos entre las publicadas con un único nivel deben superar la similitud 0,85 y coincidir los tres.
+   - «Dejar uno fuera»: con k=3 y 0,85, 8 de 8 aciertos (con k=1 la precisión era 61–70 %).
+   - Aplicado tras las reglas: 4 de 4.
+   - Combinado: 27 aciertos y 2 errores (93 %).
+
+**Tipo de beca** (solo si falta): **solo reglas sobre el título**, con una señal inequívoca («beca de investigación», «mérito académico», «excelencia académica»).
+- No hay votación por vecinos: ninguna convocatoria publicada tenía tipo el 27/11/2026, así que no hay ejemplos con los que calibrarla.
+- Con los datos de esa fecha, la regla no se activa en ninguna convocatoria.
+
+**Posibles duplicados** (cualquier estado: borrador, publicada o descartada; como máximo 5):
+- Nunca se marcan dos títulos que nombran niveles distintos (por ejemplo, «…Maestría…» frente a «…Grado…» de la misma entidad).
+- Motivos, en palabras:
+
+  | Motivo | Condición |
+  |---|---|
+  | «título casi idéntico» | Parecido de títulos ≥ 0,90 |
+  | «texto casi idéntico» | Coseno ≥ 0,985 |
+  | «misma entidad y texto muy parecido» | Misma entidad y coseno ≥ 0,97 |
+  | «mismo enlace oficial y título parecido» | Misma URL oficial y títulos ≥ 0,85 |
+- Calibración del 27/11/2026: los pares marcados son el mismo programa en otra edición o cohorte (#58/#70, #64/#78, #66/#84, #67/#85 y #69/#80). Antes de exigir el mismo nivel se marcaban becas distintas de una misma universidad, o con la misma URL de bases (UDA). El par de control #33/#34 (DASE EP, becas distintas) no se marca.
+
+**Límites:**
+- Pocos ejemplos: 55 publicadas y solo 2 tipos de beca en el catálogo.
+- Las reglas de nivel pueden confundir un requisito («título de grado») con el nivel financiado.
+- Las sugerencias por vecinos cubren pocos casos, porque solo se sugiere cuando los vecinos coinciden y son muy parecidos.
+
 ## Interpretación y límites
 
 La interfaz muestra por separado el resultado de requisitos y si la afinidad temática fue calculada. Si faltan datos temáticos del perfil, indica qué completar; si falta o falla el modelo, conserva el orden basado en reglas y muestra afinidad pendiente. No se envían datos a servicios externos ni se predice adjudicación. El modelo multilingüe es genérico: puede ordenar mal términos especializados, depende del texto disponible y trunca entradas largas. Sus similitudes no son probabilidades. Las ponderaciones futuras 70/10/10/10 de la documentación de decisiones no se aplican en este bloque porque faltan validación y un contrato de afinidad completa.
