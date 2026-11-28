@@ -12,7 +12,7 @@ const initialValue = (field, value) => {
   return value == null ? '' : String(value)
 }
 
-export default function OfferForm({ icon = "save", fields, initial = {}, onSubmit, label = 'Guardar', onCancel }) {
+export default function OfferForm({ icon = "save", fields, initial = {}, onSubmit, label = 'Guardar', onCancel, fill }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, initialValue(f, initial[f.name])])))
   const [errors, setErrors] = useState({})
   const [error, setError] = useState('')
@@ -20,6 +20,19 @@ export default function OfferForm({ icon = "save", fields, initial = {}, onSubmi
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
   const change = (name, value) => { setValues((old) => ({ ...old, [name]: value })); setSaved(false) }
+  // `fill` rellena campos desde fuera (p. ej. «Usar sugerencia») sin guardar: el guardado sigue siendo el del formulario.
+  // Se aplica al cambiar `fill`, ajustando el estado durante el render (sin efectos).
+  const [appliedFill, setAppliedFill] = useState(fill)
+  if (fill !== appliedFill) {
+    setAppliedFill(fill)
+    if (fill) {
+      setValues((old) => ({ ...old, ...Object.fromEntries(Object.entries(fill.values).flatMap(([name, value]) => {
+        const field = fields.find((f) => f.name === name)
+        return field ? [[name, initialValue(field, value)]] : []
+      })) }))
+      setSaved(false)
+    }
+  }
   async function submit(event) {
     event.preventDefault()
     if (lock.current) return

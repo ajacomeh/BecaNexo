@@ -250,6 +250,17 @@ class Consulta(AuthView):
         return respuesta
 
 
+class Sugerencias(AuthView):
+    """Sugerencias de IA local para completar un borrador (solo lectura; nunca guarda ni cambia nada)."""
+    permission_classes = [Administrador]
+    http_method_names = ["get", "options"]
+
+    def get(self, request, pk):
+        parametros(request, set())
+        from .sugerencias import sugerencias
+        return Response(sugerencias(get_object_or_404(m.Convocatoria, pk=pk)))
+
+
 class Similares(AuthView):
     """Becas parecidas por su contenido público (vectores guardados); no depende del perfil ni de la sesión."""
     permission_classes = [permissions.AllowAny]

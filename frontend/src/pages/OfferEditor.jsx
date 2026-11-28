@@ -11,6 +11,7 @@ import { generalFields, optionFields, benefitFields, requirementFields, optionLa
 import { stateLabel } from './offerDisplay'
 import { isExternal } from './offerFields'
 import OriginPanel from '../components/OriginPanel'
+import DraftSuggestions from '../components/DraftSuggestions'
 
 async function allInstitutions() {
   const rows = []
@@ -55,8 +56,14 @@ function BasesHint({ offer }) {
     {safeBasesUrl(offer.url_bases) && <> <a href={offer.url_bases} target="_blank" rel="noopener noreferrer">Abrir bases oficiales</a></>}</p>
 }
 
-function Records({ name, title, offer, catalogs, onSaved }) {
+function Records({ name, title, offer, catalogs, onSaved, fill }) {
   const [editing, setEditing] = useState(null)
+  // «Usar sugerencia» abre un registro nuevo con el valor sugerido; nada se guarda hasta pulsar Guardar.
+  const [appliedFill, setAppliedFill] = useState(fill)
+  if (fill !== appliedFill) {
+    setAppliedFill(fill)
+    if (fill && editing === null) setEditing({ ...fill.values })
+  }
   const [deleting, setDeleting] = useState(null)
   const [typeId, setTypeId] = useState('')
   const records = offer[name]
@@ -91,7 +98,7 @@ function Records({ name, title, offer, catalogs, onSaved }) {
     {!records.length && <p className="empty-note">Todavía no hay registros. Lo no informado se conserva como desconocido.</p>}
     {!editing ? <Button icon="add" className="button-light" onClick={() => { setEditing({}); setTypeId('') }}>Añadir {title.toLowerCase()}</Button> : <div className="record-editor"><h3>{editing.id ? 'Editar registro' : 'Nuevo registro'}</h3>
       {name === 'requisitos' && <div className="field"><label htmlFor="requirement-type">Tipo de requisito</label><select id="requirement-type" value={typeId} onChange={(e) => setTypeId(e.target.value)}><option value="">Selecciona un tipo</option>{catalogs.tipos_requisito.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select></div>}
-      {fields.length > 0 ? <OfferForm key={`${editing.id || 'new'}-${typeId}`} fields={fields} initial={initial} label={`Guardar ${title.toLowerCase()}`} onSubmit={save} onCancel={() => setEditing(null)} /> : <Button icon="cancel" onClick={() => setEditing(null)}>Cancelar</Button>}
+      {fields.length > 0 ? <OfferForm key={`${editing.id || 'new'}-${typeId}`} fields={fields} initial={initial} label={`Guardar ${title.toLowerCase()}`} onSubmit={save} onCancel={() => setEditing(null)} fill={fill} /> : <Button icon="cancel" onClick={() => setEditing(null)}>Cancelar</Button>}
     </div>}
     {deleting && <DeleteRecord name={name} record={deleting} offer={offer} catalogs={catalogs} onCancel={() => setDeleting(null)} onConfirm={async () => {
       await offersApi.write(`gestion/convocatorias/${offer.id}/${name}/${deleting.id}`, 'DELETE'); onSaved(name, null, deleting.id); setDeleting(null)
@@ -109,6 +116,8 @@ export default function OfferEditor() {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [notice, setNotice] = useState('')
   const [retry, setRetry] = useState(0)
+  const [generalFill, setGeneralFill] = useState(null)
+  const [optionFill, setOptionFill] = useState(null)
   useEffect(() => {
     let live = true
     Promise.all([offersApi.get('becas/catalogos'), allInstitutions(), id ? offersApi.get(`gestion/convocatorias/${id}`) : Promise.resolve(null)])
@@ -137,12 +146,13 @@ export default function OfferEditor() {
     <Message>{error}</Message>{!loaded && (error ? <Button icon="refresh" onClick={() => setRetry(retry + 1)}>Reintentar</Button> : <p role="status"><Icon name="loading" />Cargando editor…</p>)}<Message kind="success">{notice}</Message>
     {loaded && <><section className="profile-card"><h2>01 · Identificación, fechas y condiciones</h2>{loaded.offer && <p className="profile-note">Revisión: {loaded.offer.revision} · Estado: {stateLabel(loaded.offer.estado)}. Editar retira la publicación hasta una nueva revisión.</p>}
       {!loaded.offer && <p>Guarda el borrador antes de añadir opciones.</p>}
-      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions).map(field => field.name === 'institucion' ? { ...field, required: !loaded.offer?.origen_automatico, hint: <Link className="offer-institution-link" to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> } : field.name === 'tipo_beca' && loaded.offer?.origen_automatico && !loaded.offer?.tipo_beca ? { ...field, hint: 'Tipo por definir: la ficha de SIAU no indica el tipo de beca. Selecciónalo según las bases oficiales; no se infiere.' } : field)} initial={loaded.offer ? { ...loaded.offer, institucion: loaded.offer.institucion?.id ?? null } : { alcance_academico: 'pendiente' }} label="Guardar convocatoria" onSubmit={async (values) => {
+      <OfferForm key={id || 'new'} fields={generalFields(loaded.catalogs, loaded.institutions).map(field => field.name === 'institucion' ? { ...field, required: !loaded.offer?.origen_automatico, hint: <Link className="offer-institution-link" to="/gestion/instituciones"><Icon name="institutions" /><span>Gestionar entidades oferentes</span></Link> } : field.name === 'tipo_beca' && loaded.offer?.origen_automatico && !loaded.offer?.tipo_beca ? { ...field, hint: 'Tipo por definir: la ficha de SIAU no indica el tipo de beca. Selecciónalo según las bases oficiales; no se infiere.' } : field)} initial={loaded.offer ? { ...loaded.offer, institucion: loaded.offer.institucion?.id ?? null } : { alcance_academico: 'pendiente' }} label="Guardar convocatoria" fill={generalFill} onSubmit={async (values) => {
         const offer = await offersApi.write(id ? `gestion/convocatorias/${id}` : 'gestion/convocatorias', id ? 'PATCH' : 'POST', values)
         if (!id) navigate(`/gestion/convocatorias/${offer.id}`)
         else { setLoaded((old) => ({ ...old, offer })); setNotice('Cambios guardados. Publica de nuevo después de revisar.') }
       }} /></section>
-      {loaded.offer && <><OriginPanel offer={loaded.offer} /><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
+      {loaded.offer && <>{loaded.offer.revision === 'pendiente' && <DraftSuggestions key={loaded.offer.id} offerId={loaded.offer.id}
+        onUseType={(tipo) => setGeneralFill({ values: { tipo_beca: tipo } })} onUseLevel={(nivel) => setOptionFill({ values: { nivel } })} />}<OriginPanel offer={loaded.offer} /><Records name="opciones" title="Opciones de estudio" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} fill={optionFill} /><Records name="beneficios" title="Beneficios" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} /><Records name="requisitos" title="Requisitos" offer={loaded.offer} catalogs={loaded.catalogs} onSaved={childSaved} />
         <section className="profile-card"><h2>Revisión y publicación</h2>
           {loaded.offer.ficha_retirada && <p className="profile-note offer-ficha-retirada" role="note">La ficha oficial ya no está disponible en SIAU</p>}
           {loaded.offer.descartado && <p className="publish-warning" role="note">Borrador descartado: no se publica ni se vuelve a crear desde el rastreo. Puedes restaurarlo.</p>}
