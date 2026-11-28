@@ -15,7 +15,9 @@ from .portal_fuentes import PORTALES, portal_for_source
 from convocatorias.siau_red import AccessError
 from convocatorias.models import BorradorRastreo
 from .web_frequency import block_details, extraordinary_enabled, manual_window, source_blocked, unlock_source
-from .web_launch import LaunchBusy, launch_lock, marker_path, result_path, start_worker
+from .web_launch import LaunchBusy, lanzamiento_web_habilitado, launch_lock, marker_path, result_path, start_worker
+
+MENSAJE_LANZAMIENTO_DESACTIVADO = 'El rastreo desde la web está desactivado en este entorno.'
 
 
 class ControlRastreo(AuthView):
@@ -129,9 +131,15 @@ class ControlRastreo(AuthView):
                                       'fuente': ultima.fuente.nombre} if ultima else None)}
 
     def get(self, request):
-        return Response(self.estado())
+        state = self.estado()
+        if not lanzamiento_web_habilitado():
+            # Solo en entornos que lo desactivan (por ejemplo el demo): por defecto la respuesta no cambia.
+            state.update(puede_iniciar=False, lanzamiento_web_habilitado=False, motivo_no_disponible=MENSAJE_LANZAMIENTO_DESACTIVADO)
+        return Response(state)
 
     def post(self, request):
+        if not lanzamiento_web_habilitado():
+            return Response({'detail': MENSAJE_LANZAMIENTO_DESACTIVADO, 'lanzamiento_web_habilitado': False}, status=409)
         reason = request.data.get('motivo') if isinstance(request.data, dict) else None
         if (not isinstance(reason, str) or not reason.strip().isprintable()
                 or len(reason.strip()) < 10 or len(reason.strip()) > 240

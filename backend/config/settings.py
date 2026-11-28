@@ -34,6 +34,8 @@ RASTREO_EXTRAORDINARIO_HABILITADO = env.bool("RASTREO_EXTRAORDINARIO_HABILITADO"
 RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS = env.bool("RASTREO_BORRADORES_AUTOMATICOS_HABILITADOS", default=False)
 # La ficha individual conserva bases pendientes hasta acreditar su uso documental.
 RASTREO_CANDIDATO_PDF_HABILITADO = env.bool("RASTREO_CANDIDATO_PDF_HABILITADO", default=False)
+# «Iniciar rastreo» desde el panel web. Activado por defecto (como siempre); el demo en la nube lo desactiva.
+RASTREO_WEB_LANZAMIENTO_HABILITADO = env.bool("RASTREO_WEB_LANZAMIENTO_HABILITADO", default=True)
 
 # La cola de correo permanece inactiva hasta migrar y habilitarla expresamente.
 AVISOS_CORREO_HABILITADOS = env.bool("AVISOS_CORREO_HABILITADOS", default=False)
@@ -81,6 +83,18 @@ SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=False)
 CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=False)
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+
+# Producción detrás de un proxy inverso con HTTPS (docs/despliegue-linux.md). Todo desactivado por defecto:
+# sin estas variables el comportamiento es el de siempre.
+if env.bool("DJANGO_BEHIND_PROXY", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
+SECURE_HSTS_SECONDS = env.int("DJANGO_SECURE_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False)
+SECURE_HSTS_PRELOAD = env.bool("DJANGO_SECURE_HSTS_PRELOAD", default=False)
+# Proxies de confianza delante de Django: con un valor, los límites de intentos usan la IP real del cliente según
+# X-Forwarded-For; sin él (por defecto) se usa REMOTE_ADDR y X-Forwarded-For se ignora, como hasta ahora.
+REST_FRAMEWORK = {"NUM_PROXIES": env.int("DJANGO_NUM_PROXIES", default=None)}
 
 CACHES = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
@@ -188,6 +202,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# Destino de collectstatic en el servidor; sin la variable queda sin definir, como siempre (desarrollo intacto).
+STATIC_ROOT = env("DJANGO_STATIC_ROOT", default=None)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
