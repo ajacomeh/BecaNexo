@@ -26,7 +26,7 @@ El diccionario/JSON de TRA_EVALUACION_REQUISITO y la instrucción de esta etapa 
 | EXPERIENCIA | Filtra área, une intervalos superpuestos y recorta a `fecha_referencia` publicada. Devuelve los periodos utilizados, pero meses siguen desconocidos sin una convención ejecutable concreta aprobada; no interpreta texto ni convierte jornadas. |
 | ACREDITACION, DOCUMENTO, OTRO | Desconocido con verificación por entidad oferente. No se solicitan archivos. |
 
-### Nivel deducido por reglas y sugerencia de IA local (v1.1, 28/11/2026)
+### Nivel deducido por reglas y sugerencia de IA local (v1.1, 27/11/2026)
 
 - **Nivel deducido (sin IA, en memoria, sin persistir ni modificar requisitos).** Solo puede producir «cumple» ante una coincidencia exacta; en cualquier otro caso se mantiene «desconocido». Nunca produce «no_cumple» ni infiere jerarquías: por ejemplo, una maestría no cuenta como «tercer nivel». La explicación indica que el nivel se dedujo del texto de la convocatoria.
   - `FORMACION` sin `niveles_admitidos`: se deduce si el texto publicado nombra únicamente la familia de su `nivel_minimo` (bachillerato o grado), como en «Ser Bachiller».
